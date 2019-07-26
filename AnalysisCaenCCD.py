@@ -857,7 +857,58 @@ class AnalysisCaenCCD:
 	def SaveAllCanvas(self):
 		self.SaveCanvasInlist(self.canvas.keys())
 
-def main():
+# def main():
+# 	parser = OptionParser()
+# 	parser.add_option('-d', '--inDir', dest='inDir', default='.', type='string', help='Directory containing the run files')
+# 	parser.add_option('-c', '--configFile', dest='config', default='CAENAnalysisConfig.cfg', type='string', help='Path to file containing Analysis configuration file')
+# 	parser.add_option('-i', '--inputFile', dest='infile', default='', type='string', help='Path to root file to be analysed')
+# 	parser.add_option('-b', '--bias', dest='bias', default=0, type='float', help='Bias voltage used')
+# 	parser.add_option('-v', '--verbose', dest='verb', default=False, help='Toggles verbose', action='store_true')
+# 	parser.add_option('-a', '--automatic', dest='auto', default=False, help='Toggles automatic basic analysis', action='store_true')
+#
+# 	(options, args) = parser.parse_args()
+# 	directory = str(options.inDir)
+# 	config = str(options.config)
+# 	infile = str(options.infile)
+# 	bias = float(options.bias)
+# 	verb = bool(options.verb)
+# 	autom = bool(options.auto)
+#
+# 	ana = AnalysisCaenCCD(directory, config, infile, bias, verb)
+#
+# 	# ana.LoadAnalysisTree()
+# 	# ana.LoadPickles()
+# 	if autom:
+# 		ana.AnalysisWaves()
+# 		ana.PlotWaveforms('SelectedWaveforms', 'signal', cuts=ana.cut0.GetTitle())
+# 		ana.canvas['SelectedWaveforms'].SetLogz()
+# 		ana.PlotSignal('PH', cuts=ana.cut0.GetTitle())
+# 		ana.FitLanGaus('PH')
+# 		ana.PlotPedestal('Pedestal', cuts=ana.cut0.GetTitle())
+# 		ana.SaveAllCanvas()
+# 	return ana
+#
+# 	# if auto:
+# 	# 	ccd.StartHVControl()
+# 	# 	ccd.GetBaseLines()
+# 	# 	ccd.SavePickles()
+# 	# 	written_events = ccd.GetData()
+# 	# 	ccd.settings.num_events = written_events
+# 	# 	ccd.SavePickles()  # update pickles with the real amount of written events
+# 	# 	ccd.settings.MoveBinaryFiles()
+# 	# 	ccd.settings.RenameDigitiserSettings()
+# 	# 	ccd.CloseHVClient()
+# 	# 	if not ccd.settings.simultaneous_conversion:
+# 	# 		ccd.CreateRootFile(files_moved=True)
+# 	# 		while ccd.pconv.poll() is None:
+# 	# 			continue
+# 	# 		ccd.CloseSubprocess('converter', stdin=False, stdout=False)
+# 	#
+# 	# print 'Finished :)'
+# 	# sys.stdout.write('\a\a\a')
+# 	# sys.stdout.flush()
+
+if __name__ == '__main__':
 	parser = OptionParser()
 	parser.add_option('-d', '--inDir', dest='inDir', default='.', type='string', help='Directory containing the run files')
 	parser.add_option('-c', '--configFile', dest='config', default='CAENAnalysisConfig.cfg', type='string', help='Path to file containing Analysis configuration file')
@@ -886,27 +937,5 @@ def main():
 		ana.FitLanGaus('PH')
 		ana.PlotPedestal('Pedestal', cuts=ana.cut0.GetTitle())
 		ana.SaveAllCanvas()
-	return ana
-
-	# if auto:
-	# 	ccd.StartHVControl()
-	# 	ccd.GetBaseLines()
-	# 	ccd.SavePickles()
-	# 	written_events = ccd.GetData()
-	# 	ccd.settings.num_events = written_events
-	# 	ccd.SavePickles()  # update pickles with the real amount of written events
-	# 	ccd.settings.MoveBinaryFiles()
-	# 	ccd.settings.RenameDigitiserSettings()
-	# 	ccd.CloseHVClient()
-	# 	if not ccd.settings.simultaneous_conversion:
-	# 		ccd.CreateRootFile(files_moved=True)
-	# 		while ccd.pconv.poll() is None:
-	# 			continue
-	# 		ccd.CloseSubprocess('converter', stdin=False, stdout=False)
-	#
-	# print 'Finished :)'
-	# sys.stdout.write('\a\a\a')
-	# sys.stdout.flush()
-
-if __name__ == '__main__':
-	ana = main()
+	# return ana
+	# ana = main()

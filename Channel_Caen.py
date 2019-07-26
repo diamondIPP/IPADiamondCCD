@@ -64,12 +64,14 @@ class Channel_Caen:
 		if self.type == 'signal_ch':
 			self.dc_offset_percent = 45 if settings.bias < 0 else -45
 		else:
-			limit = self.base_line_u_adcs + 10 * self.sigma_adcs
-			if limit < 0:
-				self.dc_offset_percent = -50
-			else:
-				self.dc_offset_percent = int(round(100 * (limit/float(2**settings.dig_bits - 1) - 0.5)))
-				self.dc_offset_percent = 48 if self.dc_offset_percent > 48 else -48 if self.dc_offset_percent < -48 else self.dc_offset_percent
+			# limit = self.base_line_u_adcs + 10 * self.sigma_adcs
+			self.dc_offset_percent = -45
+	# if limit < 0:
+		# 	self.dc_offset_percent = -50
+		# else:
+		# 	self.dc_offset_percent = int(round(100 * (limit/float(2**settings.dig_bits - 1) - 0.5)))
+		# 	self.dc_offset_percent = 48 if self.dc_offset_percent > 48 else -48 if self.dc_offset_percent < -48 else self.dc_offset_percent
+
 
 	def Calculate_Universal_ADCs(self, value_volts, sig_res):
 		return np.divide(value_volts, sig_res, dtype='f8')
@@ -79,10 +81,12 @@ class Channel_Caen:
 		variable = mean_adc + 50 * sigma_adc
 		self.base_line_u_adcs = self.Calculate_Universal_ADCs(self.ADC_to_Volts(mean_adc, settings.sigRes, settings.dig_bits), settings.sigRes)
 		if variable > (2**settings.dig_bits - 1) * (0.5 + self.dc_offset_percent / 100.0):
-			self.dc_offset_percent += int(round(100.0 * (variable + 1 - 2.0**settings.dig_bits) / (2.0**settings.dig_bits - 1.0)))
+			# self.dc_offset_percent += int(round(100.0 * (variable + 1 - 2.0**settings.dig_bits) / (2.0**settings.dig_bits - 1.0)))
+			self.dc_offset_percent = -45
 		else:
-			self.dc_offset_percent = -50
-		self.dc_offset_percent = 48 if self.dc_offset_percent > 48 else -48 if self.dc_offset_percent < -48 else self.dc_offset_percent
+			self.dc_offset_percent = -45
+		# self.dc_offset_percent = 48 if self.dc_offset_percent > 48 else -48 if self.dc_offset_percent < -48 else self.dc_offset_percent
+		self.dc_offset_percent = -45
 
 	def Correct_Threshold(self, sigma):
 		if self.type == 'trigger_ch':
@@ -92,7 +96,7 @@ class Channel_Caen:
 
 	def ADC_to_Volts(self, adcs, sigres, nbits=14):
 		return np.add(self.offseted_adc_to_volts_cal['p0'], np.multiply(self.offseted_adc_to_volts_cal['p1'], np.add(adcs, np.multiply(2**nbits - 1, self.dc_offset_percent/100.0 - 0.5, dtype='float64'), dtype='float64'), dtype='float64'), dtype='float64')
-		# return np.multiply(sigres, np.add(adcs, np.multiply(2**nbits - 1, self.dc_offset_percent/100.0 - 0.5, dtype='f8'), dtype='f8'), dtype='f8')
+	# return np.multiply(sigres, np.add(adcs, np.multiply(2**nbits - 1, self.dc_offset_percent/100.0 - 0.5, dtype='f8'), dtype='f8'), dtype='f8')
 
 if __name__ == '__main__':
 	print 'bla'

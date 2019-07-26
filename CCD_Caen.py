@@ -372,11 +372,11 @@ class CCD_Caen:
 
 		# set channels such that the baselines are near the maximum ADC's leaving space for the scintillator signals. Adjust threshold values
 		self.trigger_ch.Correct_Base_Line(mean_adc=mean_t, sigma_adc=std_t, settings=self.settings)
-		self.trigger_ch.Correct_Threshold(sigma=std_t)
+		# self.trigger_ch.Correct_Threshold(sigma=std_t)
 		self.settings.trig_base_line = np.multiply(self.trigger_ch.base_line_u_adcs, self.settings.sigRes, dtype='f8')
 		self.settings.trig_thr_counts = self.trigger_ch.thr_counts
 		self.veto_ch.Correct_Base_Line(mean_adc=mean_ac, sigma_adc=std_ac, settings=self.settings)
-		self.veto_ch.Correct_Threshold(sigma=std_ac)
+		# self.veto_ch.Correct_Threshold(sigma=std_ac)
 		self.settings.ac_base_line = np.multiply(self.veto_ch.base_line_u_adcs, self.settings.sigRes, dtype='f8')
 		self.settings.ac_thr_counts = self.veto_ch.thr_counts
 
@@ -470,6 +470,7 @@ def main():
 	print 'Finished :)'
 	sys.stdout.write('\a\a\a')
 	sys.stdout.flush()
+	return ccd
 
 if __name__ == '__main__':
-	main()
+	ccd = main()
