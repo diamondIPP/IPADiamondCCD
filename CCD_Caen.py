@@ -410,7 +410,7 @@ class CCD_Caen:
 			self.settings.bar.finish()
 		else:
 			while self.pconv.poll() is None:
-				continue
+				time.sleep(2)
 			self.CloseSubprocess('converter', stdin=False, stdout=False)
 		return self.total_events
 

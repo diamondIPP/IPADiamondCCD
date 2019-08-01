@@ -286,7 +286,7 @@ class Converter_Caen:
 		# sigma = np.extract(condition_veto_base_line, self.vetoADC).std()
 		# vetoValNew = 4 * sigma if self.veto_value < 4 * sigma else self.veto_value
 		# veto_event = bool((np.extract(condition_search, self.vetoADC) - mean + vetoValNew).min() <= 0)
-		veto_event = bool((np.extract(condition_search, self.vetoADC) - meanbl + self.veto_value).min() <= 0)
+		veto_event = bool((np.extract(condition_search, self.vetoADC) - meanbl + self.veto_value).astype('float32').min() <= 0)
 		del condition_search, condition_veto_base_line, meanbl
 		return veto_event
 
