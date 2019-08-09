@@ -32,11 +32,12 @@ BRANCHESWAVESLOAD = ['time', 'voltageSignal']
 ANALYSISSCALARBRANCHES = ['pedestal', 'pedestalSigma', 'signalAndPedestal', 'signalAndPedestalSigma', 'signal']
 
 class AnalysisCaenCCD:
-	def __init__(self, directory='.', config='CAENAnalysisConfig.cfg', infile='', bias=0.0, verbose=False):
+	def __init__(self, directory='.', config='CAENAnalysisConfig.cfg', infile='', bias=0.0, overw=False, verbose=False):
 		print 'Starting CCD Analysis ...'
 
 		self.config = config
 		self.verb = verbose
+		self.overw = overw
 		self.inputFile = ''
 		self.inDir = directory
 		self.in_root_file = None
@@ -144,6 +145,8 @@ class AnalysisCaenCCD:
 		self.loaded_entries = 0
 		self.suffix = None
 
+		self.delta_v_signal = self.signal_ch.offseted_adc_to_volts_cal['p1'] * 100
+
 		self.Load_Config_File()
 
 	def SetRandomGenerator(self, seed=0):
@@ -182,6 +185,8 @@ class AnalysisCaenCCD:
 					self.fit_min = parser.getfloat('ANALYSIS', 'fit_min')
 				if parser.has_option('ANALYSIS', 'fit_max'):
 					self.fit_max = parser.getfloat('ANALYSIS', 'fit_max')
+				if parser.has_option('ANALYSIS', 'delta_v'):
+					self.delta_v_signal = parser.getfloat('ANALYSIS', 'delta_v')
 
 			if parser.has_section('CUTS'):
 				if parser.has_option('CUTS', 'bad_pedestal'):
@@ -244,7 +249,8 @@ class AnalysisCaenCCD:
 						self.veto_ch = pickle.load(pklveto)
 
 	def AnalysisWaves(self, doCuts0=True):
-		self.OpenAnalysisROOTFile('UPDATE')
+		optiont = 'RECREATE' if self.overw else 'UPDATE'
+		self.OpenAnalysisROOTFile(optiont)
 		if doCuts0: self.CreateCut0()
 
 		if not self.hasBranch['peakPosition'] or not np.array([self.hasBranch[key0] for key0 in self.analysisScalarsBranches]).all():
@@ -717,6 +723,33 @@ class AnalysisCaenCCD:
 			ro.gPad.Update()
 		ro.TFormula.SetMaxima(1000)
 
+	def DrawProfile(self, name, varx, xmin, xmax, deltax, xname, vary, ymin, ymax, yname, cuts='', options='e hist'):
+		ro.TFormula.SetMaxima(100000)
+		if self.profile.has_key(name):
+			if self.profile[name]:
+				self.profile[name].Delete()
+			del self.profile[name]
+		self.profile[name] = ro.TProfile('h_' + name, 'h_' + name, int(np.floor((xmax - xmin) / deltax + 0.5) + 2), xmin - deltax, xmax + deltax, ymin, ymax)
+		self.profile[name].GetXaxis().SetTitle(xname)
+		self.profile[name].GetYaxis().SetTitle(yname)
+		if 'goff' not in options:
+			if self.canvas.has_key(name):
+				if self.canvas[name]:
+					self.canvas[name].Close()
+				del self.canvas[name]
+			self.canvas[name] = ro.TCanvas('c_' + name, 'c_' + name, 1)
+			self.canvas[name].cd()
+		cuts0 = cuts
+		self.analysisTree.Draw('{vy}:{vx}>>h_{n}'.format(vy=vary, vx=varx, n=name), cuts0, options)
+		if 'goff' not in options:
+			self.canvas[name].SetGridx()
+			self.canvas[name].SetGridy()
+			self.canvas[name].SetTicky()
+			ro.gPad.Update()
+			# SetDefault1DStats(self.profile[name])
+			ro.gPad.Update()
+		ro.TFormula.SetMaxima(1000)
+
 	def DrawHisto2D(self, name, varx, xmin, xmax, deltax, xname, vary, ymin, ymax, deltay, yname, cuts='', option='colz', num_evts=1000000000, start_ev=0):
 		ro.TFormula.SetMaxima(100000)
 		if self.histo.has_key(name):
@@ -787,7 +820,8 @@ class AnalysisCaenCCD:
 		fit = self.histo[name].Fit('fit_' + name, 'QEMSB', '', self.histo[name].GetMean() - 2 * self.histo[name].GetRMS(), self.histo[name].GetMean() + 2 * self.histo[name].GetRMS())
 		params = np.array([fit.Parameter(i) for i in xrange(6)], 'float64')
 		func.SetParameters(params)
-		fit = self.histo[name].Fit('fit_' + name, 'QEMSB', '', params[1] - 2 * params[2], params[1] + 2 * params[2])
+		fit = self.histo[name].Fit('fit_' + name, 'QEMSB', '', self.histo[name].GetMean() - 2 * self.histo[name].GetRMS(), self.histo[name].GetMean() + 2 * self.histo[name].GetRMS())
+		# fit = self.histo[name].Fit('fit_' + name, 'QEMSB', '', params[1] - 2 * params[2], params[1] + 2 * params[2])
 		SetDefaultFitStats(self.histo[name], func)
 		self.peakTime = fit.Parameter(1)
 
@@ -795,12 +829,12 @@ class AnalysisCaenCCD:
 		if self.bias >= 0:
 			plotvar = '-signal'
 			# vmax, vmin, deltav = -self.analysisTree.GetMinimum('signal'), -self.analysisTree.GetMaximum('signal'), self.signal_ch.offseted_adc_to_volts_cal['p1'] * 100
-			deltav = self.signal_ch.offseted_adc_to_volts_cal['p1'] * 100
+			deltav = self.delta_v_signal
 			plotVarName = '-Signal [V]'
 		else:
 			plotvar = 'signal'
 			# vmin, vmax, deltav = self.analysisTree.GetMinimum('signal'), self.analysisTree.GetMaximum('signal'), self.signal_ch.offseted_adc_to_volts_cal['p1'] * 100
-			deltav = self.signal_ch.offseted_adc_to_volts_cal['p1'] * 100
+			deltav = self.delta_v_signal
 			plotVarName = 'Signal [V]'
 		vmin, vmax = minx, maxx
 		deltav = deltav if bins == 0 else (vmax - vmin) / float(bins)
@@ -834,7 +868,7 @@ class AnalysisCaenCCD:
 		vname = ('signal' if var == 'voltageSignal' else 'trigger' if var == 'voltageTrigger' else 'veto' if var == 'voltageVeto' else '') + ' [V]'
 		num_events = self.analysisTree.GetEntries() if num_evs == 0 else num_evs
 		tmin, tmax, deltat = self.analysisTree.GetMinimum('time'), self.analysisTree.GetMaximum('time'), self.settings.time_res
-		vmin, vmax, deltav = self.analysisTree.GetMinimum(var), self.analysisTree.GetMaximum(var), (self.signal_ch.offseted_adc_to_volts_cal['p1'] if var == 'voltageSignal' else self.settings.sigRes)
+		vmin, vmax, deltav = self.analysisTree.GetMinimum(var), self.analysisTree.GetMaximum(var), (self.signal_ch.offseted_adc_to_volts_cal['p1'] * 10 if var == 'voltageSignal' else self.settings.sigRes * 10)
 		if vbins == 0:
 			self.DrawHisto2D(name, 'time', tmin - deltat/2.0, tmax + deltat/2.0, deltat, 'time[s]', var, vmin, vmax, deltav, vname, cuts, option, num_events, start_ev)
 		else:
@@ -909,7 +943,28 @@ class AnalysisCaenCCD:
 		print np.double([(tf-ti)/float(self.settings.time_res) +1, ti-self.settings.time_res/2.0,
 		                 tf+self.settings.time_res/2.0, (vmax-vmin)/self.settings.sigRes, vmin, vmax])
 
-	# def FitLanGaus(self, name, conv_steps=100, color=ro.kRed, xmin=-10000000, xmax=-10000000):
+	def PlotHVCurrents(self, name='HVCurrents', cuts='', deltat=30., options='e hist'):
+		if self.in_root_tree.GetLeaf('timeHV').GetTypeName() == 'TDatime':
+			print 'Time format is TDataime. Not implemented yet :P'
+		else:
+			leng = self.analysisTree.Draw('timeHV.AsDouble()', cuts, 'goff')
+			timehv = self.analysisTree.GetVal(0)
+			timehv = np.array([timehv[i] for i in xrange(leng)])
+			xmin, xmax, deltax = np.floor(timehv.min()), np.ceil(timehv.max()), deltat
+			ymin, ymax = self.analysisTree.GetMinimum('currentHV'), self.analysisTree.GetMaximum('currentHV')
+			self.DrawProfile(name, 'timeHV.AsDouble()', xmin, xmax, deltax, 'time', 'currentHV', ymin, ymax, 'Current', cuts, options)
+			self.profile[name].SetStats(0)
+			# def FitLanGaus(self, name, conv_steps=100, color=ro.kRed, xmin=-10000000, xmax=-10000000):
+			self.line[name+'_p'] = ro.TLine(self.profile[name].GetXaxis().GetXmin(), self.currentCut, self.profile[name].GetXaxis().GetXmax(), self.currentCut)
+			self.line[name+'_p'].SetLineStyle(2)
+			self.line[name+'_p'].SetLineColor(ro.kRed)
+			self.line[name+'_p'].Draw('same')
+			self.line[name+'_n'] = ro.TLine(self.profile[name].GetXaxis().GetXmin(), -self.currentCut, self.profile[name].GetXaxis().GetXmax(), -self.currentCut)
+			self.line[name+'_n'].SetLineStyle(2)
+			self.line[name+'_n'].SetLineColor(ro.kRed)
+			self.line[name+'_n'].Draw('same')
+			self.profile[name].GetXaxis().SetTimeDisplay(1)
+
 	def FitLanGaus(self, name, conv_steps=100, color=ro.kRed):
 		self.canvas[name].cd()
 		self.langaus[name] = LanGaus(self.histo[name])
@@ -1022,6 +1077,7 @@ if __name__ == '__main__':
 	parser.add_option('-b', '--bias', dest='bias', default=0, type='float', help='Bias voltage used')
 	parser.add_option('-v', '--verbose', dest='verb', default=False, help='Toggles verbose', action='store_true')
 	parser.add_option('-a', '--automatic', dest='auto', default=False, help='Toggles automatic basic analysis', action='store_true')
+	parser.add_option('-o', '--overwrite', dest='overwrite', default=False, help='Toggles overwriting of the analysis tree', action='store_true')
 
 	(options, args) = parser.parse_args()
 	directory = str(options.inDir)
@@ -1031,8 +1087,9 @@ if __name__ == '__main__':
 	verb = bool(options.verb)
 	verb = True
 	autom = bool(options.auto)
+	overw = bool(options.overwrite)
 
-	ana = AnalysisCaenCCD(directory, config, infile, bias, verb)
+	ana = AnalysisCaenCCD(directory, config, infile, bias, overw, verb)
 
 	# ana.LoadAnalysisTree()
 	# ana.LoadPickles()
@@ -1043,6 +1100,7 @@ if __name__ == '__main__':
 		ana.PlotSignal('PH', cuts=ana.cut0.GetTitle())
 		ana.FitLanGaus('PH')
 		ana.PlotPedestal('Pedestal', cuts=ana.cut0.GetTitle())
+		ana.PlotHVCurrents('HVCurrents', '', 5)
 		ana.SaveAllCanvas()
 	# return ana
 	# ana = main()
