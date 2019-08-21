@@ -98,8 +98,8 @@ def main():
 	# parser.add_option('--time', dest='time', type='int', help='maximum time in minutes before closing and starting next voltage')
 	parser.add_option('-v', '--verbose', dest='verb', default=False, help='Toggles verbose', action='store_true')
 	parser.add_option('-a', '--automatic', dest='auto', default=False, help='Toggles automatic conversion and analysis afterwards', action='store_true')
-	parser.add_option('-l', '--list', dest='listvals', type='string', help='List of bias voltages to analyse. It should be in brackets. The values should be integers. e.g. [500,550,600]. It overrides "--step, --start, --stop option".', default='[]')
-	parser.add_option('-n', '--numevts', dest='numevts', type='string', help='List of number of events to analyse. It should be in brackets. The number of elements has to match the bias voltages. e.g. [10000,50000,10000]', default='[]')
+	parser.add_option('-l', '--list', dest='listvals', type='string', help='List of bias voltages to analyse. It should be in brackets. The values should be floats. e.g. [500,550,600]. It overrides "--step, --start, --stop option".', default='[]')
+	parser.add_option('-n', '--numevts', dest='numevts', type='string', help='List of number of events to analyse. It should be in brackets. The number of elements has to match the number of bias voltages. e.g. [10000,50000,10000]', default='[]')
 	parser.add_option('-t', '--time', dest='timebetween', type='int', help='time in between measurements in seconds.', default=1)
 
 	(options, args) = parser.parse_args()
@@ -120,8 +120,8 @@ def main():
 		else:
 			lista0 = lista[1:-1].split(',')
 			for elem in lista0:
-				if IsInt(elem):
-					lista1.append(int(elem))
+				if IsFloat(elem):
+					lista1.append(float(elem))
 				else:
 					ExitMessage('The entered values in -l or --list are not all integers')
 	# tau = int(options.time)

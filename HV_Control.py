@@ -66,9 +66,9 @@ class HV_Control:
 		self.CreateHVClientConfig()
 
 	def CreateHVClientConfig(self):
-		num_supplies = 8
+		num_supplies = 9
 		supplies_num = range(1, num_supplies + 1)
-		supplies_ids = {1: 'Keithley1', 2: 'Keithley2410', 3: 'Keithley237', 4: 'Keithley6517', 5: '', 6: 'Keithley2657A', 7: 'ISEG-NHS-6220x', 8: 'ISEG-NHS-6220n'}
+		supplies_ids = {1: 'Keithley1', 2: 'Keithley2410', 3: 'Keithley237', 4: 'Keithley6517', 5: '', 6: 'Keithley2657A', 7: 'ISEG-NHS-6220x', 8: 'ISEG-NHS-6220n', 9: 'Keithley6517B'}
 		conf_file = open('config/hv_{f}.cfg'.format(f=self.filename), 'w')
 
 		conf_file.write('[Main]\n')
@@ -105,6 +105,20 @@ class HV_Control:
 			conf_file.write('max_bias: 1000\n')
 			conf_file.write('baudrate: 57600\n')
 			conf_file.write('output: front\n')
+			# TODO: write the other cases for the other supplies
+		elif self.hv_supply == 'Keithley6517B':
+			conf_file.write('\n[HV{s}]\n'.format(s=self.supply_number))
+			conf_file.write('name: {n}\n'.format(n=self.hv_supply))
+			conf_file.write('model: 6517\n')
+			conf_file.write('address: /dev/keithley6\n')
+			conf_file.write('compliance: {c} nA\n'.format(c=self.current_limit*1e9))
+			conf_file.write('ramp: {r}\n'.format(r=self.ramp))
+			conf_file.write('max_step: 10\n')
+			conf_file.write('bias: 0\n')
+			conf_file.write('min_bias: -1000\n')
+			conf_file.write('max_bias: 1000\n')
+			conf_file.write('baudrate: 57600\n')
+			conf_file.write('output: rear\n')
 			# TODO: write the other cases for the other supplies
 
 		conf_file.close()
@@ -227,6 +241,7 @@ class HV_Control:
 			self.process.stdin.flush()
 			time.sleep(1)
 			self.MoveLogFolder()
+			self.MoveConfigFolder()
 			os.remove(self.out_file_name)
 
 	def MoveLogFolder(self):
@@ -234,6 +249,15 @@ class HV_Control:
 		if os.path.isdir(path_dir):
 			shutil.rmtree(path_dir)
 		shutil.move(self.filename, path_dir)
+		del path_dir
+
+	def MoveConfigFolder(self):
+		path_dir = '{d}/Runs/{f}/HV_{f}'.format(d=self.settings.outdir, f=self.filename)
+		if os.path.isdir(path_dir):
+			shutil.rmtree(path_dir)
+		shutil.move('config/hv_{f}.cfg'.format(f=self.filename), path_dir)
+		if self.hv_supply == 'ISEG-NHS-6220x' or self.hv_supply == 'ISEG-NHS-6220n':
+			shutil.move('config/iseg_{f}.cfg'.format(f=self.filename), path_dir)
 		del path_dir
 
 if __name__ == '__main__':
