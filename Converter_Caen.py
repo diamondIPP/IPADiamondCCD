@@ -125,8 +125,8 @@ class Converter_Caen:
 		self.badShapeBra = np.zeros(1, dtype=np.dtype('int8'))  # signed char
 		self.badPedBra = np.zeros(1, '?')
 		if self.control_hv:
-			self.hvVoltageBra = np.zeros(1, 'f')
-			self.hvCurrentBra = np.zeros(1, 'f')
+			self.hvVoltageBra = np.zeros(1, 'f4')
+			self.hvCurrentBra = np.zeros(1, 'f4')
 			self.hourMinSecBra = ro.TTimeStamp()
 		self.raw_tree.Branch('event', self.eventBra, 'event/i')
 		self.raw_tree.Branch('time', self.timeBra, 'time[{s}]/D'.format(s=self.points))

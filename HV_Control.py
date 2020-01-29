@@ -23,7 +23,7 @@ from Utils import *
 class HV_Control:
 	def __init__(self, settings):
 		self.settings = settings
-		self.hv_supply, self.ch, self.bias, self.current_limit, self.hot_start = settings.hv_supply, settings.hv_ch, settings.bias, settings.current_limit, settings.hot_start
+		self.hv_supply, self.ch, self.bias, self.current_limit, self.hot_start, self.address = settings.hv_supply, settings.hv_ch, settings.bias, settings.current_limit, settings.hot_start, settings.hv_address
 		self.filename, self.dut = settings.filename, settings.dut
 		self.Pics_folder_path = settings.pics_folder_path
 		self.doControlHV = False if self.hv_supply == '' else True
@@ -85,10 +85,7 @@ class HV_Control:
 			conf_file.write('module_name: ISEG\n')
 			conf_file.write('nChannels: 6\n')
 			conf_file.write('active_channels: [{ch}]\n'.format(ch=self.ch))
-			if self.hv_supply == 'ISEG-NHS-6220x':
-				conf_file.write('address: /dev/iseg\n')
-			else:
-				conf_file.write('address: /dev/iseg2\n')
+			conf_file.write('address: {a}\n'.format(a=self.address))
 			conf_file.write('# in V/s\n')
 			conf_file.write('ramp: {r}\n'.format(r=self.ramp))
 			conf_file.write('config_file: iseg.cfg\n')
@@ -96,7 +93,7 @@ class HV_Control:
 			conf_file.write('\n[HV{s}]\n'.format(s=self.supply_number))
 			conf_file.write('name: {n}\n'.format(n=self.hv_supply))
 			conf_file.write('model: 2410\n')
-			conf_file.write('address: /dev/keithley4\n')
+			conf_file.write('address: {a}\n'.format(a=self.address))
 			conf_file.write('compliance: {c} nA\n'.format(c=self.current_limit*1e9))
 			conf_file.write('ramp: {r}\n'.format(r=self.ramp))
 			conf_file.write('max_step: 10\n')
@@ -110,7 +107,7 @@ class HV_Control:
 			conf_file.write('\n[HV{s}]\n'.format(s=self.supply_number))
 			conf_file.write('name: {n}\n'.format(n=self.hv_supply))
 			conf_file.write('model: 6517\n')
-			conf_file.write('address: /dev/keithley6\n')
+			conf_file.write('address: {a}\n'.format(a=self.address))
 			conf_file.write('compliance: {c} nA\n'.format(c=self.current_limit*1e9))
 			conf_file.write('ramp: {r}\n'.format(r=self.ramp))
 			conf_file.write('max_step: 10\n')
@@ -240,24 +237,22 @@ class HV_Control:
 			self.process.stdin.write('exit\n')
 			self.process.stdin.flush()
 			time.sleep(1)
-			self.MoveLogFolder()
-			self.MoveConfigFolder()
+			self.MoveLogsAndConfig()
 			os.remove(self.out_file_name)
 
-	def MoveLogFolder(self):
+	def MoveLogsAndConfig(self):
 		path_dir = '{d}/Runs/{f}/HV_{f}'.format(d=self.settings.outdir, f=self.filename)
-		if os.path.isdir(path_dir):
-			shutil.rmtree(path_dir)
+		if os.path.isdir(path_dir) or os.path.isfile(path_dir):
+			print 'HV directory already exists. Recreating'
+			if os.path.isdir(path_dir):
+				shutil.rmtree(path_dir)
+			else:
+				os.remove(path_dir)
 		shutil.move(self.filename, path_dir)
-		del path_dir
-
-	def MoveConfigFolder(self):
-		path_dir = '{d}/Runs/{f}/HV_{f}'.format(d=self.settings.outdir, f=self.filename)
-		if os.path.isdir(path_dir):
-			shutil.rmtree(path_dir)
-		shutil.move('config/hv_{f}.cfg'.format(f=self.filename), path_dir)
-		if self.hv_supply == 'ISEG-NHS-6220x' or self.hv_supply == 'ISEG-NHS-6220n':
-			shutil.move('config/iseg_{f}.cfg'.format(f=self.filename), path_dir)
+		if os.path.isfile('config/hv_{f}.cfg'.format(f=self.filename)):
+			shutil.move('config/hv_{f}.cfg'.format(f=self.filename), path_dir)
+			if self.hv_supply.lower().startswith('iseg'):
+				shutil.move('config/iseg_{f}.cfg'.format(f=self.filename), path_dir)
 		del path_dir
 
 if __name__ == '__main__':

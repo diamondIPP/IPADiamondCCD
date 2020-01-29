@@ -40,6 +40,7 @@ class Settings_Caen:
 		self.do_hv_control = False
 		self.pics_folder_path = ''
 		self.hv_supply = ''
+                self.hv_address = ''
 		self.hv_ch = 0
 		self.current_limit = 0
 		self.hv_ramp = 10  # in V/s
@@ -129,6 +130,11 @@ class Settings_Caen:
 						self.current_limit = abs(parser.getfloat('HV', 'current_limit'))
 					if parser.has_option('HV', 'ramp'):
 						self.hv_ramp = abs(parser.getfloat('HV', 'ramp'))
+                                        if parser.has_option('HV', 'address'):
+                                                self.hv_address = parser.get('HV', 'address')
+                                        else:
+                                                self.hv_address = '/dev/'
+                                                self.hv_address += 'iseg2' if self.hv_supply.lower() == 'iseg-nhs-6220n' else 'keithley4' if self.hv_supply.loser() == 'keithley2410' else 'keithley6' if self.hv_supply.lower() == 'keithley6517b' else 'iseg'
 					# TODO: implement option in HV_control for option hot_start = False
 					# if parser.has_option('HV', 'hot_start'):
 					# 	self.hot_start = bool(parser.getboolean('HV', 'hot_start'))
