@@ -154,7 +154,7 @@ class HV_Control:
 		os.symlink('iseg_{f}.cfg'.format(f=self.filename), 'config/iseg.cfg')
 
 	def UnlinkConfigFile(self, name):
-		if os.path.isfile('config/{n}'.format(n=name)):
+		if os.path.isfile('config/{n}'.format(n=name)) or os.path.islink('config/{n}'.format(n=name)):
 			if os.path.islink('config/{n}'.format(n=name)):
 				os.unlink('config/{n}'.format(n=name))
 			else:
@@ -165,10 +165,10 @@ class HV_Control:
 		self.ReadLastLine()
 		delta_voltage = abs(self.last_line['voltage'] - self.bias)
 		do_ramp = False
-		if delta_voltage > 2:
+		if delta_voltage >= 1:
 			do_ramp = True
 			print 'Ramping voltage... ', ; sys.stdout.flush()
-		while delta_voltage > 2 and max_tries != 0:
+		while delta_voltage >= 1 and max_tries != 0:
 			self.CorrectBias(delta_voltage)
 			self.ReadLastLine()
 			delta_voltage = abs(self.last_line['voltage'] - self.bias)

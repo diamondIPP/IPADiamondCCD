@@ -91,7 +91,7 @@ class VoltageScan:
 def main():
 	parser = OptionParser()
 	parser.add_option('-i', '--infile', dest='infile', default='', type='string',
-	                  help='Input configuration file. e.g. CAENCalibration.cfg')
+	                  help='Input configuration file. e.g. CAENRunConfig.cfg')
 	parser.add_option('--start', dest='start', type='int', help='Starting scan voltage', default=0)
 	parser.add_option('--stop', dest='stop', type='int', help='Stopping scan voltage', default=0)
 	parser.add_option('--step', dest='step', type='int', help='Voltage step between scans', default=0)
