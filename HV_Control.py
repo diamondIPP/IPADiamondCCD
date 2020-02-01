@@ -249,11 +249,16 @@ class HV_Control:
 			else:
 				os.remove(path_dir)
 		shutil.move(self.filename, path_dir)
+		'Moved hv logs to output folder'
 		if os.path.isfile('config/hv_{f}.cfg'.format(f=self.filename)):
 			shutil.move('config/hv_{f}.cfg'.format(f=self.filename), path_dir)
+			print 'Moved hv config file to output folder'
 			if self.hv_supply.lower().startswith('iseg'):
 				shutil.move('config/iseg_{f}.cfg'.format(f=self.filename), path_dir)
 		del path_dir
+		if os.path.islink('config/keithley.cfg'):
+			os.unlink('config/keithley.cfg')
+			print 'Unlinked config/keithley.cfg'
 
 if __name__ == '__main__':
 	print 'blaaaa'
