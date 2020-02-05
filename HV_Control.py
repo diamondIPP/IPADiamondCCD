@@ -174,8 +174,7 @@ class HV_Control:
 			delta_voltage = abs(self.last_line['voltage'] - self.bias)
 			max_tries -= 1
 			if max_tries == 0:
-				print '\nCould not set the desired voltage\n'
-				return
+				print '\nCould not set the desired voltage. Taking data with {v}V\n'.format(v=self.last_line['voltage'])
 		if do_ramp: print 'Done'
 
 	def GetLastLogFilePath(self):

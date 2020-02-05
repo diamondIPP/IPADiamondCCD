@@ -147,6 +147,20 @@ def GetMaximumBranch(tree, bra, cut=''):
 	event_list.Delete()
 	return val
 
+def Correct_Path(path, times=2):
+	abs_path = ''
+	if path[0] == '~':
+		abs_path += os.path.expanduser('~')
+		abs_path += path[1:]
+	elif os.path.isabs(path):
+		abs_path += path
+	else:
+		abs_path += os.path.abspath(path)
+	if times != 1:
+		return Correct_Path(abs_path, 1)
+	return abs_path
+
+
 if __name__ == '__main__':
 	print 'blaaaa'
 

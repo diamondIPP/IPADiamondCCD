@@ -15,12 +15,13 @@ import ROOT as ro
 import pickle
 import shutil
 from copy import deepcopy
+from Utils import *
 
 
 # from DataAcquisition import DataAcquisition
 
 class Converter_Caen:
-	def __init__(self, settings_object='', data_path=''):
+	def __init__(self, settings_object='', data_path='', simultaneous_data_conv=True):
 		self.settings_object = settings_object
 
 		self.settings_full_path = os.path.abspath(settings_object)
@@ -31,6 +32,8 @@ class Converter_Caen:
 		self.signal_ch = pickle.load(open('{d}/{f}.signal_ch'.format(d=self.output_dir, f=self.filename), 'rb'))
 		self.trigger_ch = pickle.load(open('{d}/{f}.trigger_ch'.format(d=self.output_dir, f=self.filename), 'rb'))
 		self.veto_ch = pickle.load(open('{d}/{f}.veto'.format(d=self.output_dir, f=self.filename), 'rb'))
+
+		self.settings.simultaneous_conversion = simultaneous_data_conv
 
 		self.signal_path = data_path + '/raw_wave{chs}.dat'.format(chs=self.settings.sigCh) if self.settings.simultaneous_conversion else data_path + '/' + self.filename + '_signal.dat'
 		self.trigger_path = data_path + '/raw_wave{cht}.dat'.format(cht=self.settings.trigCh) if self.settings.simultaneous_conversion else data_path + '/' + self.filename + '_trigger.dat'
@@ -394,7 +397,11 @@ if __name__ == '__main__':
 		data_path = str(sys.argv[2])  # path where the binary data in adcs is
 	else:
 		data_path = ''
-	converter = Converter_Caen(settings_object=settings_object, data_path=data_path)
+	is_simultaneous_data_conv = True
+	if len(sys.argv) > 3:
+		if IsInt(str(sys.argv[3])):
+			is_simultaneous_data_conv = bool(int(str(sys.argv[3])))
+	converter = Converter_Caen(settings_object=settings_object, data_path=data_path, simultaneous_data_conv=is_simultaneous_data_conv)
 
 	converter.SetupRootFile()
 	converter.GetBinariesNumberWrittenEvents()

@@ -981,7 +981,7 @@ class AnalysisCaenCCD:
 		self.line[name].Draw('same')
 		ro.gPad.Update()
 		print 'Fit {n}: <PH> = {f}'.format(n=name, f=fitmean)
-		print 'Histo {n}: <PH> = {f}'.format(n=name, f=self.histo[name].GetMean())
+		print u'Histo {n}: <PH> = {f} \u00B1 {f2}'.format(n=name, f=self.histo[name].GetMean(), f2=self.histo[name].GetMeanError())
 		print 'Fit {n}: MP_fit = {f}'.format(n=name, f=self.langaus[name].fit_mp)
 		self.toy_histos = [self.histo[name].Clone('h_' + name + '_toy_' + str(it)) for it in xrange(100)]
 		self.utils.CreateProgressBar(len(self.toy_histos))

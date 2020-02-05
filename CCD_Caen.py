@@ -32,7 +32,7 @@ class CCD_Caen:
 		elif settingsObj:
 			self.settings = settingsObj
 		else:
-			ExitMessage('No setting file was given, or settings object. Quittint!')
+			ExitMessage('No setting file was given, or settings object. Quitting!')
 		self.settings.Get_Calibration_Constants()
 		self.settings.SetOutputFiles()
 
@@ -65,6 +65,8 @@ class CCD_Caen:
 		self.session_written_events_sig, self.session_written_events_trg, self.session_written_events_veto = 0, 0, 0
 		self.fins, self.fint, self.finv = None, None, None
 		self.datas, self.datat, self.datav = None, None, None
+		self.time_restart = int(np.ceil(self.settings.time_calib + 35))
+		self.do_restart = False
 
 	def RemoveFiles(self):
 		# used, for example, to remove old files that may have stayed due to crashes
@@ -191,7 +193,12 @@ class CCD_Caen:
 			# time.sleep(1)
 			self.t2 = time.time()
 			while self.p.poll() is None:
-				if time.time() - self.t1 >= self.settings.time_calib:
+				if time.time() - self.t1 > self.time_restart:
+					self.do_restart = True
+					print 'Wavedump seems to be crashed... it will be restarted!'
+					self.p.terminate()
+					time.sleep(1)
+				elif time.time() - self.t1 >= self.settings.time_calib:
 					self.p.stdin.write('s')
 					self.p.stdin.flush()
 					self.settings.RemoveBinaries()
@@ -398,7 +405,7 @@ class CCD_Caen:
 			self.settings.CreateProgressBar(self.settings.num_events)
 			self.settings.bar.start()
 		self.settings.SetupDigitiser(doBaseLines=False, signal=self.signal_ch, trigger=self.trigger_ch, ac=self.veto_ch, events_written=self.total_events)
-		while self.total_events < self.settings.num_events:
+		while self.total_events < self.settings.num_events and not self.do_restart:
 			self.sig_written = self.CalculateEventsWritten(self.signal_ch.ch)
 			self.trg_written = self.CalculateEventsWritten(self.trigger_ch.ch)
 			self.veto_written = self.CalculateEventsWritten(self.veto_ch.ch)
@@ -412,6 +419,10 @@ class CCD_Caen:
 			while self.pconv.poll() is None:
 				time.sleep(2)
 			self.CloseSubprocess('converter', stdin=False, stdout=False)
+		if self.do_restart:
+			print 'Wavedump was closed. It will be now restarted.'
+			self.do_restart = False
+			self.GetData()
 		return self.total_events
 
 	def CreateRootFile(self, files_moved=False):
