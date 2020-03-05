@@ -74,6 +74,7 @@ class Converter_Caen:
 		self.raw_file = None
 		self.raw_tree = None
 		self.eventBra = self.voltBra = self.trigBra = self.vetoBra = self.timeBra = self.vetoedBra = self.badShapeBra = self.badPedBra = None
+		self.satEventBra = None
 		self.hvVoltageBra = self.hvCurrentBra = None
 		# self.hourBra = self.minuteBra = self.secondBra = None
 		self.hourMinSecBra = None
@@ -92,6 +93,7 @@ class Converter_Caen:
 		self.vetoed_event = None
 		self.bad_shape_event = None
 		self.bad_pedstal_event = None
+		self.sat_event = None
 		self.condition_base_line = None
 		self.condition_peak_pos = None
 		self.hv_voltage_event = None
@@ -127,6 +129,7 @@ class Converter_Caen:
 		self.timeBra = np.zeros(self.points, 'f8')
 		self.badShapeBra = np.zeros(1, dtype=np.dtype('int8'))  # signed char
 		self.badPedBra = np.zeros(1, '?')
+		self.satEventBra = np.zeros(1, '?')
 		if self.control_hv:
 			self.hvVoltageBra = np.zeros(1, 'f4')
 			self.hvCurrentBra = np.zeros(1, 'f4')
@@ -139,6 +142,7 @@ class Converter_Caen:
 		self.raw_tree.Branch('vetoedEvent', self.vetoedBra, 'vetoedEvent/O')
 		self.raw_tree.Branch('badShape', self.badShapeBra, 'badShape/B')  # signed char
 		self.raw_tree.Branch('badPedestal', self.badPedBra, 'badPedestal/O')
+		self.raw_tree.Branch('satEvent', self.satEventBra, 'satEvent/O')
 		if self.control_hv:
 			self.raw_tree.Branch('voltageHV', self.hvVoltageBra, 'voltageHV/F')
 			self.raw_tree.Branch('currentHV', self.hvCurrentBra, 'currentHV/F')
@@ -188,6 +192,7 @@ class Converter_Caen:
 			self.DefineSignalBaseLineAndPeakPosition()
 			self.bad_shape_event = self.IsEventBadShape()
 			self.bad_pedstal_event = self.IsPedestalBad()
+			self.sat_event = self.IsEventSaturated()
 			self.FillBranches(ev)
 			if ev == 10:
 				self.raw_tree.OptimizeBaskets()
@@ -335,6 +340,13 @@ class Converter_Caen:
 			else:  # when the signal pedestal is well behaved and the signal returns to baseline
 				return False
 
+	def IsEventSaturated(self):
+		if RoundInt(2 ** 14 -1) in np.extract(np.bitwise_or(self.condition_base_line, self.condition_peak_pos), self.sigADC):
+			return True
+		if 0 in np.extract(np.bitwise_or(self.condition_base_line, self.condition_peak_pos), self.sigADC):
+			return True
+		return False
+
 	def FillBranches(self, ev):
 		self.eventBra.fill(ev)
 		np.putmask(self.timeBra, np.bitwise_not(np.zeros(self.points, '?')), self.timeVect)
@@ -344,6 +356,7 @@ class Converter_Caen:
 		self.vetoedBra.fill(self.vetoed_event)
 		self.badShapeBra.fill(self.bad_shape_event)
 		self.badPedBra.fill(self.bad_pedstal_event)
+		self.satEventBra.fill(self.sat_event)
 		if self.control_hv:
 			self.hvVoltageBra.fill(self.hv_data['voltage'])
 			self.hvCurrentBra.fill(self.hv_data['current'])

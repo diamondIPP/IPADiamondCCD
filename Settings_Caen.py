@@ -29,9 +29,10 @@ class Settings_Caen:
 		self.post_trig_percent = 90
 		self.num_events = 10
 		self.time_calib = 300
+		self.time_stab = 120
 		self.dut = 'diamond'
 		self.bias = 0
-		self.input_range = 2.15
+		self.input_range = 2.0
 		self.calib_path = ''
 		self.simultaneous_conversion = False
 		self.plot_waveforms = False
@@ -40,17 +41,17 @@ class Settings_Caen:
 		self.do_hv_control = False
 		self.pics_folder_path = ''
 		self.hv_supply = ''
-                self.hv_address = ''
+		self.hv_address = ''
 		self.hv_ch = 0
 		self.current_limit = 0
 		self.hv_ramp = 10  # in V/s
 		self.hot_start = True
 		self.sigCh = 0
 		self.trigCh = 1
-		self.trig_base_line = -0.08
+		self.trig_base_line = 0
 		self.trig_thr_counts = 35
 		self.acCh = 2
-		self.ac_base_line = -0.08
+		self.ac_base_line = 0
 		self.ac_thr_counts = 15
 		self.outdir = '.'
 		self.prefix = 'waves'
@@ -58,6 +59,13 @@ class Settings_Caen:
 		self.sigRes = 0
 		self.UpdateSignalResolution()
 		self.filename = ''
+
+		# calibration variables
+		self.cal_type = 'none'
+		self.trig_cal_polarity = 1
+		self.trig_cal_base_line = 0
+		self.trig_cal_thr_mv = 100
+		self.pulser_amplitude = 0
 
 		self.fit_signal_vcal_params = np.array([-1.21888705e-04, -8.96215025e-01], dtype='f8')
 		self.fit_signal_vcal_params_errors = np.array([0.0001923, 0.00559264], dtype='f8')
@@ -159,6 +167,18 @@ class Settings_Caen:
 					if parser.has_option('ANTICOINCIDENCE', 'thr_counts'):
 						self.ac_thr_counts = parser.getint('ANTICOINCIDENCE', 'thr_counts')
 
+				if parser.has_section('SIGNALCALIBRATION'):
+					if parser.has_option('SIGNALCALIBRATION', 'type'):
+						self.cal_type = parser.get('SIGNALCALIBRATION', 'type').lower()
+					if parser.has_option('SIGNALCALIBRATION', 'trigger_polarity'):
+						self.trig_cal_polarity = 1 if parser.getfloat('SIGNALCALIBRATION', 'trigger_polarity') >= 0 else -1
+					if parser.has_option('SIGNALCALIBRATION', 'trigger_baseline'):
+						self.trig_cal_base_line = parser.getfloat('SIGNALCALIBRATION', 'trigger_baseline')
+					if parser.has_option('SIGNALCALIBRATION', 'trigger_threshold'):
+						self.trig_cal_thr_mv = parser.getfloat('SIGNALCALIBRATION', 'trigger_threshold')
+					if parser.has_option('SIGNALCALIBRATION', 'pulser_amplitude'):
+						self.pulser_amplitude = parser.getfloat('SIGNALCALIBRATION', 'pulser_amplitude')
+
 				if parser.has_section('OUTPUT'):
 					if parser.has_option('OUTPUT', 'dir'):
 						self.outdir = parser.get('OUTPUT', 'dir')
@@ -257,10 +277,11 @@ class Settings_Caen:
 		print 'Done'
 
 	def ADC_to_Volts(self, adcs, channel):
-		return channel.ADC_to_Volts(adcs, self.sigRes, self.dig_bits)
+		return channel.ADC_to_Volts(adcs, self.dig_bits)
 
 	def GetTriggerValueADCs(self, channel):
-		return int(round(channel.base_line_u_adcs - channel.thr_counts - (2.0**self.dig_bits - 1) * (channel.dc_offset_percent/100.0 - 0.5)))
+		return int(channel.base_line_adcs - channel.thr_counts)
+		# return int(round(channel.base_line_u_adcs - channel.thr_counts - (2.0**self.dig_bits - 1) * (channel.dc_offset_percent/100.0 - 0.5)))
 
 	def MoveBinaryFiles(self):
 		print 'Moving binary files... ', ; sys.stdout.flush()

@@ -1051,7 +1051,7 @@ class AnalysisCaenCCD:
 #
 # 	# if auto:
 # 	# 	ccd.StartHVControl()
-# 	# 	ccd.GetBaseLines()
+# 	# 	ccd.AdjustBaseLines()
 # 	# 	ccd.SavePickles()
 # 	# 	written_events = ccd.GetData()
 # 	# 	ccd.settings.num_events = written_events

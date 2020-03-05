@@ -160,6 +160,15 @@ def Correct_Path(path, times=2):
 		return Correct_Path(abs_path, 1)
 	return abs_path
 
+def RoundInt(n, nptype='int32'):
+	val = np.floor(np.add(n, 0.5, dtype='f8'), dtype='f8').astype(nptype)
+	if nptype.lower().startswith('i') or nptype.lower().startswith('ui'):
+		return int(val)
+	elif nptype.lower().startswith('f'):
+		return float(val)
+	return val
+
+
 
 if __name__ == '__main__':
 	print 'blaaaa'

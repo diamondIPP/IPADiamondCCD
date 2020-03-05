@@ -54,7 +54,7 @@ class VoltageScan:
 
 			self.p[volt] = CCD_Caen(settingsObj=self.settings)
 			self.p[volt].StartHVControl()
-			self.p[volt].GetBaseLines()
+			self.p[volt].AdjustBaseLines()
 			self.p[volt].SavePickles()
 			print 'Waiting {s} seconds before starting run...'.format(s=self.time_sleep), ; sys.stdout.flush()
 			time.sleep(self.time_sleep)
@@ -100,7 +100,7 @@ def main():
 	parser.add_option('-a', '--automatic', dest='auto', default=False, help='Toggles automatic conversion and analysis afterwards', action='store_true')
 	parser.add_option('-l', '--list', dest='listvals', type='string', help='List of bias voltages to analyse. It should be in brackets. The values should be floats. e.g. [500,550,600]. It overrides "--step, --start, --stop option".', default='[]')
 	parser.add_option('-n', '--numevts', dest='numevts', type='string', help='List of number of events to analyse. It should be in brackets. The number of elements has to match the number of bias voltages. e.g. [10000,50000,10000]', default='[]')
-	parser.add_option('-t', '--time', dest='timebetween', type='int', help='time in between measurements in seconds.', default=1)
+	parser.add_option('-t', '--time', dest='timebetween', type='int', help='time in between measurements in seconds.', default=120)
 
 	(options, args) = parser.parse_args()
 	infile = str(options.infile)

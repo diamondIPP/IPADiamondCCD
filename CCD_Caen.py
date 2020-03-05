@@ -11,6 +11,7 @@ from optparse import OptionParser
 import ROOT as ro
 import numpy as np
 import cPickle as pickle
+import ipdb
 
 from Channel_Caen import Channel_Caen
 from Settings_Caen import Settings_Caen
@@ -66,7 +67,6 @@ class CCD_Caen:
 		self.fins, self.fint, self.finv = None, None, None
 		self.datas, self.datat, self.datav = None, None, None
 		self.time_restart = int(np.ceil(self.settings.time_calib + 35))
-		self.do_restart = False
 
 	def RemoveFiles(self):
 		# used, for example, to remove old files that may have stayed due to crashes
@@ -98,19 +98,75 @@ class CCD_Caen:
 			print 'Done'
 			self.hv_control.CheckVoltage()
 
-	def GetBaseLines(self):
-		self.settings.SetupDigitiser(doBaseLines=True, signal=self.signal_ch, trigger=self.trigger_ch, ac=self.veto_ch)
-		self.p = subp.Popen(['{p}/wavedump'.format(p=self.settings.wavedump_path), '{d}/WaveDumpConfig_CCD_BL.txt'.format(d=self.settings.outdir)], bufsize=-1, stdin=subp.PIPE, close_fds=True)
+	def AdjustBaseLines(self, ntries=5):
+		# Read ADCs from files for trigger and veto scintillators
+		ntriggers = 10
 		t0 = time.time()
 		self.CreateEmptyFiles()
 		self.CloseFiles()
-		self.GetWaveforms(events=1, stdin=True, stdout=False)
-		if self.total_events >= 1:
-			self.ReadBaseLines()
+		self.settings.SetupDigitiser(doBaseLines=True, signal=self.signal_ch, trigger=self.trigger_ch, ac=self.veto_ch)
+		self.p = subp.Popen(['{p}/wavedump'.format(p=self.settings.wavedump_path), '{d}/WaveDumpConfig_CCD_BL.txt'.format(d=self.settings.outdir)], bufsize=-1, stdin=subp.PIPE, close_fds=True)
+		time.sleep(2)
+		if self.p.poll() is None:
+			self.GetWaveforms(int(-1 * ntriggers), True, False)
+		else:
+			print 'Wavedump did not start'
 			self.settings.RemoveBinaries()
 			self.RemoveFiles()
-		print 'Time getting base lines: {t} seconds'.format(t=(time.time() - t0))
-		del t0
+			if ntries > 0:
+				self.AdjustBaseLines(ntries - 1)
+			else:
+				ExitMessage('There is a problem with Wavedump... exiting')
+
+		if self.total_events != ntriggers:
+			print 'Saved', self.total_events, 'which is different to the', ntriggers, 'sent'
+			ntriggers = self.total_events
+
+		with open('raw_wave{t}.dat'.format(t=self.trigger_ch.ch), 'rb') as self.ft0:
+			triggADCs = np.empty(0, dtype='H')
+			for ev in xrange(ntriggers):
+				self.ft0.seek(ev * self.settings.struct_len, 0)
+				self.datat = self.ft0.read(self.settings.struct_len)
+				t = struct.Struct(self.settings.struct_fmt).unpack_from(self.datat)
+				triggADCs = np.append(triggADCs, np.array(t, 'H'))
+			mean_t = triggADCs.mean()
+			std_t = triggADCs.std()
+
+		with open('raw_wave{ac}.dat'.format(ac=self.veto_ch.ch), 'rb') as self.fv0:
+			acADCs = np.empty(0, dtype='H')
+			for ev in xrange(ntriggers):
+				self.fv0.seek(ev * self.settings.struct_len, 0)
+				self.datav = self.fv0.read(self.settings.struct_len)
+				ac = struct.Struct(self.settings.struct_fmt).unpack_from(self.datav)
+				acADCs = np.append(acADCs, np.array(ac, 'H'))
+			mean_ac = acADCs.mean()
+			std_ac = acADCs.std()
+
+		# clear possible ADCs with non-baseline signals
+		for i in xrange(10):
+			condition_t = (np.abs(triggADCs - mean_t) < 3 * std_t)
+			mean_t = np.extract(condition_t, triggADCs).mean()
+			std_t = np.extract(condition_t, triggADCs).std()
+			condition_ac = (np.abs(acADCs - mean_ac) < 3 * std_ac)
+			mean_ac = np.extract(condition_ac, acADCs).mean()
+			std_ac = np.extract(condition_ac, acADCs).std()
+
+		# set channels such that the baselines are near the maximum ADC's leaving space for the scintillator signals. Adjust threshold values
+		self.trigger_ch.Correct_Base_Line(mean_adc=mean_t, sigma_adc=std_t, settings=self.settings)
+		self.trigger_ch.Correct_Threshold()
+		# self.settings.trig_base_line = np.multiply(self.trigger_ch.base_line_u_adcs, self.settings.sigRes, dtype='f8')
+		self.settings.trig_base_line = self.trigger_ch.ADC_to_Volts(self.trigger_ch.base_line_adcs)
+		self.settings.trig_thr_counts = self.trigger_ch.thr_counts
+		self.veto_ch.Correct_Base_Line(mean_adc=mean_ac, sigma_adc=std_ac, settings=self.settings)
+		self.veto_ch.Correct_Threshold()
+		# self.settings.ac_base_line = np.multiply(self.veto_ch.base_line_u_adcs, self.settings.sigRes, dtype='f8')
+		self.settings.ac_base_line = self.veto_ch.ADC_to_Volts(self.veto_ch.base_line_adcs)
+		self.settings.ac_thr_counts = self.veto_ch.thr_counts
+
+		del self.ft0, self.datat, t, triggADCs, mean_t, std_t
+		del self.fv0, self.datav, ac, acADCs, mean_ac, std_ac
+		self.ft0, self.datat= None, None
+		self.fv0, self.datav = None, None
 
 	def CreateEmptyFiles(self):
 		self.ft0 = open('raw_wave{t}.dat'.format(t=self.trigger_ch.ch), 'wb')
@@ -145,7 +201,8 @@ class CCD_Caen:
 	def GetWaveforms(self, events=1, stdin=False, stdout=False):
 		self.t1 = time.time()
 		# if self.settings.do_hv_control: self.hv_control.UpdateHVFile()
-		if events == 1:
+		# Negative events is for correcting the baseline of the scintillators and the sigma to set the thresholds
+		if events < 0:
 			# while self.p.poll() is None:
 			time.sleep(1)
 			self.p.stdin.write('c')
@@ -161,9 +218,10 @@ class CCD_Caen:
 			self.p.stdin.write('w')
 			self.p.stdin.flush()
 			# time.sleep(1)
-			self.p.stdin.write('t')
-			self.p.stdin.flush()
-			time.sleep(1)
+			for it in xrange(abs(events)):
+				time.sleep(0.5)
+				self.p.stdin.write('t')
+				self.p.stdin.flush()
 			self.p.stdin.write('s')
 			self.p.stdin.flush()
 			time.sleep(1)
@@ -193,12 +251,8 @@ class CCD_Caen:
 			# time.sleep(1)
 			self.t2 = time.time()
 			while self.p.poll() is None:
-				if time.time() - self.t1 > self.time_restart:
-					self.do_restart = True
-					print 'Wavedump seems to be crashed... it will be restarted!'
-					self.p.terminate()
-					time.sleep(1)
-				elif time.time() - self.t1 >= self.settings.time_calib:
+				if time.time() - self.t1 >= self.settings.time_calib:
+					# ipdb.set_trace()
 					self.p.stdin.write('s')
 					self.p.stdin.flush()
 					self.settings.RemoveBinaries()
@@ -350,50 +404,8 @@ class CCD_Caen:
 	def CalculateEventsWritten(self, ch):
 		return int(round(float(os.path.getsize('raw_wave{c}.dat'.format(c=ch))) / float(self.settings.struct_len)))
 
-	def ReadBaseLines(self):
-		# Read ADCs from files for trigger and veto scintillators
-		with open('raw_wave{t}.dat'.format(t=self.trigger_ch.ch), 'rb') as self.ft0:
-			self.ft0.seek(0)
-			self.datat = self.ft0.read(self.settings.struct_len)
-			t = struct.Struct(self.settings.struct_fmt).unpack_from(self.datat)
-			triggADCs = np.array(t, 'H')
-			mean_t = triggADCs.mean()
-			std_t = triggADCs.std()
-
-		with open('raw_wave{ac}.dat'.format(ac=self.veto_ch.ch), 'rb') as self.fv0:
-			self.fv0.seek(0)
-			self.datav = self.fv0.read(self.settings.struct_len)
-			ac = struct.Struct(self.settings.struct_fmt).unpack_from(self.datav)
-			acADCs = np.array(ac, 'H')
-			mean_ac = acADCs.mean()
-			std_ac = acADCs.std()
-
-		# clear possible ADCs with non-baseline signals
-		for i in xrange(10):
-			condition_t = (np.abs(triggADCs - mean_t) < 3 * std_t)
-			mean_t = np.extract(condition_t, triggADCs).mean()
-			std_t = np.extract(condition_t, triggADCs).std()
-			condition_ac = (np.abs(acADCs - mean_ac) < 3 * std_ac)
-			mean_ac = np.extract(condition_ac, acADCs).mean()
-			std_ac = np.extract(condition_ac, acADCs).std()
-
-		# set channels such that the baselines are near the maximum ADC's leaving space for the scintillator signals. Adjust threshold values
-		self.trigger_ch.Correct_Base_Line(mean_adc=mean_t, sigma_adc=std_t, settings=self.settings)
-		# self.trigger_ch.Correct_Threshold(sigma=std_t)
-		self.settings.trig_base_line = np.multiply(self.trigger_ch.base_line_u_adcs, self.settings.sigRes, dtype='f8')
-		self.settings.trig_thr_counts = self.trigger_ch.thr_counts
-		self.veto_ch.Correct_Base_Line(mean_adc=mean_ac, sigma_adc=std_ac, settings=self.settings)
-		# self.veto_ch.Correct_Threshold(sigma=std_ac)
-		self.settings.ac_base_line = np.multiply(self.veto_ch.base_line_u_adcs, self.settings.sigRes, dtype='f8')
-		self.settings.ac_thr_counts = self.veto_ch.thr_counts
-
-		del self.ft0, self.datat, t, triggADCs, mean_t, std_t
-		del self.fv0, self.datav, ac, acADCs, mean_ac, std_ac
-		self.ft0, self.datat= None, None
-		self.fv0, self.datav = None, None
-
 	# @profile(precision=12)
-	def GetData(self):
+	def GetData(self, ntries=5):
 		self.t0 = time.time()
 		self.CreateEmptyFiles()
 		self.CloseFiles()
@@ -405,12 +417,21 @@ class CCD_Caen:
 			self.settings.CreateProgressBar(self.settings.num_events)
 			self.settings.bar.start()
 		self.settings.SetupDigitiser(doBaseLines=False, signal=self.signal_ch, trigger=self.trigger_ch, ac=self.veto_ch, events_written=self.total_events)
-		while self.total_events < self.settings.num_events and not self.do_restart:
+		while self.total_events < self.settings.num_events:
 			self.sig_written = self.CalculateEventsWritten(self.signal_ch.ch)
 			self.trg_written = self.CalculateEventsWritten(self.trigger_ch.ch)
 			self.veto_written = self.CalculateEventsWritten(self.veto_ch.ch)
 			self.p = subp.Popen(['{p}/wavedump'.format(p=self.settings.wavedump_path), '{d}/WaveDumpConfig_CCD.txt'.format(d=self.settings.outdir)], bufsize=-1, stdin=subp.PIPE, stdout=subp.PIPE, close_fds=True)
-			self.GetWaveforms(self.settings.num_events, stdin=True, stdout=True)
+			time.sleep(2)
+			if self.p.poll() is None:
+				self.GetWaveforms(self.settings.num_events, stdin=True, stdout=True)
+			else:
+				print 'Wavedump did not start'
+				if ntries <= 0:
+					ExitMessage('There is a problem with Wavedump... exiting')
+				else:
+					ntries = ntries - 1
+
 		self.CloseFiles()
 		if not self.settings.simultaneous_conversion:
 			print 'Time getting {n} events: {t} seconds'.format(n=self.total_events, t=time.time() - self.t0)
@@ -419,10 +440,6 @@ class CCD_Caen:
 			while self.pconv.poll() is None:
 				time.sleep(2)
 			self.CloseSubprocess('converter', stdin=False, stdout=False)
-		if self.do_restart:
-			print 'Wavedump was closed. It will be now restarted.'
-			self.do_restart = False
-			self.GetData()
 		return self.total_events
 
 	def CreateRootFile(self, files_moved=False):
@@ -456,16 +473,25 @@ def main():
 	                  help='Input configuration file. e.g. CAENCalibration.cfg')
 	parser.add_option('-v', '--verbose', dest='verb', default=False, help='Toggles verbose', action='store_true')
 	parser.add_option('-a', '--automatic', dest='auto', default=False, help='Toggles automatic conversion and analysis afterwards', action='store_true')
+	parser.add_option('-c', '--calibration_run', dest='calrun', default=False, action='store_true', help='Used for calibration runs with pulser')
+	parser.add_option('-t', '--time', dest='stabilizationtime', type='int', default=180, help='Time in seconds to wait before taking data due to HV stabilization. Default: 180')
 
 	(options, args) = parser.parse_args()
 	infile = str(options.infile)
 	auto = bool(options.auto)
 	verb = bool(options.verb)
+	iscal = bool(options.calrun)
+	time_wait = int(options.stabilizationtime)
 	ccd = CCD_Caen(infile, verb)
-	if auto:
+
+	if iscal:
+		pass
+
+	elif auto:
 		ccd.StartHVControl()
-		ccd.GetBaseLines()
+		ccd.AdjustBaseLines()
 		ccd.SavePickles()
+		time.sleep(time_wait)
 		written_events = ccd.GetData()
 		ccd.settings.num_events = written_events
 		ccd.SavePickles()  # update pickles with the real amount of written events
