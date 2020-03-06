@@ -47,6 +47,7 @@ class CCD_Caen:
 
 		# declare extra variables that will be used
 		self.fs0, self.ft0, self.fv0 = None, None, None
+		self.file_time_stamp = None
 		self.hv_control = None
 		self.utils = Utils()
 		self.RemoveFiles()
@@ -54,15 +55,18 @@ class CCD_Caen:
 		self.p, self.pconv = None, None
 		self.total_events = 0
 		self.written_events_sig, self.written_events_trig, self.written_events_veto = 0, 0, 0
+		self.written_events_time = 0
 		self.total_events_sig, self.total_events_trig, self.total_events_veto = 0, 0, 0
 		self.session_measured_data_sig, self.session_measured_data_trig, self.session_measured_data_veto = 0, 0, 0
 		self.total_merged_data_sig, self.total_merged_data_trig, self.total_merged_data_veto = 0, 0, 0
+		self.total_merged_data_time = 0
 		self.doMerge = False
 		self.min_measured_data = 0
 		self.min_data_to_write = 0
 		self.events_to_write = 0
 		self.read_size = 0
 		self.sig_written, self.trg_written, self.veto_written = 0, 0, 0
+		self.timestamp_written = 0
 		self.session_written_events_sig, self.session_written_events_trg, self.session_written_events_veto = 0, 0, 0
 		self.fins, self.fint, self.finv = None, None, None
 		self.datas, self.datat, self.datav = None, None, None
@@ -172,6 +176,8 @@ class CCD_Caen:
 		self.ft0 = open('raw_wave{t}.dat'.format(t=self.trigger_ch.ch), 'wb')
 		self.fs0 = open('raw_wave{s}.dat'.format(s=self.signal_ch.ch), 'wb')
 		self.fv0 = open('raw_wave{a}.dat'.format(a=self.veto_ch.ch), 'wb')
+		# for timestamp
+		self.file_time_stamp = open('raw_time.dat', 'wb')
 
 	def OpenFiles(self, mode='rb'):
 		if not self.fs0:
@@ -197,6 +203,11 @@ class CCD_Caen:
 			if self.fv0.closed:
 				del self.fv0
 				self.fv0 = None
+		if self.file_time_stamp:
+			self.file_time_stamp.close()
+			if self.file_time_stamp.closed:
+				del self.file_time_stamp
+				self.file_time_stamp = None
 
 	def GetWaveforms(self, events=1, stdin=False, stdout=False):
 		self.t1 = time.time()
@@ -347,6 +358,7 @@ class CCD_Caen:
 		self.total_merged_data_sig = int(os.path.getsize('raw_wave{s}.dat'.format(s=self.signal_ch.ch)))
 		self.total_merged_data_trig = int(os.path.getsize('raw_wave{t}.dat'.format(t=self.trigger_ch.ch)))
 		self.total_merged_data_veto = int(os.path.getsize('raw_wave{a}.dat'.format(a=self.veto_ch.ch)))
+		self.total_merged_data_time = int(os.path.getsize('raw_time.dat'))
 		self.doMerge = (self.session_measured_data_sig + self.sig_written * self.settings.struct_len > self.total_merged_data_sig) and (self.session_measured_data_trig + self.trg_written * self.settings.struct_len > self.total_merged_data_trig) and (self.session_measured_data_veto + self.veto_written * self.settings.struct_len > self.total_merged_data_veto)
 		if self.doMerge:
 			# self.OpenFiles(mode='ab')
@@ -392,9 +404,21 @@ class CCD_Caen:
 			del self.fv0, self.datav
 			self.fv0, self.datav = None, None
 
+			temptime = time.time()
+			temptimes = int(temptime)
+			temptimens = int(1e9 * (temptime - temptimes))
+			datatime = struct.pack(self.settings.time_struct_fmt, temptimes, temptimens)
+			with open('raw_time.dat', 'ab') as self.file_time_stamp:
+				for ev in xrange(self.events_to_write):
+					self.file_time_stamp.write(datatime)
+					self.file_time_stamp.flush()
+			del self.file_time_stamp
+			self.file_time_stamp = None
+
 			self.written_events_sig += int(self.events_to_write)
 			self.written_events_trig += int(self.events_to_write)
 			self.written_events_veto += int(self.events_to_write)
+			self.written_events_time += int(self.events_to_write)
 
 			del self.events_to_write, self.read_size
 			self.events_to_write, self.read_size = None, None
@@ -402,7 +426,12 @@ class CCD_Caen:
 		self.doMerge = False
 
 	def CalculateEventsWritten(self, ch):
-		return int(round(float(os.path.getsize('raw_wave{c}.dat'.format(c=ch))) / float(self.settings.struct_len)))
+		if ch != -1:
+			# it is not timestamp file. it is a digitized channel
+			return int(round(float(os.path.getsize('raw_wave{c}.dat'.format(c=ch))) / float(self.settings.struct_len)))
+		else:
+			# it is for timestamp
+			return int(round(float(os.path.getsize('raw_time.dat')) / float(self.settings.time_struct_len)))
 
 	# @profile(precision=12)
 	def GetData(self, ntries=5):
@@ -421,6 +450,7 @@ class CCD_Caen:
 			self.sig_written = self.CalculateEventsWritten(self.signal_ch.ch)
 			self.trg_written = self.CalculateEventsWritten(self.trigger_ch.ch)
 			self.veto_written = self.CalculateEventsWritten(self.veto_ch.ch)
+			self.timestamp_written = self.CalculateEventsWritten(-1)
 			self.p = subp.Popen(['{p}/wavedump'.format(p=self.settings.wavedump_path), '{d}/WaveDumpConfig_CCD.txt'.format(d=self.settings.outdir)], bufsize=-1, stdin=subp.PIPE, stdout=subp.PIPE, close_fds=True)
 			time.sleep(2)
 			if self.p.poll() is None:

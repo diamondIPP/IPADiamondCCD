@@ -78,6 +78,7 @@ class Converter_Caen:
 		self.hvVoltageBra = self.hvCurrentBra = None
 		# self.hourBra = self.minuteBra = self.secondBra = None
 		self.hourMinSecBra = None
+		self.timeStampBra = None
 
 		self.t0 = time.time()
 
@@ -130,6 +131,7 @@ class Converter_Caen:
 		self.badShapeBra = np.zeros(1, dtype=np.dtype('int8'))  # signed char
 		self.badPedBra = np.zeros(1, '?')
 		self.satEventBra = np.zeros(1, '?')
+		self.timeStampBra = ro.TTimeStamp()
 		if self.control_hv:
 			self.hvVoltageBra = np.zeros(1, 'f4')
 			self.hvCurrentBra = np.zeros(1, 'f4')
@@ -143,6 +145,7 @@ class Converter_Caen:
 		self.raw_tree.Branch('badShape', self.badShapeBra, 'badShape/B')  # signed char
 		self.raw_tree.Branch('badPedestal', self.badPedBra, 'badPedestal/O')
 		self.raw_tree.Branch('satEvent', self.satEventBra, 'satEvent/O')
+		self.raw_tree.Branch('timeStamp', self.timeStampBra)
 		if self.control_hv:
 			self.raw_tree.Branch('voltageHV', self.hvVoltageBra, 'voltageHV/F')
 			self.raw_tree.Branch('currentHV', self.hvCurrentBra, 'currentHV/F')
@@ -357,6 +360,10 @@ class Converter_Caen:
 		self.badShapeBra.fill(self.bad_shape_event)
 		self.badPedBra.fill(self.bad_pedstal_event)
 		self.satEventBra.fill(self.sat_event)
+		tempTime = time.time()
+		tempSec = int(tempTime)
+		tempNanoSec = int(1e9 * abs(tempTime - tempSec))
+		self.timeStampBra.Set(1970, 1, 1, 0, 0, tempSec, tempNanoSec, True, 0)
 		if self.control_hv:
 			self.hvVoltageBra.fill(self.hv_data['voltage'])
 			self.hvCurrentBra.fill(self.hv_data['current'])

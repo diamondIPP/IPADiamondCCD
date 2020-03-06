@@ -59,6 +59,11 @@ class Settings_Caen:
 		self.sigRes = 0
 		self.UpdateSignalResolution()
 		self.filename = ''
+		self.r_passive = 230e6
+
+		# timestamp
+		self.time_struct_fmt = '@II'  # struct for time stamp the first uint32 is for the seconds since epoch, and the second for nano seconds since epoch
+		self.time_struct_len = struct.calcsize(self.time_struct_fmt)
 
 		# calibration variables
 		self.cal_type = 'none'

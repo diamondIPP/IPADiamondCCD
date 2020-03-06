@@ -181,8 +181,41 @@ class HV_Control:
 		list_logs = glob.glob('{d}/*.log'.format(d=self.logs_dir))
 		if not list_logs:
 			return
-		self.log_file = max(list_logs, key=os.path.getctime)
+		self.log_file = max(list_logs, key=os.path.getmtime)
 		del list_logs
+
+	def FindLogFilePath(self, timesec, timens):
+		list_logs = glob.glob('{d}/*.log'.format(d=self.logs_dir))
+		if not list_logs:
+			return
+		list_logs.sort(key=lambda x: os.path.getmtime(x))
+		position = 0
+		for it, filet in enumerate(list_logs):
+			if os.path.getmtime(filet) >= timesec + timens * 1e-9:
+				position = it
+				break
+		position = -1 if position == 0 else position
+		self.log_file = list_logs[position]
+
+	def FindLineInLog(self, timesec, timens):
+		lines = []
+		if self.log_file:
+			current_log = open('{f}'.format(f=self.log_file), 'r')
+			lines = current_log.readlines()
+			lines = [line.split() for line in lines if len(line.split()) >= 3 and IsFloat(line.split()[1]) and IsFloat(line.split()[2])]
+			current_log.close()
+		tempTime = ro.TTimeStamp()
+		tempTime.Set(1970, 1, 1, 0, 0, timesec, timens, True, 0)
+		tempYear, tempMonth, tempDay = np.zeros(1, 'int32'), np.zeros(1, 'int32'), np.zeros(1, 'int32')
+		tempHour, tempMinute, tempSecond = np.zeros(1, 'int32'), np.zeros(1, 'int32'), np.zeros(1, 'int32')
+		tempTime.GetDate(False, 0, tempYear, tempMonth, tempDay)
+		tempTime.GetTime(False, 0, tempHour, tempMinute, tempSecond)
+		if len(lines) > 0:
+			lines2 = np.array([ro.TTimeStamp(int(tempYear), int(tempMonth), int(tempDay), int(line[0].split(':')[0]), int(line[0].split(':')[1]), int(line[0].split(':')[2]), 0, False, 0).AsDouble() for line in lines], 'f8')
+			pos = abs(lines2 - tempTime.AsDouble()).argmin()
+			tempdic = {'time_s': lines2[pos], 'voltage': float(lines[pos][1]), 'current': float(lines[pos][2])}
+			return tempdic
+		return {'time_s': timesec + 1e-9 * timens, 'voltage': 0, 'current': 0}
 
 	def ReadLastLine(self, nEvent=0):
 		self.GetLastLogFilePath()
@@ -195,7 +228,7 @@ class HV_Control:
 		temp_time = time.time()
 		self.last_line['event'] = nEvent
 		self.last_line['seconds'] = int(temp_time)
-		self.last_line['nanoseconds'] = int(1e9 * abs(temp_time - int(temp_time)))
+		self.last_line['nanoseconds'] = int(1e9 * abs(temp_time - self.last_line['seconds']))
 		if not lines:
 			return
 		if len(lines) >= 1:
@@ -230,6 +263,11 @@ class HV_Control:
 			self.out_file.write(self.hv_struct_pack)
 		del self.out_file, temp_array
 		self.out_file = None
+
+	def SearchForData(self, time_sec, time_ns):
+		# todo
+		pass
+
 
 	def CloseClient(self):
 		if self.process:
