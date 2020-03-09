@@ -12,7 +12,7 @@ from ConfigParser import ConfigParser
 import subprocess as subp
 import struct
 import ROOT as ro
-import pickle
+import pickle, re
 import shutil
 from copy import deepcopy
 from Utils import *
@@ -33,11 +33,18 @@ class Converter_Caen:
 		self.trigger_ch = pickle.load(open('{d}/{f}.trigger_ch'.format(d=self.output_dir, f=self.filename), 'rb'))
 		self.veto_ch = pickle.load(open('{d}/{f}.veto'.format(d=self.output_dir, f=self.filename), 'rb'))
 
-		self.settings.simultaneous_conversion = simultaneous_data_conv
+		self.settings.simultaneous_conversion = simultaneous_data_conv #  overrides the flag used while taking data, if it is converted offline
+		self.control_hv = self.settings.do_hv_control
 
 		self.signal_path = data_path + '/raw_wave{chs}.dat'.format(chs=self.settings.sigCh) if self.settings.simultaneous_conversion else data_path + '/' + self.filename + '_signal.dat'
 		self.trigger_path = data_path + '/raw_wave{cht}.dat'.format(cht=self.settings.trigCh) if self.settings.simultaneous_conversion else data_path + '/' + self.filename + '_trigger.dat'
 		self.veto_path = data_path + '/raw_wave{cha}.dat'.format(cha=self.settings.acCh) if self.settings.simultaneous_conversion else data_path + '/' + self.filename + '_veto.dat'
+		self.time_path = data_path + '/raw_time.dat' if self.settings.simultaneous_conversion else data_path + '/' + self.filename + '_time.dat'
+		self.hv_log_files_path = None
+		self.current_hv_log_path = None
+		if self.control_hv:
+			self.hv_log_files_path = data_path + '{f}/{d}_CH{ch}'.format(f=self.filename, d=self.settings.hv_supply, ch=self.settings.hv_ch) if self.settings.simultaneous_conversion else '{d}/Runs/{f}/HV_{f}/{s}_CH{ch}'.format(d=self.settings.outdir, f=self.filename, s=self.settings.hv_supply, ch=self.settings.hv_ch)
+
 		self.points = self.settings.points
 		self.num_events = self.settings.num_events
 		self.struct_len = self.settings.struct_len
@@ -54,7 +61,6 @@ class Converter_Caen:
 		self.dig_bits = self.settings.dig_bits
 		self.simultaneous_conversion = self.settings.simultaneous_conversion
 		self.time_recal = self.settings.time_calib
-		self.control_hv = self.settings.do_hv_control
 		self.polarity = 1 if self.settings.bias >= 0 else -1
 
 		self.hv_file_name = 'hvfile_{f}.dat'.format(f=self.filename)
@@ -78,12 +84,19 @@ class Converter_Caen:
 		self.hvVoltageBra = self.hvCurrentBra = None
 		# self.hourBra = self.minuteBra = self.secondBra = None
 		self.hourMinSecBra = None
-		self.timeStampBra = None
+		# self.timeStampBra = None
+		try:
+			self.time_struct_fmt = self.settings.time_struct_fmt
+			self.time_struct_len = self.settings.time_struct_len
+		except AttributeError:
+			self.time_struct_fmt = '@II'
+			self.time_struct_len = struct.calcsize(self.time_struct_fmt)
 
 		self.t0 = time.time()
 
 		self.signal_written_events = self.trigger_written_events = self.anti_co_written_events = None
 		self.fs = self.ft = self.fa = None
+		self.ftime = None
 		self.wait_for_data = None
 
 		self.datas = self.datat = self.dataa = None
@@ -105,12 +118,48 @@ class Converter_Caen:
 		self.hv_raw_data = None
 		self.hv_struct = None
 		self.hv_data = {'event': 0, 'seconds': 0, 'nanoseconds': 0, 'voltage': 0, 'current': 0}
+
+		self.datatime = None
+		self.tempTime = ro.TTimeStamp()
+		self.tempYear, self.tempMonth, self.tempDay = np.zeros(1, 'int32'), np.zeros(1, 'int32'), np.zeros(1, 'int32')
+		self.tempHour, self.tempMinute, self.tempSecond = np.zeros(1, 'int32'), np.zeros(1, 'int32'), np.zeros(1, 'int32')
 		# self.hour_min_sec_event = None
 		# self.currentTime = None
 
 		self.struct_s = self.struct_t = self.struct_ac = None
+		self.struct_time = None
 
 		self.bar = None
+
+	def CheckTimeStampRaw(self):
+		if os.path.isfile('{wd}/{r}.root'.format(wd=self.output_dir, r=self.filename)):
+			tempfile = ro.TFile('{wd}/{r}.root'.format(wd=self.output_dir, r=self.filename), 'READ')
+			temptree = tempfile.Get(self.filename)
+			if temptree:
+				if temptree.FindLeaf('timeHV'):
+					if temptree.GetLeaf('timeHV').GetTypeName() != 'TDatime':
+						if not os.path.isfile(self.time_path):
+							print 'Extracting timestamp from existing root tree.'
+							temptimefile = open(self.time_path, 'wb')
+							temptimefile.close()
+							leng = temptree.Draw('timeHV.AsDouble()', '', 'goff')
+							while leng > temptree.GetEstimate():
+								temptree.SetEstimate(leng)
+								leng = temptree.Draw('timeHV.AsDouble()', '', 'goff')
+							timehv = temptree.GetVal(0)
+							timehv = np.array([timehv[i] for i in xrange(leng)], dtype='f8')
+							print 'Finished extracting timestamp from existing root tree.'
+							timehvseconds = timehv.astype('int32')
+							timehvnanoseconds = np.multiply(1e9, np.subtract(timehv, timehvseconds, dtype='f8'), dtype='f8').astype('int32')
+							print 'Extracted time in seconds and nanoseconds. Creating binary raw file'
+							with open(self.time_path, 'ab') as temptimefile:
+								for tsec, tnsec in zip(timehvseconds, timehvnanoseconds):
+									datatime = struct.pack(self.time_struct_fmt, int(tsec), int(tnsec))
+									temptimefile.write(datatime)
+									temptimefile.flush()
+							print 'Finished creating raw timestamp file'
+				tempfile.Close()
+			return
 
 	def SetupRootFile(self):
 		if self.simultaneous_conversion:
@@ -131,11 +180,11 @@ class Converter_Caen:
 		self.badShapeBra = np.zeros(1, dtype=np.dtype('int8'))  # signed char
 		self.badPedBra = np.zeros(1, '?')
 		self.satEventBra = np.zeros(1, '?')
-		self.timeStampBra = ro.TTimeStamp()
+		# self.timeStampBra = ro.TTimeStamp()
+		self.hourMinSecBra = ro.TTimeStamp()
 		if self.control_hv:
 			self.hvVoltageBra = np.zeros(1, 'f4')
 			self.hvCurrentBra = np.zeros(1, 'f4')
-			self.hourMinSecBra = ro.TTimeStamp()
 		self.raw_tree.Branch('event', self.eventBra, 'event/i')
 		self.raw_tree.Branch('time', self.timeBra, 'time[{s}]/D'.format(s=self.points))
 		self.raw_tree.Branch('voltageSignal', self.voltBra, 'voltageSignal[{s}]/D'.format(s=self.points))
@@ -145,11 +194,12 @@ class Converter_Caen:
 		self.raw_tree.Branch('badShape', self.badShapeBra, 'badShape/B')  # signed char
 		self.raw_tree.Branch('badPedestal', self.badPedBra, 'badPedestal/O')
 		self.raw_tree.Branch('satEvent', self.satEventBra, 'satEvent/O')
-		self.raw_tree.Branch('timeStamp', self.timeStampBra)
+		self.raw_tree.Branch('timeHV', self.hourMinSecBra)
+		# self.raw_tree.Branch('timeStamp', self.timeStampBra)
 		if self.control_hv:
 			self.raw_tree.Branch('voltageHV', self.hvVoltageBra, 'voltageHV/F')
 			self.raw_tree.Branch('currentHV', self.hvCurrentBra, 'currentHV/F')
-			self.raw_tree.Branch('timeHV', self.hourMinSecBra)
+		# self.raw_tree.Branch('timeHV', self.hourMinSecBra)
 
 	def GetBinariesNumberWrittenEvents(self):
 		self.signal_written_events = int(round(os.path.getsize(self.signal_path) / self.struct_len)) if os.path.isfile(self.signal_path) else 0
@@ -160,6 +210,8 @@ class Converter_Caen:
 		self.fs = open(self.signal_path, 'rb')
 		self.ft = open(self.trigger_path, 'rb')
 		self.fa = open(self.veto_path, 'rb')
+		if os.path.isfile(self.time_path):
+			self.ftime = open(self.time_path, 'rb')
 
 	def CreateProgressBar(self, maxVal=1):
 		widgets = [
@@ -196,6 +248,10 @@ class Converter_Caen:
 			self.bad_shape_event = self.IsEventBadShape()
 			self.bad_pedstal_event = self.IsPedestalBad()
 			self.sat_event = self.IsEventSaturated()
+			if self.datatime:
+				self.struct_time = struct.Struct(self.time_struct_fmt).unpack_from(self.datatime)
+				self.hv_data['seconds'] = int(self.struct_time[0])
+				self.hv_data['nanoseconds'] = int(self.struct_time[1])
 			self.FillBranches(ev)
 			if ev == 10:
 				self.raw_tree.OptimizeBaskets()
@@ -234,28 +290,39 @@ class Converter_Caen:
 		self.fa.seek(ev * self.struct_len, 0)
 		self.dataa = self.fa.read(self.struct_len)
 		if self.control_hv:
-			self.Read_HV_File(ev)
+			if self.ftime:
+				self.ftime.seek(ev * self.time_struct_len, 0)
+				self.datatime = self.ftime.read(self.time_struct_len)
+				self.Read_HV_File()
 
-	def Read_HV_File(self, ev):
-		line = [0, 0]
-		temp_line = ''
-		if os.path.isfile(self.hv_file_name):
-			hv_elems = int(round(os.path.getsize(self.hv_file_name) / self.hv_struct_len))
-			with open(self.hv_file_name, 'rb') as self.file_hv:
-				for pi in xrange(self.hv_pos, hv_elems):
-					self.file_hv.seek(pi * self.hv_struct_len, 0)
-					self.hv_raw_data = self.file_hv.read(self.hv_struct_len)
-					self.hv_struct = struct.Struct(self.hv_struct_fmt).unpack_from(self.hv_raw_data)
-					if self.hv_struct[0] <= ev:
-						self.hv_pos = pi
-					else:
-						self.hv_pos = pi - 1
-					if self.hv_struct[0] >= ev:
-						break
-				self.file_hv.seek(self.hv_pos * self.hv_struct_len, 0)
-				self.hv_raw_data = self.file_hv.read(self.hv_struct_len)
-				self.hv_struct = struct.Struct(self.hv_struct_fmt).unpack_from(self.hv_raw_data)
-				self.hv_data['event'], self.hv_data['seconds'], self.hv_data['nanoseconds'], self.hv_data['voltage'], self.hv_data['current'] = ev, self.hv_struct[1], self.hv_struct[2], self.hv_struct[3], self.hv_struct[4]
+	def Read_HV_File(self):
+		self.struct_time = struct.Struct(self.time_struct_fmt).unpack_from(self.datatime)
+		self.hv_data['seconds'] = int(self.struct_time[0])
+		self.hv_data['nanoseconds'] = int(self.struct_time[1])
+		self.FindLogFilePath(self.hv_data['seconds'], self.hv_data['nanoseconds'])
+		temp_hv_dic = self.FindLineInLog(self.hv_data['seconds'], self.hv_data['nanoseconds'])
+		self.hv_data['voltage'] = temp_hv_dic['voltage']
+		self.hv_data['current'] = temp_hv_dic['current']
+
+		# line = [0, 0]
+		# temp_line = ''
+		# if os.path.isfile(self.hv_file_name):
+		# 	hv_elems = int(round(os.path.getsize(self.hv_file_name) / self.hv_struct_len))
+		# 	with open(self.hv_file_name, 'rb') as self.file_hv:
+		# 		for pi in xrange(self.hv_pos, hv_elems):
+		# 			self.file_hv.seek(pi * self.hv_struct_len, 0)
+		# 			self.hv_raw_data = self.file_hv.read(self.hv_struct_len)
+		# 			self.hv_struct = struct.Struct(self.hv_struct_fmt).unpack_from(self.hv_raw_data)
+		# 			if self.hv_struct[0] <= ev:
+		# 				self.hv_pos = pi
+		# 			else:
+		# 				self.hv_pos = pi - 1
+		# 			if self.hv_struct[0] >= ev:
+		# 				break
+		# 		self.file_hv.seek(self.hv_pos * self.hv_struct_len, 0)
+		# 		self.hv_raw_data = self.file_hv.read(self.hv_struct_len)
+		# 		self.hv_struct = struct.Struct(self.hv_struct_fmt).unpack_from(self.hv_raw_data)
+		# 		self.hv_data['event'], self.hv_data['seconds'], self.hv_data['nanoseconds'], self.hv_data['voltage'], self.hv_data['current'] = ev, self.hv_struct[1], self.hv_struct[2], self.hv_struct[3], self.hv_struct[4]
 
 		# if self.simultaneous_conversion:
 		# 	if os.path.isfile(self.hv_file_name):
@@ -268,8 +335,58 @@ class Converter_Caen:
 		# 			temp_line = self.file_hv.readline()
 		# 			line = temp_line.split() if temp_line != '' else line
 		# self.hv_voltage_event, self.hv_current_event = float(line[0]), float(line[1])
-		del line, temp_line, self.file_hv
-		self.file_hv = None
+		# del line, temp_line, self.file_hv
+		# self.file_hv = None
+
+	def FindLogFilePath(self, timesec, timens):
+		list_logs = glob.glob('{d}/*.log'.format(d=self.hv_log_files_path))
+		if not list_logs:
+			return
+		list_logs.sort(key=lambda x: os.path.getmtime(x))
+		position = -1
+		for it, filet in enumerate(list_logs):
+			if os.path.getmtime(filet) >= timesec + timens * 1e-9:
+				position = it
+				break
+		self.current_hv_log_path = list_logs[position]
+
+	def FindLineInLog(self, timesec, timens):
+		lines = []
+		temptime = time.localtime(timesec + 1e-9 * timens)
+		# do_before = True if temptime[5] == 0 else False
+		# do_after = True if temptime[5] == 59 else False
+		# temptime_before = time.localtime(timesec + 1e-9 * timens - 1)
+		# temptime_after = time.localtime(timesec + 1e-9 * timens + 1)
+		if self.current_hv_log_path:
+			with open('{f}'.format(f=self.current_hv_log_path), 'r') as current_log:
+			# while True:
+			# 	line = current_log.readline().split()
+			# 	if not line:
+			# 		break
+			# 	line = line.split()
+				# if len(line) > 2 and IsFloat(line[1]) and IsFloat(line[2]):
+				# 	lines.append(line)
+			# lines.append(line.split() for if len(line.split()) > 2 and IsFloat(line.split()[1]) and IsFloat(line.split()[2]))]
+				lines = current_log.readlines()
+			lines = [line.split() for line in lines if re.match('{h}:{m}'.format(h=temptime[3], m=temptime[4]), line) and len(line.split()) >= 3 and IsFloat(line.split()[1]) and IsFloat(line.split()[2])]
+			# lines = [line.split() for line in lines if len(line.split()) >= 3 and IsFloat(line.split()[1]) and IsFloat(line.split()[2])]
+			# current_log.close()
+		# self.tempYear = temptime[0]
+		# self.tempMonth = temptime[1]
+		# self.tempDay = temptime[2]
+		# self.tempTime.Set(1970, 1, 1, 0, 0, timesec, timens, True, 0)
+		# self.tempTime.GetDate(False, 0, self.tempYear, self.tempMonth, self.tempDay)
+		# self.tempTime.GetTime(False, 0, self.tempHour, self.tempMinute, self.tempSecond)
+		tempdic = {'voltage': 0, 'current': 0}
+		if len(lines) > 0:
+			lines2 = [abs(timesec + 1e-9 * timens - time.mktime([temptime[0], temptime[1], temptime[2], int(line[0].split(':')[0]), int(line[0].split(':')[1]), int(line[0].split(':')[2]), 0, 0, -1])) for line in lines]
+			# lines2 = np.array([ro.TTimeStamp(int(self.tempYear), int(self.tempMonth), int(self.tempDay), int(line[0].split(':')[0]), int(line[0].split(':')[1]), int(line[0].split(':')[2]), 0, False, 0).AsDouble() for line in lines], 'f8')
+			# pos = abs(lines2 - self.tempTime.AsDouble()).argmin()
+			# pos = np.argmin(lines2)
+			pos = lines2.index(min(lines2))
+			tempdic['voltage'] = float(lines[pos][1])
+			tempdic['current'] = float(lines[pos][2])
+		return tempdic
 
 	def CheckData(self):
 		if not self.datas or not self.datat or not self.dataa:
@@ -279,7 +396,8 @@ class Converter_Caen:
 	def LookForTime0(self):
 		guess_pos = int(round(self.points * (100.0 - self.post_trig_percent)/100.0))
 		condition_trigg = np.array(np.abs(self.array_points - guess_pos) <= int(round(self.trigger_search_window/self.time_res)), dtype='?')
-		condition_no_trigg = np.array(1 - condition_trigg, dtype='?')
+		condition_no_trigg = np.bitwise_not(condition_trigg, dtype='?')
+		# condition_no_trigg = np.array(1 - condition_trigg, dtype='?')
 		# mean = np.extract(condition_no_trigg, self.trigVolts).mean()
 		# sigma = np.extract(condition_no_trigg, self.trigVolts).std()
 		temp_trig_volts = np.copy(self.trigVolts)
@@ -292,7 +410,8 @@ class Converter_Caen:
 
 	def IsEventVetoed(self):
 		condition_veto_base_line = np.array(np.abs(self.array_points - self.trigPos) > int(round(self.veto_window_around_trigg / float(self.time_res))), dtype='?')
-		condition_search = np.array(1 - condition_veto_base_line, dtype='?')
+		condition_search = np.bitwise_not(condition_veto_base_line, dtype='?')
+		# condition_search = np.array(1 - condition_veto_base_line, dtype='?')
 		meanbl = np.extract(condition_veto_base_line, self.vetoADC).mean()
 		# sigma = np.extract(condition_veto_base_line, self.vetoADC).std()
 		# vetoValNew = 4 * sigma if self.veto_value < 4 * sigma else self.veto_value
@@ -360,14 +479,15 @@ class Converter_Caen:
 		self.badShapeBra.fill(self.bad_shape_event)
 		self.badPedBra.fill(self.bad_pedstal_event)
 		self.satEventBra.fill(self.sat_event)
-		tempTime = time.time()
-		tempSec = int(tempTime)
-		tempNanoSec = int(1e9 * abs(tempTime - tempSec))
-		self.timeStampBra.Set(1970, 1, 1, 0, 0, tempSec, tempNanoSec, True, 0)
+		# tempTime = time.time()
+		# tempSec = int(tempTime)
+		# tempNanoSec = int(1e9 * abs(tempTime - tempSec))
+		# todo
+		# self.timeStampBra.Set(1970, 1, 1, 0, 0, tempSec, tempNanoSec, True, 0)
+		self.hourMinSecBra.Set(1970, 1, 1, 0, 0, self.hv_data['seconds'], self.hv_data['nanoseconds'], True, 0)
 		if self.control_hv:
 			self.hvVoltageBra.fill(self.hv_data['voltage'])
 			self.hvCurrentBra.fill(self.hv_data['current'])
-			self.hourMinSecBra.Set(1970, 1, 1, 0, 0, self.hv_data['seconds'], self.hv_data['nanoseconds'], True, 0)
 
 	def CloseAll(self):
 		self.bar.finish()
@@ -412,9 +532,12 @@ class Converter_Caen:
 		return result
 
 if __name__ == '__main__':
+	# first argument is the path to the settings pickle file
+	# sedond argument is the path of the directory that contains the raw data.
+	# By default, it assumes simultaneous data conversion. If the conversion is done offline (aka. not simultaneous), then the 3rd parameter has to be given and should be '0'
 	settings_object = str(sys.argv[1])  # settings pickle path
 	if len(sys.argv) > 2:
-		data_path = str(sys.argv[2])  # path where the binary data in adcs is
+		data_path = str(sys.argv[2])  # path where the binary data in adcs is. It is a directory path containing the raw files.
 	else:
 		data_path = ''
 	is_simultaneous_data_conv = True
@@ -423,6 +546,7 @@ if __name__ == '__main__':
 			is_simultaneous_data_conv = bool(int(str(sys.argv[3])))
 	converter = Converter_Caen(settings_object=settings_object, data_path=data_path, simultaneous_data_conv=is_simultaneous_data_conv)
 
+	converter.CheckTimeStampRaw()
 	converter.SetupRootFile()
 	converter.GetBinariesNumberWrittenEvents()
 	converter.OpenRawBinaries()

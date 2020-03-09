@@ -268,7 +268,6 @@ class HV_Control:
 		# todo
 		pass
 
-
 	def CloseClient(self):
 		if self.process:
 			self.process.stdin.write('exit\n')

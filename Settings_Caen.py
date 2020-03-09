@@ -285,14 +285,18 @@ class Settings_Caen:
 		return channel.ADC_to_Volts(adcs, self.dig_bits)
 
 	def GetTriggerValueADCs(self, channel):
-		return int(channel.base_line_adcs - channel.thr_counts)
-		# return int(round(channel.base_line_u_adcs - channel.thr_counts - (2.0**self.dig_bits - 1) * (channel.dc_offset_percent/100.0 - 0.5)))
+		try:
+			return int(channel.base_line_adcs - channel.thr_counts)
+		except AttributeError:
+			return int(round(channel.base_line_u_adcs - channel.thr_counts - (2.0**self.dig_bits - 1) * (channel.dc_offset_percent/100.0 - 0.5)))
 
 	def MoveBinaryFiles(self):
 		print 'Moving binary files... ', ; sys.stdout.flush()
 		shutil.move('raw_wave{chs}.dat'.format(chs=self.sigCh), '{d}/Runs/{f}/{f}_signal.dat'.format(d=self.outdir, f=self.filename))
 		shutil.move('raw_wave{cht}.dat'.format(cht=self.trigCh), '{d}/Runs/{f}/{f}_trigger.dat'.format(d=self.outdir, f=self.filename))
 		shutil.move('raw_wave{cha}.dat'.format(cha=self.acCh), '{d}/Runs/{f}/{f}_veto.dat'.format(d=self.outdir, f=self.filename))
+		if os.path.isfile('raw_time.dat'):
+			shutil.move('raw_time.dat', '{d}/Runs/{f}/{f}_time.dat'.format(d=self.outdir, f=self.filename))
 		self.RemoveBinaries()
 		print 'Done'
 
