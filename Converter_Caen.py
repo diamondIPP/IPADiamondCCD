@@ -35,6 +35,7 @@ class Converter_Caen:
 
 		self.settings.simultaneous_conversion = simultaneous_data_conv #  overrides the flag used while taking data, if it is converted offline
 		self.control_hv = self.settings.do_hv_control
+		self.r_passive = self.settings.r_passive if 'r_passive' in self.settings.__dict__.keys() else 230e6
 
 		self.signal_path = data_path + '/raw_wave{chs}.dat'.format(chs=self.settings.sigCh) if self.settings.simultaneous_conversion else data_path + '/' + self.filename + '_signal.dat'
 		self.trigger_path = data_path + '/raw_wave{cht}.dat'.format(cht=self.settings.trigCh) if self.settings.simultaneous_conversion else data_path + '/' + self.filename + '_trigger.dat'
@@ -82,6 +83,7 @@ class Converter_Caen:
 		self.eventBra = self.voltBra = self.trigBra = self.vetoBra = self.timeBra = self.vetoedBra = self.badShapeBra = self.badPedBra = None
 		self.satEventBra = None
 		self.hvVoltageBra = self.hvCurrentBra = None
+		self.voltageDiaBra = None
 		# self.hourBra = self.minuteBra = self.secondBra = None
 		self.hourMinSecBra = None
 		# self.timeStampBra = None
@@ -185,6 +187,7 @@ class Converter_Caen:
 		if self.control_hv:
 			self.hvVoltageBra = np.zeros(1, 'f4')
 			self.hvCurrentBra = np.zeros(1, 'f4')
+			self.voltageDiaBra = np.zeros(1, 'f4')
 		self.raw_tree.Branch('event', self.eventBra, 'event/i')
 		self.raw_tree.Branch('time', self.timeBra, 'time[{s}]/D'.format(s=self.points))
 		self.raw_tree.Branch('voltageSignal', self.voltBra, 'voltageSignal[{s}]/D'.format(s=self.points))
@@ -199,6 +202,7 @@ class Converter_Caen:
 		if self.control_hv:
 			self.raw_tree.Branch('voltageHV', self.hvVoltageBra, 'voltageHV/F')
 			self.raw_tree.Branch('currentHV', self.hvCurrentBra, 'currentHV/F')
+			self.raw_tree.Branch('voltageDia', self.voltageDiaBra, 'voltageDia/F')
 		# self.raw_tree.Branch('timeHV', self.hourMinSecBra)
 
 	def GetBinariesNumberWrittenEvents(self):
@@ -368,7 +372,7 @@ class Converter_Caen:
 				# 	lines.append(line)
 			# lines.append(line.split() for if len(line.split()) > 2 and IsFloat(line.split()[1]) and IsFloat(line.split()[2]))]
 				lines = current_log.readlines()
-			lines = [line.split() for line in lines if re.match('{h}:{m}'.format(h=temptime[3], m=temptime[4]), line) and len(line.split()) >= 3 and IsFloat(line.split()[1]) and IsFloat(line.split()[2])]
+			lines = [line.split() for line in lines if re.match('{h:02d}:{m:02d}:{s:02d}'.format(h=temptime[3], m=temptime[4], s=temptime[5]), line) and len(line.split()) >= 3 and IsFloat(line.split()[1]) and IsFloat(line.split()[2])]
 			# lines = [line.split() for line in lines if len(line.split()) >= 3 and IsFloat(line.split()[1]) and IsFloat(line.split()[2])]
 			# current_log.close()
 		# self.tempYear = temptime[0]
@@ -379,11 +383,14 @@ class Converter_Caen:
 		# self.tempTime.GetTime(False, 0, self.tempHour, self.tempMinute, self.tempSecond)
 		tempdic = {'voltage': 0, 'current': 0}
 		if len(lines) > 0:
-			lines2 = [abs(timesec + 1e-9 * timens - time.mktime([temptime[0], temptime[1], temptime[2], int(line[0].split(':')[0]), int(line[0].split(':')[1]), int(line[0].split(':')[2]), 0, 0, -1])) for line in lines]
-			# lines2 = np.array([ro.TTimeStamp(int(self.tempYear), int(self.tempMonth), int(self.tempDay), int(line[0].split(':')[0]), int(line[0].split(':')[1]), int(line[0].split(':')[2]), 0, False, 0).AsDouble() for line in lines], 'f8')
-			# pos = abs(lines2 - self.tempTime.AsDouble()).argmin()
-			# pos = np.argmin(lines2)
-			pos = lines2.index(min(lines2))
+			if len(lines) == 1:
+				pos = 0
+			else:
+				lines2 = [abs(timesec + 1e-9 * timens - time.mktime([temptime[0], temptime[1], temptime[2], int(line[0].split(':')[0]), int(line[0].split(':')[1]), int(line[0].split(':')[2]), 0, 0, -1])) for line in lines]
+				# lines2 = np.array([ro.TTimeStamp(int(self.tempYear), int(self.tempMonth), int(self.tempDay), int(line[0].split(':')[0]), int(line[0].split(':')[1]), int(line[0].split(':')[2]), 0, False, 0).AsDouble() for line in lines], 'f8')
+				# pos = abs(lines2 - self.tempTime.AsDouble()).argmin()
+				# pos = np.argmin(lines2)
+				pos = lines2.index(min(lines2))
 			tempdic['voltage'] = float(lines[pos][1])
 			tempdic['current'] = float(lines[pos][2])
 		return tempdic
@@ -488,6 +495,10 @@ class Converter_Caen:
 		if self.control_hv:
 			self.hvVoltageBra.fill(self.hv_data['voltage'])
 			self.hvCurrentBra.fill(self.hv_data['current'])
+			self.voltageDiaBra.fill(self.CalculateDiamondVoltage())
+
+	def CalculateDiamondVoltage(self):
+		return self.hv_data['voltage'] - self.hv_data['current'] * self.r_passive
 
 	def CloseAll(self):
 		self.bar.finish()

@@ -131,6 +131,8 @@ class Settings_Caen:
 						self.random_test = bool(parser.getboolean('RUN', 'random_test'))
 
 				if parser.has_section('HV'):
+					if parser.has_option('HV', 'r_passive'):
+						self.r_passive = parser.getfloat('HV', 'r_passive')
 					if parser.has_option('HV', 'path_Pics_folder'):
 						self.pics_folder_path = parser.get('HV', 'path_Pics_folder')
 					if parser.has_option('HV', 'HV_supply'):
