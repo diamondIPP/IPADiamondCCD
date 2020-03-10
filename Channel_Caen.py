@@ -50,11 +50,11 @@ class Channel_Caen:
 				self.offseted_adc_to_volts_cal['p0'] = 0.025512742406801153 if settings.bias < 0 else -0.024895654896994378
 				self.offseted_adc_to_volts_cal['p1'] = 0.00012875546036321804 if settings.bias < 0 else 0.00013155381396351944
 		elif self.type == 'trigger_ch':
-			self.dc_offset_percent = -25
-			self.base_line_u_adcs = self.Calculate_Universal_ADCs(settings.trig_base_line, self.offseted_adc_to_volts_cal['p1'])
-			self.base_line_adcs = self.Volts_to_ADC(settings.trig_base_line)
-			self.thr_counts = settings.trig_thr_counts
-			self.edge = -1
+			self.dc_offset_percent = -25 if not settings.is_cal_run else 0
+			self.base_line_u_adcs = self.Calculate_Universal_ADCs(settings.trig_base_line, self.offseted_adc_to_volts_cal['p1']) if not settings.is_cal_run else self.Calculate_Universal_ADCs(settings.trig_cal_base_line, self.offseted_adc_to_volts_cal['p1'])
+			self.base_line_adcs = self.Volts_to_ADC(settings.trig_base_line) if not settings.is_cal_run else self.Volts_to_ADC(settings.trig_cal_base_line)
+			self.thr_counts = settings.trig_thr_counts if not settings.is_cal_run else RoundInt(settings.trig_cal_thr_mv  / 1000. / self.offseted_adc_to_volts_cal['p1'])
+			self.edge = -1 if not settings.is_cal_run else settings.trig_cal_polarity
 		elif self.type == 'veto':
 			self.dc_offset_percent = -25
 			self.base_line_u_adcs = self.Calculate_Universal_ADCs(settings.ac_base_line, self.offseted_adc_to_volts_cal['p1'])

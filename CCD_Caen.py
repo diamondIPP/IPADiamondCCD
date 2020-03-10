@@ -23,12 +23,13 @@ trig_rand_time = 0.2
 wait_time_hv = 7
 
 class CCD_Caen:
-	def __init__(self, infile='None', verbose=False, settingsObj=None):
+	def __init__(self, infile='None', verbose=False, settingsObj=None, iscal=False):
 		print 'Starting CCD program ...'
 		self.infile = infile
 		self.verb = verbose
+		self.is_cal_run = iscal
 		if self.infile != 'None':
-			self.settings = Settings_Caen(self.infile, self.verb)
+			self.settings = Settings_Caen(self.infile, self.verb, self.is_cal_run)
 			self.settings.ReadInputFile()
 		elif settingsObj:
 			self.settings = settingsObj
@@ -42,8 +43,9 @@ class CCD_Caen:
 		self.signal_ch.Set_Channel(self.settings)
 		self.trigger_ch = Channel_Caen(self.settings.trigCh, 'trigger_ch', self.verb)
 		self.trigger_ch.Set_Channel(self.settings)
-		self.veto_ch = Channel_Caen(self.settings.acCh, 'veto', self.verb)
-		self.veto_ch.Set_Channel(self.settings)
+		self.veto_ch = Channel_Caen(self.settings.acCh, 'veto', self.verb) if not self.is_cal_run else None
+		if not self.is_cal_run:
+			self.veto_ch.Set_Channel(self.settings)
 
 		# declare extra variables that will be used
 		self.fs0, self.ft0, self.fv0 = None, None, None
@@ -86,7 +88,7 @@ class CCD_Caen:
 			if not self.fv0.closed:
 				self.fv0.close()
 				del self.fv0
-		channels = [self.signal_ch.ch, self.trigger_ch.ch, self.veto_ch.ch]
+		channels = [self.signal_ch.ch, self.trigger_ch.ch, self.veto_ch.ch] if not self.is_cal_run else [self.signal_ch.ch, self.trigger_ch.ch]
 		for ch in channels:
 			if os.path.isfile('raw_waves{c}.dat'.format(c=ch)):
 				os.remove('raw_waves{c}.dat'.format(c=ch))
@@ -175,7 +177,8 @@ class CCD_Caen:
 	def CreateEmptyFiles(self):
 		self.ft0 = open('raw_wave{t}.dat'.format(t=self.trigger_ch.ch), 'wb')
 		self.fs0 = open('raw_wave{s}.dat'.format(s=self.signal_ch.ch), 'wb')
-		self.fv0 = open('raw_wave{a}.dat'.format(a=self.veto_ch.ch), 'wb')
+		if not self.is_cal_run:
+			self.fv0 = open('raw_wave{a}.dat'.format(a=self.veto_ch.ch), 'wb')
 		# for timestamp
 		self.file_time_stamp = open('raw_time.dat', 'wb')
 
@@ -300,8 +303,8 @@ class CCD_Caen:
 			if self.settings.do_hv_control: self.hv_control.UpdateHVFile(int(min(self.written_events_sig + self.sig_written, self.settings.num_events)))
 		self.total_events_sig = self.CalculateEventsWritten(self.signal_ch.ch)
 		self.total_events_trig = self.CalculateEventsWritten(self.trigger_ch.ch)
-		self.total_events_veto = self.CalculateEventsWritten(self.veto_ch.ch)
-		if self.total_events_sig == self.total_events_trig and self.total_events_sig == self.total_events_veto:
+		self.total_events_veto = self.CalculateEventsWritten(self.veto_ch.ch) if not self.is_cal_run else 0
+		if self.total_events_sig == self.total_events_trig:
 			self.total_events = self.total_events_sig
 		else:
 			print 'Written events are of different sizes (signal: {s}, trigger: {t}, veto: {v}). Missmatch!'.format(s=self.total_events_sig, t=self.total_events_trig, v=self.total_events_veto)
@@ -353,20 +356,22 @@ class CCD_Caen:
 		if os.path.isfile('wave{s}.dat'.format(s=self.signal_ch.ch)) and os.path.isfile('wave{t}.dat'.format(t=self.trigger_ch.ch)) and os.path.isfile('wave{a}.dat'.format(a=self.veto_ch.ch)):
 			self.session_measured_data_sig = int(os.path.getsize('wave{s}.dat'.format(s=self.signal_ch.ch)))
 			self.session_measured_data_trig = int(os.path.getsize('wave{t}.dat'.format(t=self.trigger_ch.ch)))
-			self.session_measured_data_veto = int(os.path.getsize('wave{a}.dat'.format(a=self.veto_ch.ch)))
+			self.session_measured_data_veto = int(os.path.getsize('wave{a}.dat'.format(a=self.veto_ch.ch))) if not self.is_cal_run else 0
 
 		self.total_merged_data_sig = int(os.path.getsize('raw_wave{s}.dat'.format(s=self.signal_ch.ch)))
 		self.total_merged_data_trig = int(os.path.getsize('raw_wave{t}.dat'.format(t=self.trigger_ch.ch)))
-		self.total_merged_data_veto = int(os.path.getsize('raw_wave{a}.dat'.format(a=self.veto_ch.ch)))
+		self.total_merged_data_veto = int(os.path.getsize('raw_wave{a}.dat'.format(a=self.veto_ch.ch))) if not self.is_cal_run else 0
 		self.total_merged_data_time = int(os.path.getsize('raw_time.dat'))
-		self.doMerge = (self.session_measured_data_sig + self.sig_written * self.settings.struct_len > self.total_merged_data_sig) and (self.session_measured_data_trig + self.trg_written * self.settings.struct_len > self.total_merged_data_trig) and (self.session_measured_data_veto + self.veto_written * self.settings.struct_len > self.total_merged_data_veto)
+		self.doMerge = (self.session_measured_data_sig + self.sig_written * self.settings.struct_len > self.total_merged_data_sig) and (self.session_measured_data_trig + self.trg_written * self.settings.struct_len > self.total_merged_data_trig)
+		if not self.is_cal_run:
+			self.doMerge = self.doMerge and (self.session_measured_data_veto + self.veto_written * self.settings.struct_len > self.total_merged_data_veto)
 		if self.doMerge:
 			# self.OpenFiles(mode='ab')
-			self.min_measured_data = min(self.session_measured_data_sig, self.session_measured_data_trig, self.session_measured_data_veto)
+			self.min_measured_data = min(self.session_measured_data_sig, self.session_measured_data_trig, self.session_measured_data_veto) if not self.is_cal_run else min(self.session_measured_data_sig, self.session_measured_data_trig)
 			data_to_write_sig = self.min_measured_data - self.total_merged_data_sig + self.sig_written * self.settings.struct_len
 			data_to_write_trg = self.min_measured_data - self.total_merged_data_trig + self.trg_written * self.settings.struct_len
-			data_to_write_aco = self.min_measured_data - self.total_merged_data_veto + self.veto_written * self.settings.struct_len
-			self.min_data_to_write = min(data_to_write_sig, data_to_write_trg, data_to_write_aco)
+			data_to_write_aco = self.min_measured_data - self.total_merged_data_veto + self.veto_written * self.settings.struct_len if not self.is_cal_run else 0
+			self.min_data_to_write = min(data_to_write_sig, data_to_write_trg, data_to_write_aco) if not self.is_cal_run else min(data_to_write_sig, data_to_write_trg)
 			del data_to_write_sig, data_to_write_trg, data_to_write_aco
 			self.events_to_write = int(np.floor(self.min_data_to_write / float(self.settings.struct_len)))
 			self.read_size = self.events_to_write * self.settings.struct_len
@@ -393,16 +398,17 @@ class CCD_Caen:
 			del self.ft0, self.datat
 			self.ft0, self.datat = None, None
 
-			with open('wave{a}.dat'.format(a=self.veto_ch.ch), 'rb') as self.finv:
-				self.finv.seek(self.written_events_veto * self.settings.struct_len, 0)
-				self.datav = self.finv.read(self.read_size)
-			del self.finv
-			self.finv = None
-			with open('raw_wave{a}.dat'.format(a=self.veto_ch.ch), 'ab') as self.fv0:
-				self.fv0.write(self.datav)
-				self.fv0.flush()
-			del self.fv0, self.datav
-			self.fv0, self.datav = None, None
+			if not self.is_cal_run:
+				with open('wave{a}.dat'.format(a=self.veto_ch.ch), 'rb') as self.finv:
+					self.finv.seek(self.written_events_veto * self.settings.struct_len, 0)
+					self.datav = self.finv.read(self.read_size)
+				del self.finv
+				self.finv = None
+				with open('raw_wave{a}.dat'.format(a=self.veto_ch.ch), 'ab') as self.fv0:
+					self.fv0.write(self.datav)
+					self.fv0.flush()
+				del self.fv0, self.datav
+				self.fv0, self.datav = None, None
 
 			temptime = time.time()
 			temptimes = int(temptime)
@@ -417,7 +423,7 @@ class CCD_Caen:
 
 			self.written_events_sig += int(self.events_to_write)
 			self.written_events_trig += int(self.events_to_write)
-			self.written_events_veto += int(self.events_to_write)
+			self.written_events_veto += int(self.events_to_write) if not self.is_cal_run else 0
 			self.written_events_time += int(self.events_to_write)
 
 			del self.events_to_write, self.read_size
@@ -449,7 +455,7 @@ class CCD_Caen:
 		while self.total_events < self.settings.num_events:
 			self.sig_written = self.CalculateEventsWritten(self.signal_ch.ch)
 			self.trg_written = self.CalculateEventsWritten(self.trigger_ch.ch)
-			self.veto_written = self.CalculateEventsWritten(self.veto_ch.ch)
+			self.veto_written = self.CalculateEventsWritten(self.veto_ch.ch) if not self.is_cal_run else 0
 			self.timestamp_written = self.CalculateEventsWritten(-1)
 			self.p = subp.Popen(['{p}/wavedump'.format(p=self.settings.wavedump_path), '{d}/WaveDumpConfig_CCD.txt'.format(d=self.settings.outdir)], bufsize=-1, stdin=subp.PIPE, stdout=subp.PIPE, close_fds=True)
 			time.sleep(2)
@@ -507,22 +513,20 @@ def main():
 	parser.add_option('-v', '--verbose', dest='verb', default=False, help='Toggles verbose', action='store_true')
 	parser.add_option('-a', '--automatic', dest='auto', default=False, help='Toggles automatic conversion and analysis afterwards', action='store_true')
 	parser.add_option('-c', '--calibration_run', dest='calrun', default=False, action='store_true', help='Used for calibration runs with pulser')
-	parser.add_option('-t', '--time', dest='stabilizationtime', type='int', default=180, help='Time in seconds to wait before taking data due to HV stabilization. Default: 180')
+	parser.add_option('-t', '--time', dest='stabilizationtime', type='int', default=180, help='Time in seconds to wait before taking data due to HV stabilization. Default: 180. For calibration runs, only 10 seconds is used')
 
 	(options, args) = parser.parse_args()
 	infile = str(options.infile)
 	auto = bool(options.auto)
 	verb = bool(options.verb)
 	iscal = bool(options.calrun)
-	time_wait = int(options.stabilizationtime)
-	ccd = CCD_Caen(infile, verb)
+	time_wait = int(options.stabilizationtime) if not iscal else 10
+	ccd = CCD_Caen(infile, verb, iscal=iscal)
 
-	if iscal:
-		pass
-
-	elif auto:
-		ccd.StartHVControl()
-		ccd.AdjustBaseLines()
+	if auto or iscal:
+		if not iscal:
+			ccd.StartHVControl()
+			ccd.AdjustBaseLines()
 		ccd.SavePickles()
 		time.sleep(time_wait)
 		written_events = ccd.GetData()
@@ -530,7 +534,8 @@ def main():
 		ccd.SavePickles()  # update pickles with the real amount of written events
 		ccd.settings.MoveBinaryFiles()
 		ccd.settings.RenameDigitiserSettings()
-		ccd.CloseHVClient()
+		if not iscal:
+			ccd.CloseHVClient()
 		if not ccd.settings.simultaneous_conversion:
 			ccd.CreateRootFile(files_moved=True)
 			while ccd.pconv.poll() is None:

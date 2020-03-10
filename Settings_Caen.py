@@ -13,11 +13,12 @@ import subprocess as subp
 import struct
 import ROOT as ro
 import shutil
+from Utils import *
 # from DataAcquisition import DataAcquisition
 
 
 class Settings_Caen:
-	def __init__(self, infile='None', verbose=False):
+	def __init__(self, infile='None', verbose=False, iscal=False):
 		self.infile = infile
 		self.verb = verbose
 		self.optlink = 1
@@ -27,6 +28,7 @@ class Settings_Caen:
 		self.dig_bits = 14
 		self.points = 2560
 		self.post_trig_percent = 90
+		self.trigg_offset = 0
 		self.num_events = 10
 		self.time_calib = 300
 		self.time_stab = 120
@@ -66,6 +68,7 @@ class Settings_Caen:
 		self.time_struct_len = struct.calcsize(self.time_struct_fmt)
 
 		# calibration variables
+		self.is_cal_run = iscal
 		self.cal_type = 'none'
 		self.trig_cal_polarity = 1
 		self.trig_cal_base_line = 0
@@ -111,12 +114,14 @@ class Settings_Caen:
 						self.struct_len = struct.calcsize(self.struct_fmt)
 					if parser.has_option('RUN', 'post_trigger_percent'):
 						self.post_trig_percent = parser.getint('RUN', 'post_trigger_percent')
+					if parser.has_option('RUN', 'trigger_offset'):
+						self.trigg_offset = parser.getint('RUN', 'trigger_offset')
 					if parser.has_option('RUN', 'num_events'):
 						self.num_events = parser.getint('RUN', 'num_events')
 					if parser.has_option('RUN', 'time_calib'):
 						self.time_calib = parser.getfloat('RUN', 'time_calib')
 					if parser.has_option('RUN', 'dut'):
-						self.dut = parser.get('RUN', 'dut').lower()
+						self.dut = parser.get('RUN', 'dut').lower() if not self.is_cal_run else 'vcal'
 					if parser.has_option('RUN', 'sample_voltage'):
 						self.bias = parser.getfloat('RUN', 'sample_voltage')
 					if parser.has_option('RUN', 'input_range'):
@@ -130,29 +135,29 @@ class Settings_Caen:
 					if parser.has_option('RUN', 'random_test'):
 						self.random_test = bool(parser.getboolean('RUN', 'random_test'))
 
-				if parser.has_section('HV'):
-					if parser.has_option('HV', 'r_passive'):
-						self.r_passive = parser.getfloat('HV', 'r_passive')
-					if parser.has_option('HV', 'path_Pics_folder'):
-						self.pics_folder_path = parser.get('HV', 'path_Pics_folder')
-					if parser.has_option('HV', 'HV_supply'):
-						self.hv_supply = parser.get('HV', 'HV_supply')
-						if self.hv_supply != '':
-							self.do_hv_control = True
-					if parser.has_option('HV', 'ch'):
-						self.hv_ch = parser.getint('HV', 'ch')
-					if parser.has_option('HV', 'current_limit'):
-						self.current_limit = abs(parser.getfloat('HV', 'current_limit'))
-					if parser.has_option('HV', 'ramp'):
-						self.hv_ramp = abs(parser.getfloat('HV', 'ramp'))
-                                        if parser.has_option('HV', 'address'):
-                                                self.hv_address = parser.get('HV', 'address')
-                                        else:
-                                                self.hv_address = '/dev/'
-                                                self.hv_address += 'iseg2' if self.hv_supply.lower() == 'iseg-nhs-6220n' else 'keithley4' if self.hv_supply.loser() == 'keithley2410' else 'keithley6' if self.hv_supply.lower() == 'keithley6517b' else 'iseg'
-					# TODO: implement option in HV_control for option hot_start = False
-					# if parser.has_option('HV', 'hot_start'):
-					# 	self.hot_start = bool(parser.getboolean('HV', 'hot_start'))
+				if not self.is_cal_run:
+					if parser.has_section('HV'):
+						if parser.has_option('HV', 'r_passive'):
+							self.r_passive = parser.getfloat('HV', 'r_passive')
+						if parser.has_option('HV', 'path_Pics_folder'):
+							self.pics_folder_path = parser.get('HV', 'path_Pics_folder')
+						if parser.has_option('HV', 'HV_supply'):
+							self.hv_supply = parser.get('HV', 'HV_supply')
+							if self.hv_supply != '':
+								self.do_hv_control = True
+						if parser.has_option('HV', 'ch'):
+							self.hv_ch = parser.getint('HV', 'ch')
+						if parser.has_option('HV', 'current_limit'):
+							self.current_limit = abs(parser.getfloat('HV', 'current_limit'))
+						if parser.has_option('HV', 'ramp'):
+							self.hv_ramp = abs(parser.getfloat('HV', 'ramp'))
+	                                        if parser.has_option('HV', 'address'):
+	                                                self.hv_address = parser.get('HV', 'address')
+	                                        else:
+	                                                self.hv_address = '/dev/'
+	                                                self.hv_address += 'iseg2' if self.hv_supply.lower() == 'iseg-nhs-6220n' else 'keithley4' if self.hv_supply.loser() == 'keithley2410' else 'keithley6' if self.hv_supply.lower() == 'keithley6517b' else 'iseg'
+						# if parser.has_option('HV', 'hot_start'):
+						# 	self.hot_start = bool(parser.getboolean('HV', 'hot_start'))
 
 				if parser.has_section('SIGNAL'):
 					if parser.has_option('SIGNAL', 'channel'):
@@ -166,17 +171,21 @@ class Settings_Caen:
 					if parser.has_option('TRIGGER', 'thr_counts'):
 						self.trig_thr_counts = parser.getint('TRIGGER', 'thr_counts')
 
-				if parser.has_section('ANTICOINCIDENCE'):
-					if parser.has_option('ANTICOINCIDENCE', 'channel'):
-						self.acCh = parser.getint('ANTICOINCIDENCE', 'channel')
-					if parser.has_option('ANTICOINCIDENCE', 'base_line'):
-						self.ac_base_line = parser.getfloat('ANTICOINCIDENCE', 'base_line')
-					if parser.has_option('ANTICOINCIDENCE', 'thr_counts'):
-						self.ac_thr_counts = parser.getint('ANTICOINCIDENCE', 'thr_counts')
+				if not self.is_cal_run:
+					if parser.has_section('ANTICOINCIDENCE'):
+						if parser.has_option('ANTICOINCIDENCE', 'channel'):
+							self.acCh = parser.getint('ANTICOINCIDENCE', 'channel')
+						if parser.has_option('ANTICOINCIDENCE', 'base_line'):
+							self.ac_base_line = parser.getfloat('ANTICOINCIDENCE', 'base_line')
+						if parser.has_option('ANTICOINCIDENCE', 'thr_counts'):
+							self.ac_thr_counts = parser.getint('ANTICOINCIDENCE', 'thr_counts')
 
 				if parser.has_section('SIGNALCALIBRATION'):
 					if parser.has_option('SIGNALCALIBRATION', 'type'):
 						self.cal_type = parser.get('SIGNALCALIBRATION', 'type').lower()
+						if not self.cal_type in ['in', 'out']:
+							print 'The calibration "type" should be either "in" or "out". Exiting'
+							exit()
 					if parser.has_option('SIGNALCALIBRATION', 'trigger_polarity'):
 						self.trig_cal_polarity = 1 if parser.getfloat('SIGNALCALIBRATION', 'trigger_polarity') >= 0 else -1
 					if parser.has_option('SIGNALCALIBRATION', 'trigger_baseline'):
@@ -190,7 +199,7 @@ class Settings_Caen:
 					if parser.has_option('OUTPUT', 'dir'):
 						self.outdir = parser.get('OUTPUT', 'dir')
 					if parser.has_option('OUTPUT', 'prefix'):
-						self.prefix = parser.get('OUTPUT', 'prefix')
+						self.prefix = parser.get('OUTPUT', 'prefix') if not self.is_cal_run else '{Y:04d}{M:02d}{D:02d}'.format(Y=time.localtime()[0], M=time.localtime()[1], D=time.localtime()[2])
 					if parser.has_option('OUTPUT', 'suffix'):
 						self.suffix = parser.get('OUTPUT', 'suffix')
 					else:
@@ -219,10 +228,14 @@ class Settings_Caen:
 
 	def SetOutputFiles(self):
 		def AddSuffix(string1):
-			string1 += '_Pos' if self.bias >= 0 else '_Neg'
-			string1 += '_{b}V'.format(b=abs(self.bias))
-			if self.suffix != '':
-				string1 += '_{s}'.format(s=self.suffix)
+			if not self.is_cal_run:
+				string1 += '_Pos' if self.bias >= 0 else '_Neg'
+				string1 += '_{b}V'.format(b=abs(self.bias))
+				if self.suffix != '':
+					string1 += '_{s}'.format(s=self.suffix)
+			else:
+				string1 += '_{t}'.format(t=self.cal_type)
+				string1 += '_{p}mV'.format(p=self.pulser_amplitude)
 			return string1
 
 		self.filename = '{d}_{p}_ccd'.format(p=self.prefix, d=self.dut)
@@ -250,7 +263,7 @@ class Settings_Caen:
 						elif line.startswith('RECORD_LENGTH'):
 							dest_file.write('RECORD_LENGTH\t{p}\n'.format(p=int(self.points)))
 						elif line.startswith('POST_TRIGGER'):
-							dest_file.write('POST_TRIGGER\t{pt}\n'.format(pt=int(round(self.post_trig_percent*0.9996 - 1.6384))))
+							dest_file.write('POST_TRIGGER\t{pt}\n'.format(pt=RoundInt(self.post_trig_percent - 100. * self.trigg_offset / self.points)))
 						elif line.startswith('CHANNEL_TRIGGER'):
 							dest_file.write('CHANNEL_TRIGGER\tDISABLED\n')
 							cont = False
@@ -260,7 +273,8 @@ class Settings_Caen:
 				dest_file.write('\n# configuration for each channel [0] to [15], although it only has 8 channels ;)')
 				for ch in xrange(16):
 					dest_file.write('\n\n[{ch}]'.format(ch=ch))
-					if ch == signal.ch or ch == trigger.ch or ch == ac.ch:
+					channels = [signal.ch, trigger.ch, ac.ch] if not self.is_cal_run and ac else [signal.ch, trigger.ch]
+					if ch in channels:
 						dest_file.write('\nENABLE_INPUT\tYES')
 					else:
 						dest_file.write('\nENABLE_INPUT\tNO')
@@ -269,17 +283,19 @@ class Settings_Caen:
 						dest_file.write('\nDC_OFFSET\t{o}'.format(o=signal.dc_offset_percent))
 						dest_file.write('\nCHANNEL_TRIGGER\tDISABLED')
 					elif ch == self.trigCh:
-						dest_file.write('\nPULSE_POLARITY\tNEGATIVE')
+						trigpol = 'NEGATIVE' if trigger.edge == -1 else 'POSITIVE'
+						dest_file.write('\nPULSE_POLARITY\t{tp}'.format(tp=trigpol))
 						dest_file.write('\nDC_OFFSET\t{o}'.format(o=trigger.dc_offset_percent))
 						if doBaseLines or self.random_test:
 							dest_file.write('\nCHANNEL_TRIGGER\tDISABLED')
 						else:
 							dest_file.write('\nCHANNEL_TRIGGER\tACQUISITION_ONLY')
 							dest_file.write('\nTRIGGER_THRESHOLD\t{th}'.format(th=self.GetTriggerValueADCs(trigger)))
-					elif ch == ac.ch:
-						dest_file.write('\nPULSE_POLARITY\tNEGATIVE')
-						dest_file.write('\nDC_OFFSET\t{o}'.format(o=ac.dc_offset_percent))
-						dest_file.write('\nCHANNEL_TRIGGER\tDISABLED')
+					elif not self.is_cal_run and ac:
+						if ch == ac.ch:
+							dest_file.write('\nPULSE_POLARITY\tNEGATIVE')
+							dest_file.write('\nDC_OFFSET\t{o}'.format(o=ac.dc_offset_percent))
+							dest_file.write('\nCHANNEL_TRIGGER\tDISABLED')
 				dest_file.write('\n')
 		print 'Done'
 
@@ -288,7 +304,7 @@ class Settings_Caen:
 
 	def GetTriggerValueADCs(self, channel):
 		try:
-			return int(channel.base_line_adcs - channel.thr_counts)
+			return int(channel.base_line_adcs + channel.edge * channel.thr_counts)
 		except AttributeError:
 			return int(round(channel.base_line_u_adcs - channel.thr_counts - (2.0**self.dig_bits - 1) * (channel.dc_offset_percent/100.0 - 0.5)))
 
@@ -296,7 +312,8 @@ class Settings_Caen:
 		print 'Moving binary files... ', ; sys.stdout.flush()
 		shutil.move('raw_wave{chs}.dat'.format(chs=self.sigCh), '{d}/Runs/{f}/{f}_signal.dat'.format(d=self.outdir, f=self.filename))
 		shutil.move('raw_wave{cht}.dat'.format(cht=self.trigCh), '{d}/Runs/{f}/{f}_trigger.dat'.format(d=self.outdir, f=self.filename))
-		shutil.move('raw_wave{cha}.dat'.format(cha=self.acCh), '{d}/Runs/{f}/{f}_veto.dat'.format(d=self.outdir, f=self.filename))
+		if not self.is_cal_run:
+			shutil.move('raw_wave{cha}.dat'.format(cha=self.acCh), '{d}/Runs/{f}/{f}_veto.dat'.format(d=self.outdir, f=self.filename))
 		if os.path.isfile('raw_time.dat'):
 			shutil.move('raw_time.dat', '{d}/Runs/{f}/{f}_time.dat'.format(d=self.outdir, f=self.filename))
 		self.RemoveBinaries()
@@ -308,7 +325,7 @@ class Settings_Caen:
 		print 'Done'
 
 	def RemoveBinaries(self):
-		channels = [self.sigCh, self.trigCh, self.acCh]
+		channels = [self.sigCh, self.trigCh, self.acCh] if not self.is_cal_run else [self.sigCh, self.trigCh]
 		for ch in channels:
 			if os.path.isfile('wave{c}.dat'.format(c=ch)):
 				os.remove('wave{c}.dat'.format(c=ch))
