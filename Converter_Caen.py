@@ -63,6 +63,7 @@ class Converter_Caen:
 		self.simultaneous_conversion = self.settings.simultaneous_conversion
 		self.time_recal = self.settings.time_calib
 		self.polarity = 1 if self.settings.bias >= 0 else -1
+		self.is_cal_run = self.settings.is_cal_run if 'is_cal_run' in self.settings.__dict__.keys() else False
 
 		self.hv_file_name = 'hvfile_{f}.dat'.format(f=self.filename)
 		self.hv_dict = None
@@ -75,7 +76,7 @@ class Converter_Caen:
 		self.peak_pos_estimate = 2.131e-6
 		self.peak_pos_window = 0.5e-6
 
-		self.doVeto = True
+		self.doVeto = True if not self.is_cal_run else False
 		self.array_points = np.arange(self.points, dtype=np.dtype('int32'))
 
 		self.raw_file = None
@@ -192,8 +193,9 @@ class Converter_Caen:
 		self.raw_tree.Branch('time', self.timeBra, 'time[{s}]/D'.format(s=self.points))
 		self.raw_tree.Branch('voltageSignal', self.voltBra, 'voltageSignal[{s}]/D'.format(s=self.points))
 		self.raw_tree.Branch('voltageTrigger', self.trigBra, 'voltageTrigger[{s}]/D'.format(s=self.points))
-		self.raw_tree.Branch('voltageVeto', self.vetoBra, 'voltageVeto[{s}]/D'.format(s=self.points))
-		self.raw_tree.Branch('vetoedEvent', self.vetoedBra, 'vetoedEvent/O')
+		if self.doVeto:
+			self.raw_tree.Branch('voltageVeto', self.vetoBra, 'voltageVeto[{s}]/D'.format(s=self.points))
+			self.raw_tree.Branch('vetoedEvent', self.vetoedBra, 'vetoedEvent/O')
 		self.raw_tree.Branch('badShape', self.badShapeBra, 'badShape/B')  # signed char
 		self.raw_tree.Branch('badPedestal', self.badPedBra, 'badPedestal/O')
 		self.raw_tree.Branch('satEvent', self.satEventBra, 'satEvent/O')
@@ -208,12 +210,12 @@ class Converter_Caen:
 	def GetBinariesNumberWrittenEvents(self):
 		self.signal_written_events = int(round(os.path.getsize(self.signal_path) / self.struct_len)) if os.path.isfile(self.signal_path) else 0
 		self.trigger_written_events = int(round(os.path.getsize(self.trigger_path) / self.struct_len)) if os.path.isfile(self.trigger_path) else 0
-		self.anti_co_written_events = int(round(os.path.getsize(self.veto_path) / self.struct_len)) if os.path.isfile(self.veto_path) else 0
+		self.anti_co_written_events = int(round(os.path.getsize(self.veto_path) / self.struct_len)) if self.doVeto and os.path.isfile(self.veto_path) else 0
 
 	def OpenRawBinaries(self):
 		self.fs = open(self.signal_path, 'rb')
 		self.ft = open(self.trigger_path, 'rb')
-		self.fa = open(self.veto_path, 'rb')
+		self.fa = open(self.veto_path, 'rb') if self.doVeto and os.path.isfile(self.veto_path) else None
 		if os.path.isfile(self.time_path):
 			self.ftime = open(self.time_path, 'rb')
 
@@ -244,10 +246,11 @@ class Converter_Caen:
 			self.trigVolts = self.ADC_to_Volts('trigger')
 			self.LookForTime0()
 			self.timeVect = np.linspace(-self.trigPos * self.time_res, self.time_res * (self.points - 1 - self.trigPos), self.points, dtype='f8')
-			self.struct_ac = struct.Struct(self.struct_fmt).unpack_from(self.dataa)
-			self.vetoADC = np.array(self.struct_ac, 'H')
-			self.vetoVolts = self.ADC_to_Volts('veto')
-			self.vetoed_event = self.IsEventVetoed()
+			if self.doVeto:
+				self.struct_ac = struct.Struct(self.struct_fmt).unpack_from(self.dataa)
+				self.vetoADC = np.array(self.struct_ac, 'H')
+				self.vetoVolts = self.ADC_to_Volts('veto')
+				self.vetoed_event = self.IsEventVetoed()
 			self.DefineSignalBaseLineAndPeakPosition()
 			self.bad_shape_event = self.IsEventBadShape()
 			self.bad_pedstal_event = self.IsPedestalBad()
@@ -263,7 +266,9 @@ class Converter_Caen:
 			self.bar.update(ev + 1)
 
 	def CheckFilesSizes(self, ev):
-		self.wait_for_data = (self.signal_written_events <= ev) or (self.trigger_written_events <= ev) or (self.anti_co_written_events <= ev)
+		self.wait_for_data = (self.signal_written_events <= ev) or (self.trigger_written_events <= ev)
+		if self.doVeto:
+			self.wait_for_data = self.wait_for_data or (self.anti_co_written_events <= ev)
 
 	def WaitForData(self, ev):
 		t1 = time.time()
@@ -276,8 +281,9 @@ class Converter_Caen:
 					self.fs.close()
 				if not self.ft.closed:
 					self.ft.close()
-				if not self.fa.closed:
-					self.fa.close()
+				if self.doVeto:
+					if not self.fa.closed:
+						self.fa.close()
 				self.GetBinariesNumberWrittenEvents()
 				self.CheckFilesSizes(ev)
 				if not self.wait_for_data:
@@ -291,8 +297,9 @@ class Converter_Caen:
 		self.datas = self.fs.read(self.struct_len)
 		self.ft.seek(ev * self.struct_len, 0)
 		self.datat = self.ft.read(self.struct_len)
-		self.fa.seek(ev * self.struct_len, 0)
-		self.dataa = self.fa.read(self.struct_len)
+		if self.doVeto:
+			self.fa.seek(ev * self.struct_len, 0)
+			self.dataa = self.fa.read(self.struct_len)
 		if self.control_hv:
 			if self.ftime:
 				self.ftime.seek(ev * self.time_struct_len, 0)
@@ -396,7 +403,7 @@ class Converter_Caen:
 		return tempdic
 
 	def CheckData(self):
-		if not self.datas or not self.datat or not self.dataa:
+		if not self.datas or not self.datat or (self.doVeto and (not self.dataa)):
 			print 'No event in signal or trigger files... exiting'
 			exit(os.EX_DATAERR)
 
@@ -408,12 +415,12 @@ class Converter_Caen:
 		# mean = np.extract(condition_no_trigg, self.trigVolts).mean()
 		# sigma = np.extract(condition_no_trigg, self.trigVolts).std()
 		temp_trig_volts = np.copy(self.trigVolts)
-		np.putmask(temp_trig_volts, condition_no_trigg, 100)
-		volt_min_pos = temp_trig_volts.argmin()
-		condition_trigg = np.bitwise_and(condition_trigg, np.array(self.array_points <= volt_min_pos))
-		np.putmask(temp_trig_volts, np.bitwise_not(condition_trigg), 100)
+		np.putmask(temp_trig_volts, condition_no_trigg, -100 * self.trigger_ch.edge)
+		volt_peak_pos = temp_trig_volts.argmin() if self.trigger_ch.edge < 0 else temp_trig_volts.argmax()
+		condition_trigg = np.bitwise_and(condition_trigg, np.array(self.array_points <= volt_peak_pos))
+		np.putmask(temp_trig_volts, np.bitwise_not(condition_trigg), -100 * self.trigger_ch.edge)
 		self.trigPos = np.abs(temp_trig_volts - self.trig_value).argmin()
-		del guess_pos, condition_trigg, condition_no_trigg, temp_trig_volts, volt_min_pos
+		del guess_pos, condition_trigg, condition_no_trigg, temp_trig_volts, volt_peak_pos
 
 	def IsEventVetoed(self):
 		condition_veto_base_line = np.array(np.abs(self.array_points - self.trigPos) > int(round(self.veto_window_around_trigg / float(self.time_res))), dtype='?')
@@ -481,8 +488,9 @@ class Converter_Caen:
 		np.putmask(self.timeBra, np.bitwise_not(np.zeros(self.points, '?')), self.timeVect)
 		np.putmask(self.voltBra, np.bitwise_not(np.zeros(self.points, '?')), self.sigVolts)
 		np.putmask(self.trigBra, np.bitwise_not(np.zeros(self.points, '?')), self.trigVolts)
-		np.putmask(self.vetoBra, np.bitwise_not(np.zeros(self.points, '?')), self.vetoVolts)
-		self.vetoedBra.fill(self.vetoed_event)
+		if self.doVeto:
+			np.putmask(self.vetoBra, np.bitwise_not(np.zeros(self.points, '?')), self.vetoVolts)
+			self.vetoedBra.fill(self.vetoed_event)
 		self.badShapeBra.fill(self.bad_shape_event)
 		self.badPedBra.fill(self.bad_pedstal_event)
 		self.satEventBra.fill(self.sat_event)
