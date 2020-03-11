@@ -31,7 +31,9 @@ class Converter_Caen:
 		self.settings = pickle.load(open('{d}/{f}.settings'.format(d=self.output_dir, f=self.filename), 'rb'))
 		self.signal_ch = pickle.load(open('{d}/{f}.signal_ch'.format(d=self.output_dir, f=self.filename), 'rb'))
 		self.trigger_ch = pickle.load(open('{d}/{f}.trigger_ch'.format(d=self.output_dir, f=self.filename), 'rb'))
-		self.veto_ch = pickle.load(open('{d}/{f}.veto'.format(d=self.output_dir, f=self.filename), 'rb'))
+		self.is_cal_run = self.settings.is_cal_run if 'is_cal_run' in self.settings.__dict__.keys() else False
+		self.doVeto = True if not self.is_cal_run else False
+		self.veto_ch = pickle.load(open('{d}/{f}.veto'.format(d=self.output_dir, f=self.filename), 'rb')) if self.doVeto else None
 
 		self.settings.simultaneous_conversion = simultaneous_data_conv #  overrides the flag used while taking data, if it is converted offline
 		self.control_hv = self.settings.do_hv_control
@@ -54,16 +56,15 @@ class Converter_Caen:
 		self.adc_offset = 0
 		self.sig_offset = self.signal_ch.dc_offset_percent
 		self.trig_offset = self.trigger_ch.dc_offset_percent
-		self.anti_co_offset = self.veto_ch.dc_offset_percent
+		self.anti_co_offset = self.veto_ch.dc_offset_percent if self.doVeto else 0
 		self.time_res = self.settings.time_res
 		self.post_trig_percent = self.settings.post_trig_percent
 		self.trig_value = self.settings.ADC_to_Volts(self.settings.GetTriggerValueADCs(self.trigger_ch), self.trigger_ch)
-		self.veto_value = self.veto_ch.thr_counts
+		self.veto_value = self.veto_ch.thr_counts if self.doVeto else 0
 		self.dig_bits = self.settings.dig_bits
 		self.simultaneous_conversion = self.settings.simultaneous_conversion
 		self.time_recal = self.settings.time_calib
 		self.polarity = 1 if self.settings.bias >= 0 else -1
-		self.is_cal_run = self.settings.is_cal_run if 'is_cal_run' in self.settings.__dict__.keys() else False
 
 		self.hv_file_name = 'hvfile_{f}.dat'.format(f=self.filename)
 		self.hv_dict = None
@@ -76,7 +77,6 @@ class Converter_Caen:
 		self.peak_pos_estimate = 2.131e-6
 		self.peak_pos_window = 0.5e-6
 
-		self.doVeto = True if not self.is_cal_run else False
 		self.array_points = np.arange(self.points, dtype=np.dtype('int32'))
 
 		self.raw_file = None
@@ -555,14 +555,20 @@ if __name__ == '__main__':
 	# sedond argument is the path of the directory that contains the raw data.
 	# By default, it assumes simultaneous data conversion. If the conversion is done offline (aka. not simultaneous), then the 3rd parameter has to be given and should be '0'
 	settings_object = str(sys.argv[1])  # settings pickle path
+	print 'settings object', settings_object
 	if len(sys.argv) > 2:
 		data_path = str(sys.argv[2])  # path where the binary data in adcs is. It is a directory path containing the raw files.
+		print 'data_path', data_path
 	else:
 		data_path = ''
+		print 'data_path empty ""'
 	is_simultaneous_data_conv = True
 	if len(sys.argv) > 3:
+		print 'it entered here 0'
 		if IsInt(str(sys.argv[3])):
+			print 'it entered here 1'
 			is_simultaneous_data_conv = bool(int(str(sys.argv[3])))
+			print 'simultaneous is now', is_simultaneous_data_conv
 	converter = Converter_Caen(settings_object=settings_object, data_path=data_path, simultaneous_data_conv=is_simultaneous_data_conv)
 
 	converter.CheckTimeStampRaw()

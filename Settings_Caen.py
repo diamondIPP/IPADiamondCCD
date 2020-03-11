@@ -49,6 +49,7 @@ class Settings_Caen:
 		self.hv_ramp = 10  # in V/s
 		self.hot_start = True
 		self.sigCh = 0
+		self.sig_dc_offset_percent = 0
 		self.trigCh = 1
 		self.trig_base_line = 0
 		self.trig_thr_counts = 35
@@ -162,6 +163,8 @@ class Settings_Caen:
 				if parser.has_section('SIGNAL'):
 					if parser.has_option('SIGNAL', 'channel'):
 						self.sigCh = parser.getint('SIGNAL', 'channel')
+					if parser.has_option('SIGNAL', 'dc_offset_percent'):
+						self.sig_dc_offset_percent = parser.getint('SIGNAL', 'dc_offset_percent')
 
 				if parser.has_section('TRIGGER'):
 					if parser.has_option('TRIGGER', 'channel'):

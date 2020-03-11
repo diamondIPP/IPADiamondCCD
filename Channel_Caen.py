@@ -36,7 +36,7 @@ class Channel_Caen:
 	def Set_Channel(self, settings):
 		self.offseted_adc_to_volts_cal['p1'] = settings.sigRes
 		if self.type == 'signal_ch':
-			self.dc_offset_percent = 0
+			self.dc_offset_percent = settings.sig_dc_offset_percent if 'sig_dc_offset_percent' in settings.__dict__.keys() else 0
 			self.edge = -int(settings.bias/abs(settings.bias)) if settings.bias != 0 else -1
 			# Channels 3, 6 and 7 were calibrated with dc voltage and multimeter. The calibration files are on 20180419ch{X}/Runs
 			if self.ch == 3:

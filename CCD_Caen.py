@@ -19,7 +19,8 @@ from HV_Control import HV_Control
 from Utils import *
 # from memory_profiler import profile
 
-trig_rand_time = 0.2
+# trig_rand_time = 0.001  # for voltage calibration
+trig_rand_time = 0.2  # for system test
 wait_time_hv = 7
 
 class CCD_Caen:
@@ -353,7 +354,7 @@ class CCD_Caen:
 
 	def ConcatenateBinaries(self):
 		self.session_measured_data_sig, self.session_measured_data_trig, self.session_measured_data_veto = 0, 0, 0
-		if os.path.isfile('wave{s}.dat'.format(s=self.signal_ch.ch)) and os.path.isfile('wave{t}.dat'.format(t=self.trigger_ch.ch)) and os.path.isfile('wave{a}.dat'.format(a=self.veto_ch.ch)):
+		if os.path.isfile('wave{s}.dat'.format(s=self.signal_ch.ch)) and os.path.isfile('wave{t}.dat'.format(t=self.trigger_ch.ch)) and (self.is_cal_run or os.path.isfile('wave{a}.dat'.format(a=self.veto_ch.ch))):
 			self.session_measured_data_sig = int(os.path.getsize('wave{s}.dat'.format(s=self.signal_ch.ch)))
 			self.session_measured_data_trig = int(os.path.getsize('wave{t}.dat'.format(t=self.trigger_ch.ch)))
 			self.session_measured_data_veto = int(os.path.getsize('wave{a}.dat'.format(a=self.veto_ch.ch))) if not self.is_cal_run else 0
@@ -482,7 +483,7 @@ class CCD_Caen:
 		settings_bin_path = os.path.abspath(self.settings.outdir + '/Runs/{f}/{f}.settings'.format(f=self.settings.filename))
 		data_bin_path = os.path.abspath(self.settings.outdir + '/Runs/{f}'.format(f=self.settings.filename)) if files_moved else os.getcwd()
 		conv_command = ['python', 'Converter_Caen.py', settings_bin_path, data_bin_path]
-		if not files_moved:
+		if files_moved:
 			conv_command.append('0')
 		self.pconv = subp.Popen(conv_command, close_fds=True)
 		del settings_bin_path
