@@ -303,7 +303,7 @@ class Settings_Caen:
 		print 'Done'
 
 	def ADC_to_Volts(self, adcs, channel):
-		return channel.ADC_to_Volts(adcs, self.dig_bits)
+		return channel.ADC_to_Volts(adcs)
 
 	def GetTriggerValueADCs(self, channel):
 		try:

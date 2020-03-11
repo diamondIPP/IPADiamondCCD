@@ -113,6 +113,13 @@ def SetDefaultFitStats(histo, fit, color=ro.kRed):
 	histo.FindObject('stats').SetY1NDC(0.6)
 	histo.FindObject('stats').SetY2NDC(0.9)
 
+def SetDefault1DCanvasSettings(canvas):
+	canvas.SetGridx()
+	canvas.SetGridy()
+	canvas.SetTicky()
+	ro.gPad.Update()
+
+
 def AddLineToStats(canvas, keys=['Mean_{Fit}'], values=[0], samplelinekey='Mean'):
 	if canvas:
 		ps = canvas.GetPrimitive('stats')
@@ -168,6 +175,15 @@ def RoundInt(n, nptype='int32'):
 		return float(val)
 	return val
 
+def TruncateFloat(num_float, resol=0):
+	'''
+	Truncates a float to the specified number of digits and decimals
+	:param num_float: float to be truncated
+	:param resol: gives the resolution. if 0, it means it does not matter.
+	:return: truncated value to the specified resolution
+	'''
+	temp_float = num_float if resol == 0 else float(np.multiply(resol, RoundInt(np.divide(num_float, resol, dtype='f8')), dtype='f8'))
+	return temp_float
 
 
 if __name__ == '__main__':

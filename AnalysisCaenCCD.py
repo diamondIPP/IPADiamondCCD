@@ -145,7 +145,7 @@ class AnalysisCaenCCD:
 		self.loaded_entries = 0
 		self.suffix = None
 
-		self.delta_v_signal = self.signal_ch.offseted_adc_to_volts_cal['p1'] * 100
+		self.delta_v_signal = self.signal_ch.adc_to_volts_cal['p1'] * 100
 
 		self.Load_Config_File()
 
@@ -828,12 +828,12 @@ class AnalysisCaenCCD:
 	def PlotSignal(self, name='signal', bins=0, cuts='', option='e', minx=0, maxx=2.0):
 		if self.bias >= 0:
 			plotvar = '-signal'
-			# vmax, vmin, deltav = -self.analysisTree.GetMinimum('signal'), -self.analysisTree.GetMaximum('signal'), self.signal_ch.offseted_adc_to_volts_cal['p1'] * 100
+			# vmax, vmin, deltav = -self.analysisTree.GetMinimum('signal'), -self.analysisTree.GetMaximum('signal'), self.signal_ch.adc_to_volts_cal['p1'] * 100
 			deltav = self.delta_v_signal
 			plotVarName = '-Signal [V]'
 		else:
 			plotvar = 'signal'
-			# vmin, vmax, deltav = self.analysisTree.GetMinimum('signal'), self.analysisTree.GetMaximum('signal'), self.signal_ch.offseted_adc_to_volts_cal['p1'] * 100
+			# vmin, vmax, deltav = self.analysisTree.GetMinimum('signal'), self.analysisTree.GetMaximum('signal'), self.signal_ch.adc_to_volts_cal['p1'] * 100
 			deltav = self.delta_v_signal
 			plotVarName = 'Signal [V]'
 		vmin, vmax = minx, maxx
@@ -868,7 +868,7 @@ class AnalysisCaenCCD:
 		vname = ('signal' if var == 'voltageSignal' else 'trigger' if var == 'voltageTrigger' else 'veto' if var == 'voltageVeto' else '') + ' [V]'
 		num_events = self.analysisTree.GetEntries() if num_evs == 0 else num_evs
 		tmin, tmax, deltat = self.analysisTree.GetMinimum('time'), self.analysisTree.GetMaximum('time'), self.settings.time_res
-		vmin, vmax, deltav = self.analysisTree.GetMinimum(var), self.analysisTree.GetMaximum(var), (self.signal_ch.offseted_adc_to_volts_cal['p1'] * 10 if var == 'voltageSignal' else self.settings.sigRes * 10)
+		vmin, vmax, deltav = self.analysisTree.GetMinimum(var), self.analysisTree.GetMaximum(var), (self.signal_ch.adc_to_volts_cal['p1'] * 10 if var == 'voltageSignal' else self.settings.sigRes * 10)
 		if vbins == 0:
 			self.DrawHisto2D(name, 'time', tmin - deltat/2.0, tmax + deltat/2.0, deltat, 'time[s]', var, vmin, vmax, deltav, vname, cuts, option, num_events, start_ev)
 		else:

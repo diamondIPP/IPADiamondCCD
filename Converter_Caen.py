@@ -463,7 +463,7 @@ class Converter_Caen:
 	def IsPedestalBad(self):
 		sigma = np.extract(self.condition_base_line, self.sigADC).std()
 		mean = np.extract(self.condition_base_line, self.sigADC).mean()
-		self.adc_res = self.signal_ch.offseted_adc_to_volts_cal['p1']
+		self.adc_res = self.signal_ch.adc_to_volts_cal['p1']
 		sigma_volts = sigma * self.adc_res
 		mean_volts = mean * self.adc_res
 		diff_volts = abs(int(self.sigADC[0]) - int(self.sigADC[self.trigPos])) * self.adc_res
@@ -532,18 +532,18 @@ class Converter_Caen:
 		if sig_type == 'signal':
 			adcs = self.sigADC
 			offset = self.sig_offset
-			self.adc_offset = self.signal_ch.offseted_adc_to_volts_cal['p0']
-			self.adc_res = self.signal_ch.offseted_adc_to_volts_cal['p1']
+			self.adc_offset = self.signal_ch.adc_to_volts_cal['p0']
+			self.adc_res = self.signal_ch.adc_to_volts_cal['p1']
 		elif sig_type == 'trigger':
 			adcs = self.trigADC
 			offset = self.trig_offset
-			self.adc_offset = self.trigger_ch.offseted_adc_to_volts_cal['p0']
-			self.adc_res = self.trigger_ch.offseted_adc_to_volts_cal['p1']
+			self.adc_offset = self.trigger_ch.adc_to_volts_cal['p0']
+			self.adc_res = self.trigger_ch.adc_to_volts_cal['p1']
 		elif sig_type == 'veto':
 			adcs = self.vetoADC
 			offset = self.anti_co_offset
-			self.adc_offset = self.veto_ch.offseted_adc_to_volts_cal['p0']
-			self.adc_res = self.veto_ch.offseted_adc_to_volts_cal['p1']
+			self.adc_offset = self.veto_ch.adc_to_volts_cal['p0']
+			self.adc_res = self.veto_ch.adc_to_volts_cal['p1']
 		else:
 			print 'Wrong type. Exiting'
 			exit()
