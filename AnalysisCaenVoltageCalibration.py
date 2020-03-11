@@ -44,12 +44,7 @@ class AnalysisCaenVoltageCalibration:
 			self.LoadPickle()
 
 		if not self.cal_pickle:
-			self.runs = glob.glob(self.inDir + '/*mV')
-			if len(self.runs) < 2: ExitMessage('Can\'t make calibration with only ' + str(len(self.runs)) + ' runs. Exiting!', os.EX_USAGE)
-			self.runs.sort(key=lambda x: float(x.split('_')[-1].split('mV')[0]))
-			self.vcals = [float(x.split('_')[-1].split('mV')[0]) for x in self.runs]
-			if len(self.vcals) != len(self.runs): ExitMessage('There was an error. Check the runs inside {d}'.format(d=self.inDir), os.EX_DATAERR)
-			self.EstimateVcalsUncertainty()
+			self.DoAsFirstTime()
 
 		self.working_dir = ''
 		self.working_vcal = 0
@@ -68,6 +63,19 @@ class AnalysisCaenVoltageCalibration:
 		self.working_num_events = 0
 		self.working_adcs = []
 		self.working_total_points = 0
+
+	def DoAsFirstTime(self):
+		self.cal_pickle = None
+		self.runs = []
+		self.vcals = []
+		self.vcals_valid = []
+		self.vcals_uncertainty = []
+		self.runs = glob.glob(self.inDir + '/*mV')
+		if len(self.runs) < 2: ExitMessage('Can\'t make calibration with only ' + str(len(self.runs)) + ' runs. Exiting!', os.EX_USAGE)
+		self.runs.sort(key=lambda x: float(x.split('_')[-1].split('mV')[0]))
+		self.vcals = [float(x.split('_')[-1].split('mV')[0]) for x in self.runs]
+		if len(self.vcals) != len(self.runs): ExitMessage('There was an error. Check the runs inside {d}'.format(d=self.inDir), os.EX_DATAERR)
+		self.EstimateVcalsUncertainty()
 
 	def LookForCalPickles(self):
 		pick_files = glob.glob(self.inDir + '/*.cal')
@@ -90,6 +98,7 @@ class AnalysisCaenVoltageCalibration:
 			self.fits['ADC_Voltage_cal'].SetParError(1, self.cal_pickle['fit_p1_error'])
 			self.fits['ADC_Voltage_cal'].SetChisquare(self.cal_pickle['fit_chi2'])
 			self.fits['ADC_Voltage_cal'].SetNDF(self.cal_pickle['fit_ndf'])
+			print 'Loaded pickle:', self.cal_pickles[pos], '. Run LoadPickle again with another argument if you want to load another pickle'
 
 	def EstimateSystematicUncertainty(self, reading, reading_percent=0.6, reading_fixed=0.2):
 		resol = reading_fixed / float(str(reading_fixed).split('.')[-1].strip('0')) if reading_fixed != 0 else ExitMessage('reading_fixed cannot be 0!. Exiting', os.EX_PROTOCOL)
@@ -198,8 +207,8 @@ class AnalysisCaenVoltageCalibration:
 		self.graphs[name].Draw('AP')
 		SetDefault1DCanvasSettings(self.canvas[name])
 		self.FitGraph(name)
-		self.canvas[name].SaveAs('{d}/{n}.png'.format(d=self.inDir, n=name))
-		self.canvas[name].SaveAs('{d}/{n}.root'.format(d=self.inDir, n=name))
+		self.canvas[name].SaveAs('{d}/{n}_{c}_{o}.png'.format(d=self.inDir, n=name, c=self.working_caen_ch, o=self.working_caen_ch_dc_off_percent))
+		self.canvas[name].SaveAs('{d}/{n}_{c}_{o}.root'.format(d=self.inDir, n=name, c=self.working_caen_ch, o=self.working_caen_ch_dc_off_percent))
 
 	def FitGraph(self, name='ADC_Voltage_cal'):
 		if name in self.graphs.keys():

@@ -42,8 +42,10 @@ class Channel_Caen:
 			# Channels 3, 6 and 7 were calibrated with dc voltage and multimeter. The calibration files are on 20180419ch{X}/Runs
 			if self.ch == 3:
 				# With negative bias, signals are positive. With positive bias, signals are negative
-				self.adc_to_volts_cal['p0'] = 0.035089408942074955 if settings.bias < 0 else -0.02328757136517118
-				self.adc_to_volts_cal['p1'] = 0.00013089621340339722 if settings.bias < 0 else 0.00013076091653412987
+				self.adc_to_volts_cal['p0'] = -0.07482169290039371 if settings.bias < 0 else -2.056009761213107
+				# self.adc_to_volts_cal['p0'] = 0.035089408942074955 if settings.bias < 0 else -0.02328757136517118
+				self.adc_to_volts_cal['p1'] = 0.00013097264906803782 if settings.bias < 0 else 0.00013061281362144022
+				# self.adc_to_volts_cal['p1'] = 0.00013089621340339722 if settings.bias < 0 else 0.00013076091653412987
 			elif self.ch == 6:
 				self.adc_to_volts_cal['p0'] = 0.04183464530415922 if settings.bias < 0 else -0.04426166525468815
 				self.adc_to_volts_cal['p1'] = 0.0001294935440001848 if settings.bias < 0 else 0.00012934155437522722

@@ -529,25 +529,30 @@ class Converter_Caen:
 
 	def ADC_to_Volts(self, sig_type):
 		adcs, offset = 0, 0
+		channel = None
 		if sig_type == 'signal':
 			adcs = self.sigADC
-			offset = self.sig_offset
-			self.adc_offset = self.signal_ch.adc_to_volts_cal['p0']
-			self.adc_res = self.signal_ch.adc_to_volts_cal['p1']
+			channel = self.signal_ch
+			# offset = self.sig_offset
+			# self.adc_offset = self.signal_ch.adc_to_volts_cal['p0']
+			# self.adc_res = self.signal_ch.adc_to_volts_cal['p1']
 		elif sig_type == 'trigger':
 			adcs = self.trigADC
-			offset = self.trig_offset
-			self.adc_offset = self.trigger_ch.adc_to_volts_cal['p0']
-			self.adc_res = self.trigger_ch.adc_to_volts_cal['p1']
+			channel = self.trigger_ch
+			# offset = self.trig_offset
+			# self.adc_offset = self.trigger_ch.adc_to_volts_cal['p0']
+			# self.adc_res = self.trigger_ch.adc_to_volts_cal['p1']
 		elif sig_type == 'veto':
 			adcs = self.vetoADC
-			offset = self.anti_co_offset
-			self.adc_offset = self.veto_ch.adc_to_volts_cal['p0']
-			self.adc_res = self.veto_ch.adc_to_volts_cal['p1']
+			channel = self.veto_ch
+			# offset = self.anti_co_offset
+			# self.adc_offset = self.veto_ch.adc_to_volts_cal['p0']
+			# self.adc_res = self.veto_ch.adc_to_volts_cal['p1']
 		else:
 			print 'Wrong type. Exiting'
 			exit()
-		result = np.add(self.adc_offset, np.multiply(self.adc_res, np.add(adcs, np.multiply(2 ** self.dig_bits - 1.0, offset / 100.0 - 0.5, dtype='f8'), dtype='f8'), dtype='f8'), dtype='f8')
+		# result = np.add(self.adc_offset, np.multiply(self.adc_res, np.add(adcs, np.multiply(2 ** self.dig_bits - 1.0, offset / 100.0 - 0.5, dtype='f8'), dtype='f8'), dtype='f8'), dtype='f8')
+		result = channel.ADC_to_Volts(adcs)
 		return result
 
 if __name__ == '__main__':
