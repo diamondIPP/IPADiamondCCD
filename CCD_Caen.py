@@ -19,8 +19,8 @@ from HV_Control import HV_Control
 from Utils import *
 # from memory_profiler import profile
 
-# trig_rand_time = 0.001  # for voltage calibration
-trig_rand_time = 0.2  # for system test
+trig_rand_time = 0.001  # for voltage calibration
+# trig_rand_time = 0.2  # for system test
 wait_time_hv = 7
 
 class CCD_Caen:
@@ -37,6 +37,7 @@ class CCD_Caen:
 		else:
 			ExitMessage('No setting file was given, or settings object. Quitting!')
 		self.settings.Get_Calibration_Constants()
+		self.settings.Get_voltage_calibration()
 		self.settings.SetOutputFiles()
 
 		# Create channel objects for signal, trigger and veto

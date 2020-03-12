@@ -14,6 +14,7 @@ import struct
 import ROOT as ro
 import shutil
 from Utils import *
+import cPickle as pickle
 # from DataAcquisition import DataAcquisition
 
 
@@ -67,6 +68,10 @@ class Settings_Caen:
 		# timestamp
 		self.time_struct_fmt = '@II'  # struct for time stamp the first uint32 is for the seconds since epoch, and the second for nano seconds since epoch
 		self.time_struct_len = struct.calcsize(self.time_struct_fmt)
+
+		# voltage calibration constants
+		self.voltage_calib_dir = ''
+		self.adc_volts_pickle = None
 
 		# calibration variables
 		self.is_cal_run = iscal
@@ -129,6 +134,8 @@ class Settings_Caen:
 						self.input_range = parser.getfloat('RUN', 'input_range')
 					if parser.has_option('RUN', 'calib_path'):
 						self.calib_path = parser.get('RUN', 'calib_path')
+					if parser.has_option('RUN', 'voltage_calib_dir'):
+						self.voltage_calib_dir = parser.get('RUN', 'voltage_calib_dir')
 					if parser.has_option('RUN', 'simultaneous_conversion'):
 						self.simultaneous_conversion = bool(parser.getboolean('RUN', 'simultaneous_conversion'))
 					if parser.has_option('RUN', 'plot_waveforms'):
@@ -223,6 +230,19 @@ class Settings_Caen:
 				self.fit_signal_vcal_params = np.array(fit_signal_vcal.Parameters(), dtype='f8')
 				self.fit_charge_signal_params = np.array(fit_charge_signal.Parameters(), dtype='f8')
 				self.UpdateVcalVsSignal()
+
+	def Get_voltage_calibration(self):
+		if self.voltage_calib_dir != '':
+			if os.path.isdir(self.voltage_calib_dir):
+				v_adc_calfile = ''
+				if 'sig_dc_offset_percent' in self.__dict__.keys():
+					v_adc_calfile = 'adc_cal_{c}_{dop}.cal'.format(c=self.sigCh, dop=self.sig_dc_offset_percent)
+				else:
+					v_adc_calfile = 'adc_cal_{c}_{dop}.cal'.format(c=self.sigCh, dop=45 if self.bias < 0 else -45)
+				if os.path.isfile('{d}/{f}'.format(d=self.voltage_calib_dir, f=v_adc_calfile)):
+					cal_pickle = pickle.load(open('{d}/{f}'.format(d=self.voltage_calib_dir, f=v_adc_calfile), 'rb'))
+
+
 
 	def UpdateVcalVsSignal(self):
 		self.fit_vcal_signal_params = np.array([np.divide(-self.fit_signal_vcal_params[0], self.fit_signal_vcal_params[1], dtype='f8'),

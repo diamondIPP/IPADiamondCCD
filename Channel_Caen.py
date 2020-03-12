@@ -40,18 +40,23 @@ class Channel_Caen:
 			self.adc_to_volts_cal['p0'] = np.subtract(np.divide(self.dc_offset_percent, 50, dtype='f8'), 1, dtype='f8')
 			self.edge = -int(settings.bias/abs(settings.bias)) if settings.bias != 0 else -1
 			# Channels 3, 6 and 7 were calibrated with dc voltage and multimeter. The calibration files are on 20180419ch{X}/Runs
-			if self.ch == 3:
-				# With negative bias, signals are positive. With positive bias, signals are negative
-				self.adc_to_volts_cal['p0'] = -0.07482169290039371 if settings.bias < 0 else -2.056009761213107
-				# self.adc_to_volts_cal['p0'] = 0.035089408942074955 if settings.bias < 0 else -0.02328757136517118
-				self.adc_to_volts_cal['p1'] = 0.00013097264906803782 if settings.bias < 0 else 0.00013061281362144022
-				# self.adc_to_volts_cal['p1'] = 0.00013089621340339722 if settings.bias < 0 else 0.00013076091653412987
-			elif self.ch == 6:
-				self.adc_to_volts_cal['p0'] = 0.04183464530415922 if settings.bias < 0 else -0.04426166525468815
-				self.adc_to_volts_cal['p1'] = 0.0001294935440001848 if settings.bias < 0 else 0.00012934155437522722
-			elif self.ch == 7:
-				self.adc_to_volts_cal['p0'] = 0.025512742406801153 if settings.bias < 0 else -0.024895654896994378
-				self.adc_to_volts_cal['p1'] = 0.00012875546036321804 if settings.bias < 0 else 0.00013155381396351944
+			if 'adc_volts_pickle' in settings.__dict__.keys():
+				if settings.adc_volts_pickle:
+					self.adc_to_volts_cal['p0'] = settings.adc_volts_pickle['fit_p0']
+					self.adc_to_volts_cal['p1'] = settings.adc_volts_pickle['fit_p1']
+			else:
+				if self.ch == 3:
+					# With negative bias, signals are positive. With positive bias, signals are negative
+					self.adc_to_volts_cal['p0'] = -0.07482169290039371 if settings.bias < 0 else -2.056009761213107
+					# self.adc_to_volts_cal['p0'] = 0.035089408942074955 if settings.bias < 0 else -0.02328757136517118
+					self.adc_to_volts_cal['p1'] = 0.00013097264906803782 if settings.bias < 0 else 0.00013061281362144022
+					# self.adc_to_volts_cal['p1'] = 0.00013089621340339722 if settings.bias < 0 else 0.00013076091653412987
+				elif self.ch == 6:
+					self.adc_to_volts_cal['p0'] = 0.04183464530415922 if settings.bias < 0 else -0.04426166525468815
+					self.adc_to_volts_cal['p1'] = 0.0001294935440001848 if settings.bias < 0 else 0.00012934155437522722
+				elif self.ch == 7:
+					self.adc_to_volts_cal['p0'] = 0.025512742406801153 if settings.bias < 0 else -0.024895654896994378
+					self.adc_to_volts_cal['p1'] = 0.00012875546036321804 if settings.bias < 0 else 0.00013155381396351944
 		elif self.type == 'trigger_ch':
 			self.dc_offset_percent = -25 if not settings.is_cal_run else 0
 			self.adc_to_volts_cal['p0'] = np.subtract(np.divide(self.dc_offset_percent, 50, dtype='f8'), 1, dtype='f8')
