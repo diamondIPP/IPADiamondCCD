@@ -462,19 +462,20 @@ class Converter_Caen:
 
 	def IsPedestalBad(self):
 		sigma = np.extract(self.condition_base_line, self.sigADC).std()
-		mean = np.extract(self.condition_base_line, self.sigADC).mean()
 		self.adc_res = self.signal_ch.adc_to_volts_cal['p1']
 		sigma_volts = sigma * self.adc_res
-		mean_volts = mean * self.adc_res
-		diff_volts = abs(int(self.sigADC[0]) - int(self.sigADC[self.trigPos])) * self.adc_res
-		if sigma_volts >= 2e-3 or diff_volts >= 15e-3:  # if a signal is not flat enough due to previous unstable states
+		diff_volts = abs(np.mean(self.sigADC[0:250]) - np.mean(self.sigADC[(self.trigPos - 250):self.trigPos])) * self.adc_res
+		# diff_volts = abs(int(self.sigADC[0]) - int(self.sigADC[self.trigPos])) * self.adc_res
+		if sigma_volts >= 10e-3 or diff_volts >= 15e-3:  # if a signal is not flat enough due to previous unstable states
 			return True
-		else:
-			last_sig = self.sigADC[-1] * self.adc_res
-			if abs(last_sig - mean_volts) > 75e-3:  # if a signal does not return to base line due to multiple effects
-				return True
-			else:  # when the signal pedestal is well behaved and the signal returns to baseline
-				return False
+		condition_base_line_ini = np.bitwise_and(np.less_equal(self.array_points, self.trigPos), np.greater(self.array_points, self.trigPos - 500))
+		condition_base_line_end = np.bitwise_and(np.greater_equal(self.array_points, self.trigPos + 4000), np.less(self.array_points, self.trigPos + 4500))
+		meanbl_ini = np.extract(condition_base_line_ini, self.sigADC).mean()
+		meanbl_end = np.extract(condition_base_line_end, self.sigADC).mean()
+		if abs(meanbl_end - meanbl_ini) * self.adc_res > 50e-3:  # if a signal does not return to base line due to multiple effects
+			return True
+		# when the signal pedestal is well behaved and the signal returns to baseline
+		return False
 
 	def IsEventSaturated(self):
 		if RoundInt(2 ** 14 -1) in np.extract(np.bitwise_or(self.condition_base_line, self.condition_peak_pos), self.sigADC):
@@ -528,6 +529,12 @@ class Converter_Caen:
 		condition_base_line = np.array(array_points - trigPos <= 0, dtype='?')
 
 	def ADC_to_Volts(self, sig_type):
+		def ChannelAdcToVolts(adcs, channel):
+			if 'adc_to_volts_cal' in channel.__dict__.keys():
+				return np.add(channel.adc_to_volts_cal['p0'], np.multiply(adcs, channel.adc_to_volts_cal['p1'], dtype='f8'), dtype='f8')
+			else:
+				ExitMessage('The channel object does not have "adc_to_volts_cal". Run Modify_Settings_Caen.py first.', os.EX_USAGE)
+
 		adcs, offset = 0, 0
 		channel = None
 		if sig_type == 'signal':
@@ -552,14 +559,21 @@ class Converter_Caen:
 			print 'Wrong type. Exiting'
 			exit()
 		# result = np.add(self.adc_offset, np.multiply(self.adc_res, np.add(adcs, np.multiply(2 ** self.dig_bits - 1.0, offset / 100.0 - 0.5, dtype='f8'), dtype='f8'), dtype='f8'), dtype='f8')
-		result = channel.ADC_to_Volts(adcs)
+		# result = channel.ADC_to_Volts(adcs)
+		result = ChannelAdcToVolts(adcs, channel)
 		return result
 
 if __name__ == '__main__':
 	# first argument is the path to the settings pickle file
 	# sedond argument is the path of the directory that contains the raw data.
 	# By default, it assumes simultaneous data conversion. If the conversion is done offline (aka. not simultaneous), then the 3rd parameter has to be given and should be '0'
+	if len(sys.argv) < 2:
+		print 'Usage is: Converter_Caen.py <settings_pickle_path> <dir_with_raw_data> 0 for offline conversion)'
+		exit()
 	settings_object = str(sys.argv[1])  # settings pickle path
+	if settings_object in ['-h', '--help']:
+		print 'Usage is: Converter_Caen.py <settings_pickle_path> <dir_with_raw_data> 0 for offline conversion)'
+		exit()
 	print 'settings object', settings_object
 	if len(sys.argv) > 2:
 		data_path = str(sys.argv[2])  # path where the binary data in adcs is. It is a directory path containing the raw files.

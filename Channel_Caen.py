@@ -31,7 +31,7 @@ class Channel_Caen:
 		self.edge = -1
 		self.name = str(ch_type)
 
-		self.adc_to_volts_cal = {'p0': 0, 'p1': np.divide(2, np.subtract(np.power(2, 14, dtype='float64'), 1.0, dtype='float64'), dtype='float64')}
+		self.adc_to_volts_cal = {'p0': -1, 'p1': np.divide(2, np.subtract(np.power(2, 14, dtype='float64'), 1.0, dtype='float64'), dtype='float64')}
 
 	def Set_Channel(self, settings):
 		self.adc_to_volts_cal['p1'] = settings.sigRes

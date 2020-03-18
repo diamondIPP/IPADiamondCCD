@@ -240,7 +240,7 @@ class Settings_Caen:
 				else:
 					v_adc_calfile = 'adc_cal_{c}_{dop}.cal'.format(c=self.sigCh, dop=45 if self.bias < 0 else -45)
 				if os.path.isfile('{d}/{f}'.format(d=self.voltage_calib_dir, f=v_adc_calfile)):
-					cal_pickle = pickle.load(open('{d}/{f}'.format(d=self.voltage_calib_dir, f=v_adc_calfile), 'rb'))
+					self.adc_volts_pickle = pickle.load(open('{d}/{f}'.format(d=self.voltage_calib_dir, f=v_adc_calfile), 'rb'))
 
 
 
