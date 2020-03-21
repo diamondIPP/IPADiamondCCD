@@ -43,7 +43,7 @@ class Modify_Pickles_Caen:
 		self.settings.ac_thr_counts = val
 		self.veto_ch.thr_counts = val
 
-	def CorrectAdcVoltageCal(self):
+	def CorrectAdcVoltageCal(self, vcaldir=''):
 		def CheckForDir():
 			while self.voltage_cal_dir == '' or not os.path.isdir(self.voltage_cal_dir):
 				prompt_text = 'The path for the adc-voltage-cal directory does not exist. Enter a correct path to the directory containing the adc_cal_<ch>_<dcOffsetP>.cal files: ' if self.voltage_cal_dir != '' else 'The adc voltage calibration directory is not present in this run. Please enter it: '
@@ -89,9 +89,14 @@ class Modify_Pickles_Caen:
 					print 'Set', channelObj.type, 'p0 to:', channelObj.adc_to_volts_cal['p0'], ', p1 to:', channelObj.adc_to_volts_cal['p1'], ', base_line_adcs to:', channelObj.base_line_adcs, 'and base_line_u_adcs to:', channelObj.base_line_u_adcs
 
 		if not 'voltage_calib_dir' in self.settings.__dict__.keys():
-			print 'The adc voltage calibration directory was not defined for this run. Please enter it:'
+			print 'The adc voltage calibration directory was not defined for this run. ', ; sys.stdout.flush()
+			if vcaldir != '':
+				self.voltage_cal_dir = vcaldir
+				print 'Using parsed directory:', vcaldir
+			else:
+				print 'Please enter it:'
 		else:
-			self.voltage_cal_dir = self.settings.voltage_calib_dir
+			self.voltage_cal_dir = self.settings.voltage_calib_dir if vcaldir == '' else vcaldir
 		CheckForDir()
 		Get_voltage_calibration()
 		# ipdb.set_trace()

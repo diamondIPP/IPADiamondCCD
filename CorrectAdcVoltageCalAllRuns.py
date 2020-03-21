@@ -16,7 +16,7 @@ class CorrectAdcVoltageCalAllRuns:
 		self.runsdir = Correct_Path(runsdir)
 		self.runs = glob.glob('{d}/*'.format(d=self.runsdir))
 
-	def MakeAllCalibrationModifications(self):
+	def MakeAllCalibrationModifications(self, vcaldir=''):
 		for run in self.runs:
 			if os.path.isdir(run):
 				print 'Modifying run', run
@@ -35,7 +35,7 @@ class CorrectAdcVoltageCalAllRuns:
 					shutil.copy2(vetosfs[0], vetosfs[0] + '.bkp')
 				print 'Done'
 				modPickleRun = Modify_Pickles_Caen(run)
-				modPickleRun.CorrectAdcVoltageCal()
+				modPickleRun.CorrectAdcVoltageCal(vcaldir)
 				modPickleRun.SavePickles()
 				print 'Finish with run', run, '\n'
 

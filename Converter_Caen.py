@@ -64,7 +64,10 @@ class Converter_Caen:
 		self.dig_bits = self.settings.dig_bits
 		self.simultaneous_conversion = self.settings.simultaneous_conversion
 		self.time_recal = self.settings.time_calib
-		self.polarity = 1 if self.settings.bias >= 0 else -1
+		if not self.is_cal_run:
+			self.polarity = 1 if self.settings.bias >= 0 else -1
+		else:
+			self.polarity = 1 if self.settings.pulser_amplitude >=0 else -1
 
 		self.hv_file_name = 'hvfile_{f}.dat'.format(f=self.filename)
 		self.hv_dict = None
@@ -583,9 +586,7 @@ if __name__ == '__main__':
 		print 'data_path empty ""'
 	is_simultaneous_data_conv = True
 	if len(sys.argv) > 3:
-		print 'it entered here 0'
 		if IsInt(str(sys.argv[3])):
-			print 'it entered here 1'
 			is_simultaneous_data_conv = bool(int(str(sys.argv[3])))
 			print 'simultaneous is now', is_simultaneous_data_conv
 	converter = Converter_Caen(settings_object=settings_object, data_path=data_path, simultaneous_data_conv=is_simultaneous_data_conv)

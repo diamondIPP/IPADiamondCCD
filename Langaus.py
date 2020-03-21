@@ -19,7 +19,7 @@ class LanGaus:
 		self.chi2 = 0
 		self.ndf = 0
 		# self.fit_range = [max(self.histo.GetMean()*0.3, 0), min(self.histo.GetXaxis().GetXmax(), self.histo.GetMean()*3)]
-		self.fit_range = {'min': max(self.histo.GetMean()*0.2, 0), 'max': min(self.histo.GetXaxis().GetXmax(), self.histo.GetMean()*3)}
+		self.fit_range = {'min': max(self.histo.GetMean()- 3 * self.histo.GetRMS(), -10), 'max': min(self.histo.GetXaxis().GetXmax(), self.histo.GetMean() + 3 * self.histo.GetRMS())}
 		# self.fit_range = [0, min(self.histo.GetXaxis().GetXmax(), self.histo.GetMean()*5)]
 		self.fit = None
 		self.EstimateParameters()

@@ -30,6 +30,7 @@ BRANCHESWAVESTYPE = {'time': 'float64', 'voltageSignal': 'float64', 'voltageTrig
 BRANCHES1DLOAD = ['event', 'voltageHV', 'currentHV', 'timeHV.Convert()', 'timeHV.AsDouble()', 'peakPosition']
 BRANCHESWAVESLOAD = ['time', 'voltageSignal']
 ANALYSISSCALARBRANCHES = ['pedestal', 'pedestalSigma', 'signalAndPedestal', 'signalAndPedestalSigma', 'signal']
+fit_method = ('Minuit2', 'Migrad', )
 
 class AnalysisCaenCCD:
 	def __init__(self, directory='.', config='CAENAnalysisConfig.cfg', infile='', bias=0.0, overw=False, verbose=False):
@@ -48,10 +49,12 @@ class AnalysisCaenCCD:
 		self.trigger_ch = None
 		self.veto_ch = None
 		self.max_events = 0
+		self.is_cal_run = False
+		self.cal_run_type = ''
 		self.bias = bias
 		self.pedestalIntegrationTime = 0.4e-6
 		self.pedestalTEndPos = -20e-9
-		self.peakTime = 2.121e-6 if self.bias >= 0 else 2.120e-6
+		self.peakTime = 2.5e-6
 		self.doPeakPos = True
 		self.peakForward = self.pedestalIntegrationTime / 2.0
 		self.peakBackward = self.pedestalIntegrationTime / 2.0
@@ -63,6 +66,7 @@ class AnalysisCaenCCD:
 		self.currentCut = 10e-9
 		self.fit_min = -10000000
 		self.fit_max = -10000000
+		self.pedestal_sigma = 0
 
 		self.analysisTreeExisted = False
 
@@ -145,7 +149,7 @@ class AnalysisCaenCCD:
 		self.loaded_entries = 0
 		self.suffix = None
 
-		self.delta_v_signal = self.signal_ch.adc_to_volts_cal['p1'] * 100
+		self.delta_v_signal = self.signal_ch.adc_to_volts_cal['p1'] * 100 * 1000  # in mV
 
 		self.Load_Config_File()
 
@@ -203,13 +207,23 @@ class AnalysisCaenCCD:
 
 	def SetFromSettingsFile(self):
 		if self.settings:
-			self.bias = self.settings.bias
+			self.is_cal_run = self.settings.is_cal_run if 'is_cal_run' in self.settings.__dict__.keys() else False
+			self.bias = self.settings.bias if not self.is_cal_run else self.settings.pulser_amplitude
+			if self.is_cal_run:
+				self.cal_run_type = 'in' if 'in' in self.in_tree_name else 'out'
 
 	def LoadInputTree(self):
 		if not os.path.isdir(self.inDir):
 			ExitMessage('The directory {d} does not exist! Exiting...'.format(d=self.inDir), os.EX_DATAERR)
 		if self.in_tree_name == '':
 			root_files = glob.glob('{d}/*.root'.format(d=self.inDir))
+			root_files = [filei for filei in root_files if 'analysis' not in filei]
+			root_files = [filei for filei in root_files if 'Pedestal' not in filei]
+			root_files = [filei for filei in root_files if 'SelectedWaveformsPedCor' not in filei]
+			root_files = [filei for filei in root_files if 'PH' not in filei]
+			root_files = [filei for filei in root_files if 'HVCurrents' not in filei]
+			root_files = [filei for filei in root_files if 'peakPosDist' not in filei]
+			root_files = [filei for filei in root_files if 'SelectedWaveforms' not in filei]
 			if len(root_files) == 1:
 				self.in_tree_name = root_files[0].split('/')[-1].split('.root')[0]
 			elif len(root_files) == 0:
@@ -298,8 +312,8 @@ class AnalysisCaenCCD:
 					os.remove('{d}/{f}{s}.root'.format(d=self.outDir, f=self.analysisTreeNameStem, s=si))
 				self.suffix = None
 				self.OpenAnalysisROOTFile('READ')
-
-		self.PlotPeakPositionDistributions()
+		if not self.is_cal_run or self.cal_run_type == 'out':
+			self.PlotPeakPositionDistributions()
 		self.AddPeakPositionCut()
 
 	def OpenAnalysisROOTFile(self, mode='READ'):
@@ -484,6 +498,78 @@ class AnalysisCaenCCD:
 
 	def FindRealPeakPosition(self):
 		print 'Getting real peak positions...'
+		# mpos = self.signalWaveVect.argmin(axis=1) if self.bias >= 0 else self.signalWaveVect.argmax(axis=1)
+		# time_mpos = self.timeVect[:, mpos].diagonal()
+		# time_mpos = np.array([self.timeVect[it[0], pos] for it, pos in np.ndenumerate(mpos)])
+		# xmin, xmax = time_mpos - self.pedestalIntegrationTime, time_mpos + self.pedestalIntegrationTime
+		# par0lim = {'low': 1e-30, 'up': 1e30} if self.bias >= 0 else {'low': -1e30, 'up': -1e-30}
+		# par0ini = 3.14 if self.bias >= 0 else -3.14
+		ro.Math.MinimizerOptions.SetDefaultMinimizer(*fit_method)
+		ro.Math.MinimizerOptions.SetDefaultMaxFunctionCalls(1000000)
+		ro.Math.MinimizerOptions.SetDefaultTolerance(0.01)
+		ro.gErrorIgnoreLevel = ro.kFatal
+		self.peak_positions = []
+		print 'Calculating peak positions...'
+		self.utils.CreateProgressBar(len(self.timeVect))
+		self.utils.bar.start()
+		for it, timei in enumerate(self.timeVect):
+			# fit_fcn = ro.TF1('fit_{it}'.format(it=it), '[0]*(x-[1])^2+[2]', xmin[it], xmax[it])
+			fit_fcn = ro.TF1('fit_{it}'.format(it=it), '[0]*exp(-((x-[1])/[2])^2)+pol1(3)', self.peakTime - 2e-6, self.peakTime + 2e-6)
+			fit_fcn.SetNpx(1000)
+			# par2limFact = {'low': -10.0, 'up': -0.1} if self.bias >= 0 else {'low': 0.1, 'up': 10.0}
+			# bin1, bin2 = int(mpos[it] - np.round(self.pedestalIntegrationTime / self.settings.time_res)), int(mpos[it] + np.round(self.pedestalIntegrationTime / self.settings.time_res))
+			# y1, y2, y0 = self.signalWaveVect[it, bin1], self.signalWaveVect[it, bin2], self.signalWaveVect[it, mpos[it]]
+			par0 = 1 if self.bias < 0 else -1
+			par1 = self.peakTime
+			par2 = 1e-6
+			par3 = -1 if self.bias < 0 else 1
+			par4 = 1 if self.bias < 0 else -1
+			fit_fcn.SetParameter(0, par0)
+			fit_fcn.SetParLimits(0, 0 if self.bias < 0 else -100, 100 if self.bias < 0 else 0)
+			par1Min, par1Max = par1 - 1.5e-6, par1 + 1.5e-6
+			fit_fcn.SetParameter(1, par1)
+			fit_fcn.SetParLimits(1, par1Min, par1Max)
+			fit_fcn.SetParameter(2, par2)
+			fit_fcn.SetParLimits(2, 0, 10e-6)
+			fit_fcn.SetParameter(3, par3)
+			fit_fcn.SetParLimits(3, -100, 100)
+			fit_fcn.SetParameter(4, par4)
+			fit_fcn.SetParLimits(4, 0 if self.bias < 0 else -1e6, 1e6 if self.bias < 0 else 0)
+			xmin, xmax = par1Min, par1Max
+			xpeak = self.peakTime
+			fit_res = None
+			for it2 in xrange(3):
+				fit_res = ro.TGraph(len(timei), timei, self.signalWaveVect[it]).Fit('fit_{it}'.format(it=it), 'QBN0S', '', xmin, xmax)
+				xpeak = fit_fcn.GetMaximumX(xmin, xmax) if self.bias < 0 else fit_fcn.GetMinimumX(xmin, xmax)
+				xwindow = 600e-9 if it == 2 else 400e-9
+				if xpeak + xwindow > par1Max:
+					xmin, xmax = par1Max - 2 * xwindow, par1Max
+				elif xpeak - xwindow < par1Min:
+					xmin, xmax = par1Min, par1Min + 2 * xwindow
+				else:
+					xmin, xmax = xpeak - xwindow, xpeak + xwindow
+			if fit_res.IsValid() and (par1Min < xpeak < par1Max):
+				self.peak_positions.append(xpeak)
+			else:
+				self.peak_positions.append(0)
+				print 'Could not find peak for event', it, '; setting peak position to 0 for this event'
+			# fit_fcn.Delete()
+			# fit.Delete()
+			self.utils.bar.update(it + 1)
+		ro.gErrorIgnoreLevel = ro.kInfo
+		# fit = [ro.TGraph(len(timei), timei, self.signalWaveVect[it]).Fit('pol2', 'QMN0FS', '', xmin[it], xmax[it]) for it, timei in enumerate(self.timeVect)]
+		# fit = [ro.TGraph(len(timei), timei, self.signalWaveVect[it]).Fit('fit_{it}'.format(it=it), 'QBMN0FS', '', xmin[it], xmax[it]) for it, timei in enumerate(self.timeVect)]
+		# for it, timei in enumerate(self.timeVect):
+		# 	pass
+		# b, a = np.array([fiti.Parameter(1) for fiti in fit]), np.array([fiti.Parameter(2) for fiti in fit])
+		# self.peak_positions = np.divide(-b, 2 * a)
+		# self.peak_positions = np.array([fiti.Parameter(1) for fiti in fit])
+		self.peak_positions = np.array(self.peak_positions)
+		self.utils.bar.finish()
+		print 'Done getting real peak positions'
+
+	def FindRealPeakPosition2(self):
+		print 'Getting real peak positions...'
 		mpos = self.signalWaveVect.argmin(axis=1) if self.bias >= 0 else self.signalWaveVect.argmax(axis=1)
 		# time_mpos = self.timeVect[:, mpos].diagonal()
 		time_mpos = np.array([self.timeVect[it[0], pos] for it, pos in np.ndenumerate(mpos)])
@@ -496,7 +582,8 @@ class AnalysisCaenCCD:
 		self.utils.CreateProgressBar(len(self.timeVect))
 		self.utils.bar.start()
 		for it, timei in enumerate(self.timeVect):
-			fit_fcn = ro.TF1('fit_{it}'.format(it=it), '[0]*(x-[1])^2+[2]', xmin[it], xmax[it])
+			# fit_fcn = ro.TF1('fit_{it}'.format(it=it), '[0]*(x-[1])^2+[2]', xmin[it], xmax[it])
+			fit_fcn = ro.TF1('fit_{it}'.format(it=it), '[0]*exp(-((x-[1])/[2])^2+pol1(3)', self.peakTime - 1e-6, self.peakTime - 1e-6)
 			# par2limFact = {'low': -10.0, 'up': -0.1} if self.bias >= 0 else {'low': 0.1, 'up': 10.0}
 			bin1, bin2 = int(mpos[it] - np.round(self.pedestalIntegrationTime / self.settings.time_res)), int(mpos[it] + np.round(self.pedestalIntegrationTime / self.settings.time_res))
 			y1, y2, y0 = self.signalWaveVect[it, bin1], self.signalWaveVect[it, bin2], self.signalWaveVect[it, mpos[it]]
@@ -592,7 +679,7 @@ class AnalysisCaenCCD:
 
 	def FindSignalPositions(self, backward, forward):
 		print 'Calculating position of signals...', ;sys.stdout.flush()
-		self.signalTimeIndices = [np.argwhere(abs(timeVectEvi - self.peak_positions[it] + (forward - backward)/2.0) <= (forward + backward)/2.0).flatten() for it, timeVectEvi in enumerate(self.timeVect)]
+		self.signalTimeIndices = [np.argwhere(abs(timeVectEvi - self.peak_positions[it] - (forward - backward)/2.0) <= (forward + backward)/2.0).flatten() for it, timeVectEvi in enumerate(self.timeVect)]
 		print 'Done'
 
 	def CalculatePedestalsAndSignals(self):
@@ -778,7 +865,7 @@ class AnalysisCaenCCD:
 			SetDefault2DStats(self.histo[name])
 		ro.TFormula.SetMaxima(1000)
 
-	def PlotPeakPositionDistributions2(self, name='peakPosDist', low_t=1e-9, up_t=5001e-9, nbins=500, cut=''):
+	def PlotPeakPositionDistributions2(self, name='peakPosDist', low_t=1e-6, up_t=3e-6, nbins=500, cut=''):
 		self.DrawHisto(name, low_t, up_t, (up_t - low_t) / nbins, 'peakPosition', 'Peak Position [s]', cut, 'e')
 		self.histo[name].GetXaxis().SetRangeUser(self.histo[name].GetMean() - 5 * self.histo[name].GetRMS(), self.histo[name].GetMean() + 5 * self.histo[name].GetRMS())
 		func = ro.TF1('fit_' + name, 'gaus', low_t, up_t)
@@ -793,8 +880,16 @@ class AnalysisCaenCCD:
 		SetDefaultFitStats(self.histo[name], func)
 		self.peakTime = fit.Parameter(1)
 
-	def PlotPeakPositionDistributions(self, name='peakPosDist', low_t=1e-9, up_t=5001e-9, nbins=500, cut=''):
-		self.DrawHisto(name, low_t, up_t, (up_t - low_t) / nbins, 'peakPosition', 'Peak Position [s]', cut, 'e')
+	def PlotPeakPositionDistributions(self, name='peakPosDist', low_t=1, up_t=4, nbins=200, cut=''):
+		good_binning = False
+		nbins2 = nbins
+		while not good_binning:
+			self.DrawHisto(name, low_t, up_t, float(up_t - low_t) / nbins2, 'peakPosition*1000000', 'Peak Position [us]', cut, 'e')
+			empty_bins = 0
+			for bin in xrange(1, self.histo[name].GetNbinsX() + 1):
+				empty_bins += 1 if self.histo[name].GetBinContent(bin) < 1 else 0
+			good_binning = True if nbins2 - empty_bins >= 12 else False
+			nbins2 *= 2
 		self.histo[name].GetXaxis().SetRangeUser(self.histo[name].GetMean() - 5 * self.histo[name].GetRMS(), self.histo[name].GetMean() + 5 * self.histo[name].GetRMS())
 		func = ro.TF1('fit_' + name, 'gaus(0)+gaus(3)', low_t, up_t)
 		func.SetNpx(1000)
@@ -807,44 +902,47 @@ class AnalysisCaenCCD:
 		params = np.array((const_p[0], mean_p[0], rms_p[0], const_p[1], mean_p[1], rms_p[1]), 'float64')
 		func.SetParameters(params)
 		func.SetParLimits(0, 0, self.histo[name].GetMaximum() * 2)
-		func.SetParLimits(2, 0, self.histo[name].GetRMS() * 2)
+		func.SetParLimits(2, 0.001, self.histo[name].GetRMS() * 2)
 		func.SetParLimits(3, 0, self.histo[name].GetMaximum() * 2)
-		func.SetParLimits(5, 0, self.histo[name].GetRMS() * 2)
+		func.SetParLimits(5, 0.001, self.histo[name].GetRMS() * 2)
 		if skew >= 0:
-			func.SetParLimits(1, self.histo[name].GetMean() - 2 * self.histo[name].GetRMS(), self.histo[name].GetMean())
-			func.SetParLimits(4, self.histo[name].GetMean(), self.histo[name].GetMean() + 2 * self.histo[name].GetRMS())
+			func.SetParLimits(1, self.histo[name].GetMean() - 4 * self.histo[name].GetRMS(), self.histo[name].GetMean())
+			func.SetParLimits(4, self.histo[name].GetMean(), self.histo[name].GetMean() + 4 * self.histo[name].GetRMS())
 		else:
-			func.SetParLimits(1, self.histo[name].GetMean(), self.histo[name].GetMean() + 2 * self.histo[name].GetRMS())
-			func.SetParLimits(4, self.histo[name].GetMean() - 2 * self.histo[name].GetRMS(), self.histo[name].GetMean())
+			func.SetParLimits(1, self.histo[name].GetMean(), self.histo[name].GetMean() + 4 * self.histo[name].GetRMS())
+			func.SetParLimits(4, self.histo[name].GetMean() - 4 * self.histo[name].GetRMS(), self.histo[name].GetMean())
 
-		fit = self.histo[name].Fit('fit_' + name, 'QEMSB', '', self.histo[name].GetMean() - 2 * self.histo[name].GetRMS(), self.histo[name].GetMean() + 2 * self.histo[name].GetRMS())
+		fit = self.histo[name].Fit('fit_' + name, 'QEMSB', '', self.histo[name].GetMean() - 4 * self.histo[name].GetRMS(), self.histo[name].GetMean() + 4 * self.histo[name].GetRMS())
 		params = np.array([fit.Parameter(i) for i in xrange(6)], 'float64')
+		xpeak = func.GetMaximumX(self.histo[name].GetMean() - 4 * self.histo[name].GetRMS(), self.histo[name].GetMean() + 4 * self.histo[name].GetRMS())
 		func.SetParameters(params)
-		fit = self.histo[name].Fit('fit_' + name, 'QEMSB', '', self.histo[name].GetMean() - 2 * self.histo[name].GetRMS(), self.histo[name].GetMean() + 2 * self.histo[name].GetRMS())
+		fit = self.histo[name].Fit('fit_' + name, 'QEMSB', '', xpeak - 3.5 * self.histo[name].GetRMS(), xpeak + 3.5 * self.histo[name].GetRMS())
 		# fit = self.histo[name].Fit('fit_' + name, 'QEMSB', '', params[1] - 2 * params[2], params[1] + 2 * params[2])
 		SetDefaultFitStats(self.histo[name], func)
-		self.peakTime = fit.Parameter(1)
+		xpeak = func.GetMaximumX(xpeak - 3 * self.histo[name].GetRMS(), xpeak + 3 * self.histo[name].GetRMS())
+		self.peakTime = np.divide(xpeak, 1e6, dtype='f8')
+		self.canvas[name].Modified()
+		ro.gPad.Update()
 
-	def PlotSignal(self, name='signal', bins=0, cuts='', option='e', minx=0, maxx=2.0):
+	def PlotSignal(self, name='signal', bins=0, cuts='', option='e', minx=-10, maxx=990):
 		if self.bias >= 0:
-			plotvar = '-signal'
+			plotvar = '-1000*signal' if not self.is_cal_run or self.cal_run_type == 'out' else '1000*signal'
 			# vmax, vmin, deltav = -self.analysisTree.GetMinimum('signal'), -self.analysisTree.GetMaximum('signal'), self.signal_ch.adc_to_volts_cal['p1'] * 100
-			deltav = self.delta_v_signal
-			plotVarName = '-Signal [V]'
+			plotVarName = '-Signal [mV]' if not self.is_cal_run or self.cal_run_type == 'out' else 'Signal [mV]'
 		else:
-			plotvar = 'signal'
+			plotvar = '1000*signal' if not self.is_cal_run or self.cal_run_type == 'out' else '-1000*signal'
 			# vmin, vmax, deltav = self.analysisTree.GetMinimum('signal'), self.analysisTree.GetMaximum('signal'), self.signal_ch.adc_to_volts_cal['p1'] * 100
-			deltav = self.delta_v_signal
-			plotVarName = 'Signal [V]'
+			plotVarName = 'Signal [mV]' if not self.is_cal_run or self.cal_run_type == 'out' else '-Signal [mV]'
+		deltav = self.delta_v_signal
 		vmin, vmax = minx, maxx
 		deltav = deltav if bins == 0 else (vmax - vmin) / float(bins)
 		self.DrawHisto(name, vmin - deltav/2.0, vmax + deltav/2.0, deltav, plotvar, plotVarName, cuts, option)
 
 	def PlotPedestal(self, name='pedestal', bins=0, cuts='', option='e', minx=0, maxx=0):
-		vmin = minx if minx != 0 else GetMinimumBranch(self.analysisTree, 'pedestal', cuts)
-		vmax = maxx if maxx != 0 else GetMaximumBranch(self.analysisTree, 'pedestal', cuts)
+		vmin = minx if minx != 0 else GetMinimumBranch(self.analysisTree, 'pedestal', cuts) * 1000
+		vmax = maxx if maxx != 0 else GetMaximumBranch(self.analysisTree, 'pedestal', cuts) * 1000
 		deltax = (vmax - vmin) / 100.0 if bins == 0 else (vmax - vmin) / float(bins)
-		self.DrawHisto(name, vmin - deltax/2.0, vmax + deltax/2.0, deltax, 'pedestal', 'Pedestal[V]', cuts, option)
+		self.DrawHisto(name, vmin - deltax/2.0, vmax + deltax/2.0, deltax, '1000*pedestal', 'Pedestal[mV]', cuts, option)
 		func = ro.TF1('fit_' + name, 'gaus', vmin, vmax)
 		func.SetNpx(1000)
 		mean_p, sigma_p = self.histo[name].GetMean(), self.histo[name].GetRMS()
@@ -855,26 +953,34 @@ class AnalysisCaenCCD:
 		fit = self.histo[name].Fit('fit_' + name, 'QEMS', '', mean_p - 2 * sigma_p, mean_p + 2 * sigma_p)
 		params = np.array((fit.Parameter(0), fit.Parameter(1), fit.Parameter(2)), 'float64')
 		func.SetParameters(params)
-		self.DrawHisto(name, vmin - deltax/2.0, vmax + deltax/2.0, deltax, 'pedestal', 'Pedestal[V]', cuts, option)
+		self.DrawHisto(name, vmin - deltax/2.0, vmax + deltax/2.0, deltax, '1000*pedestal', 'Pedestal[mV]', cuts, option)
 		fit = self.histo[name].Fit('fit_' + name, 'QEMS', '', params[1] - 2 * params[2], params[1] + 2 * params[2])
 		SetDefaultFitStats(self.histo[name], func)
+		self.pedestal_sigma = func.GetParameter(2) if not self.is_cal_run or self.cal_run_type == 'out' else self.histo[name].GetRMS()
 
 	def PlotWaveforms(self, name='SignalWaveform', type='signal', vbins=0, cuts='', option='colz', start_ev=0, num_evs=0, do_logz=False):
-		var = 'voltageSignal' if 'signal' in type.lower() else 'voltageTrigger' if 'trig' in type.lower() else 'voltageVeto' if 'veto' in type.lower() else ''
+		var = '1000*(voltageSignal-pedestal)' if 'signal_ped_cor' in type.lower() else '1000*voltageSignal' if 'signal' in type.lower() else '1000*voltageTrigger' if 'trig' in type.lower() else '1000*voltageVeto' if 'veto' in type.lower() else ''
 		if var == '':
-			print 'type should be "signal", "trigger" or "veto"'
+			print 'type should be "signal", "signal_ped_corrected", "trigger" or "veto"'
 			return
 		# cuts0 = self.cut0.GetTitle() if cuts == '' else cuts
-		vname = ('signal' if var == 'voltageSignal' else 'trigger' if var == 'voltageTrigger' else 'veto' if var == 'voltageVeto' else '') + ' [V]'
+		vname = ('signal - ped' if var == '1000*(voltageSignal-pedestal)' else 'signal' if var == '1000*voltageSignal' else 'trigger' if var == '1000*voltageTrigger' else 'veto' if var == '1000*voltageVeto' else '') + ' [mV]'
 		num_events = self.analysisTree.GetEntries() if num_evs == 0 else num_evs
-		tmin, tmax, deltat = self.analysisTree.GetMinimum('time'), self.analysisTree.GetMaximum('time'), self.settings.time_res
-		vmin, vmax, deltav = self.analysisTree.GetMinimum(var), self.analysisTree.GetMaximum(var), (self.signal_ch.adc_to_volts_cal['p1'] * 10 if var == 'voltageSignal' else self.settings.sigRes * 10)
+		tmin, tmax, deltat = 1e6*self.analysisTree.GetMinimum('time'), 1e6*self.analysisTree.GetMaximum('time'), 1e6*self.settings.time_res
+		vmin, vmax, deltav = -1000, 1000, (1000*self.signal_ch.adc_to_volts_cal['p1'] * 10 if 'voltageSignal' in var else 1000*self.settings.sigRes * 10)
+		miny, maxy = vmin, vmax
+		if 'signal' in var.lower():
+			extra_y = self.pedestal_sigma if self.pedestal_sigma != 0 else 10
+			extra_y = extra_y if not self.is_cal_run or self.cal_run_type == 'out' else 10
+			miny, maxy = self.analysisTree.GetMinimum('voltageSignal') * 1000 - 3 * extra_y, self.analysisTree.GetMaximum('voltageSignal') * 1000 + 3 * extra_y
+			vmin, vmax = TruncateFloat(miny, deltav) - deltav / 2.0, TruncateFloat(maxy, deltav) + deltav / 2.0
 		if vbins == 0:
-			self.DrawHisto2D(name, 'time', tmin - deltat/2.0, tmax + deltat/2.0, deltat, 'time[s]', var, vmin, vmax, deltav, vname, cuts, option, num_events, start_ev)
+			self.DrawHisto2D(name, '1000000*time', tmin - deltat/2.0, tmax + deltat/2.0, deltat, 'time[us]', var, vmin, vmax, deltav, vname, cuts, option, num_events, start_ev)
 		else:
-			self.DrawHisto2D(name, 'time', tmin - deltat/2.0, tmax + deltat/2.0, deltat, 'time[s]', var, vmin, vmax, (vmax-vmin)/vbins, vname, cuts, option, num_events, start_ev)
+			self.DrawHisto2D(name, '1000000*time', tmin - deltat/2.0, tmax + deltat/2.0, deltat, 'time[us]', var, vmin, vmax, (vmax-vmin)/vbins, vname, cuts, option, num_events, start_ev)
 		if do_logz and 'goff' not in option:
 			self.canvas[name].SetLogz()
+		self.histo[name].GetYaxis().SetRangeUser(miny, maxy)
 
 	def PeakPositionStudy(self, xmin, xmax, deltax, pos_or_cut='pos', do_fit=True):
 		if not (pos_or_cut.lower().startswith('pos') or pos_or_cut.lower().startswith('cut')):
@@ -1007,6 +1113,47 @@ class AnalysisCaenCCD:
 		ro.gPad.Update()
 		print '100 Toys Fit {n}: <PH> = {f}'.format(n=name, f=mean_toys)
 
+	def FitConvolutedGaussians(self, name, conv_steps=100, color=ro.kRed):
+		self.canvas[name].cd()
+		# self.langaus[name] = LanGaus(self.histo[name])
+		# self.langaus[name].LanGausFit(conv_steps, xmin=self.fit_min, xmax=self.fit_max)
+		# xlow, xhigh = self.langaus[name].fit_range['min'], self.langaus[name].fit_range['max']
+		xlow, xhigh = max(self.histo[name].GetBinLowEdge(self.histo[name].FindFirstBinAbove(0)), self.histo[name].GetMean() - 3 * self.histo[name].GetRMS()), min(self.histo[name].GetBinLowEdge(self.histo[name].FindLastBinAbove(0) + 1), self.histo[name].GetMean() + 3 * self.histo[name].GetRMS())
+		funccg = ro.TF1('fit_' + name, '[0]*exp(-0.5*((x-[1])^2/([2]^2+[3]^2)))', xlow, xhigh)
+		funccg.SetParameter(0, self.histo[name].GetMaximum())
+		funccg.SetParLimits(0, 0, 100 * self.histo[name].GetMaximum())
+		funccg.SetParameter(1, self.histo[name].GetBinCenter(self.histo[name].GetMaximumBin()))
+		funccg.SetParLimits(1, xlow, xhigh)
+		funccg.SetParameter(2, (abs(self.histo[name].GetRMS() ** 2 - self.pedestal_sigma ** 2) ** 0.5))
+		funccg.SetParLimits(2, 0, 10 * self.histo[name].GetRMS())
+		funccg.SetParameter(3, self.pedestal_sigma)
+		funccg.FixParameter(3, self.pedestal_sigma)
+		self.histo[name].Fit('fit_' + name, 'IQBM')
+		self.langaus[name] = funccg
+		self.line[name] = ro.TLine(xlow, 0, xhigh, 0)
+		self.line[name].SetLineColor(ro.kViolet + 1)
+		self.line[name].SetLineWidth(4)
+		fitmean = self.langaus[name].Mean(xlow, xhigh)
+		self.histo[name].FindObject('stats').SetOptFit(1)
+		ro.gPad.Update()
+		self.langaus[name].Draw('same')
+		self.langaus[name].SetLineColor(color)
+		self.line[name].Draw('same')
+		ro.gPad.Update()
+		print u'Histo {n}: <PH> = {f} \u00B1 {f2}'.format(n=name, f=self.histo[name].GetMean(), f2=self.histo[name].GetMeanError())
+		print 'Fit {n}: <PH> = {f}'.format(n=name, f=fitmean)
+		print 'Fit {n}: signal_sigma = {f}'.format(n=name, f=self.langaus[name].GetParameter(2))
+		xlow, xhigh = self.langaus[name].GetMaximumX(xlow, xhigh) - 5 * self.histo[name].GetRMS(), self.langaus[name].GetMaximumX(xlow, xhigh) + 5 * self.histo[name].GetRMS()
+		self.histo[name].GetXaxis().SetRangeUser(xlow, xhigh)
+		self.histo[name].FindObject('stats').SetX1NDC(0.55)
+		self.histo[name].FindObject('stats').SetX2NDC(0.9)
+		self.histo[name].FindObject('stats').SetY1NDC(0.5)
+		self.histo[name].FindObject('stats').SetY2NDC(0.9)
+		AddLineToStats(self.canvas[name], ['Mean_{Fit}', 'signal_sigma_{Fit}'], [fitmean, self.langaus[name].GetParameter(2)])
+		self.histo[name].SetStats(0)
+		self.canvas[name].Modified()
+		ro.gPad.Update()
+
 	def SaveCanvasInlist(self, lista):
 		if not os.path.isdir('{d}'.format(d=self.inDir)):
 			ExitMessage('The directory does not exist!!!!', os.EX_UNAVAILABLE)
@@ -1085,7 +1232,7 @@ if __name__ == '__main__':
 	infile = str(options.infile)
 	bias = float(options.bias)
 	verb = bool(options.verb)
-	verb = True
+	verb = True or verb
 	autom = bool(options.auto)
 	overw = bool(options.overwrite)
 
@@ -1095,12 +1242,17 @@ if __name__ == '__main__':
 	# ana.LoadPickles()
 	if autom:
 		ana.AnalysisWaves()
+		ana.PlotPedestal('Pedestal', cuts=ana.cut0.GetTitle())
 		ana.PlotWaveforms('SelectedWaveforms', 'signal', cuts=ana.cut0.GetTitle())
 		ana.canvas['SelectedWaveforms'].SetLogz()
+		ana.PlotWaveforms('SelectedWaveformsPedCor', 'signal_ped_corrected', cuts=ana.cut0.GetTitle())
+		ana.canvas['SelectedWaveformsPedCor'].SetLogz()
 		ana.PlotSignal('PH', cuts=ana.cut0.GetTitle())
-		ana.FitLanGaus('PH')
-		ana.PlotPedestal('Pedestal', cuts=ana.cut0.GetTitle())
-		ana.PlotHVCurrents('HVCurrents', '', 5)
+		if not ana.is_cal_run:
+			ana.FitLanGaus('PH')
+			ana.PlotHVCurrents('HVCurrents', '', 5)
+		else:
+			ana.FitConvolutedGaussians('PH')
 		ana.SaveAllCanvas()
 	# return ana
 	# ana = main()

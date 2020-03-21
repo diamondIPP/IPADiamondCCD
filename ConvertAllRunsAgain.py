@@ -15,7 +15,7 @@ from ParallelManager import ParallelManager
 
 
 class ConvertAllRunsAgain:
-	def __init__(self, runsdir='None'):
+	def __init__(self, runsdir=''):
 		self.time0 = time.time()
 		self.runsdir = Correct_Path(runsdir)
 		runstemp = glob.glob('{d}/*'.format(d=self.runsdir))
@@ -58,7 +58,7 @@ class ConvertAllRunsAgain:
 
 def main():
 	parser = OptionParser()
-	parser.add_option('-d', '--runsdir', dest='runsdir', help='path to folder containing all the run folders to modify')
+	parser.add_option('-d', '--runsdir', dest='runsdir', type='str', default='', help='path to folder containing all the run folders to modify')
 	(options, args) = parser.parse_args()
 	runsdir = str(options.runsdir)
 	cara = ConvertAllRunsAgain(runsdir)
