@@ -50,6 +50,7 @@ class AnalysisCaenCCD:
 		self.veto_ch = None
 		self.max_events = 0
 		self.is_cal_run = False
+		self.ch_caen_signal = 3
 		self.cal_run_type = ''
 		self.bias = bias
 		self.pedestalIntegrationTime = 0.4e-6
@@ -209,6 +210,7 @@ class AnalysisCaenCCD:
 		if self.settings:
 			self.is_cal_run = self.settings.is_cal_run if 'is_cal_run' in self.settings.__dict__.keys() else False
 			self.bias = self.settings.bias if not self.is_cal_run else self.settings.pulser_amplitude
+			self.ch_caen_signal = self.settings.sigCh
 			if self.is_cal_run:
 				self.cal_run_type = 'in' if 'in' in self.in_tree_name else 'out'
 
@@ -1225,6 +1227,7 @@ if __name__ == '__main__':
 	parser.add_option('-v', '--verbose', dest='verb', default=False, help='Toggles verbose', action='store_true')
 	parser.add_option('-a', '--automatic', dest='auto', default=False, help='Toggles automatic basic analysis', action='store_true')
 	parser.add_option('-o', '--overwrite', dest='overwrite', default=False, help='Toggles overwriting of the analysis tree', action='store_true')
+	parser.add_option('--batch', dest='dobatch', default=False, help='Toggles batch mode with no plotting', action='store_true')
 
 	(options, args) = parser.parse_args()
 	directory = str(options.inDir)
@@ -1235,8 +1238,13 @@ if __name__ == '__main__':
 	verb = True or verb
 	autom = bool(options.auto)
 	overw = bool(options.overwrite)
+	doBatch = bool(options.dobatch)
 
 	ana = AnalysisCaenCCD(directory, config, infile, bias, overw, verb)
+
+	if doBatch:
+		print 'Running in Batch mode!'
+		ro.gROOT.SetBatch(1)
 
 	# ana.LoadAnalysisTree()
 	# ana.LoadPickles()
