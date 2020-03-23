@@ -9,6 +9,7 @@ class LanGaus:
 		self.params = np.zeros(4, 'f8')
 		self.conv_steps = 1000
 		self.sigma_conv = 5
+		# self.mpshift = -0.22278298977829894
 		self.mpshift = -0.22278298
 		self.paramErrors = np.zeros(4, 'f8')
 		self.paramsLimitsLow = np.zeros(4, 'f8')
@@ -18,11 +19,15 @@ class LanGaus:
 		self.chi2 = 0
 		self.ndf = 0
 		# self.fit_range = [max(self.histo.GetMean()*0.3, 0), min(self.histo.GetXaxis().GetXmax(), self.histo.GetMean()*3)]
-		self.fit_range = {'min': max(self.histo.GetMean()*0.2, 0), 'max': min(self.histo.GetXaxis().GetXmax(), self.histo.GetMean()*3)}
+		self.fit_range = {'min': max(self.histo.GetMean()- 3 * self.histo.GetRMS(), -10), 'max': min(self.histo.GetXaxis().GetXmax(), self.histo.GetMean() + 3 * self.histo.GetRMS())}
 		# self.fit_range = [0, min(self.histo.GetXaxis().GetXmax(), self.histo.GetMean()*5)]
 		self.fit = None
 		self.EstimateParameters()
 		self.EstimateParametersLimits()
+		self.fit_mp = 0
+		self.fit_minx_1 = 0
+		self.histo_bin_1 = 1
+		self.entries_under_curve = 0
 
 	def LangausFunc(self, x, params):
 		mpc = params[1] - self.mpshift * params[0]
@@ -78,6 +83,12 @@ class LanGaus:
 			self.paramsFitErrors[i] = self.fit.GetParError(i)
 		self.chi2 = self.fit.GetChisquare()
 		self.ndf = self.fit.GetNDF()
+		self.fit_mp = self.fit.GetMaximumX(0, 0, 1e-20, 1000)
+		minx1 = self.fit.GetX(1, 0, self.fit_mp)
+		self.fit_minx_1 = minx1 if minx1 >= 0 else 0
+		binx1 = self.histo.FindBin(self.fit_minx_1)
+		self.histo_bin_1 = binx1 if binx1 > 0 else 1
+		self.entries_under_curve = int(self.histo.Integral(self.histo_bin_1, -10))
 
 if __name__ == '__main__':
 	mu = 1000

@@ -113,19 +113,27 @@ def SetDefaultFitStats(histo, fit, color=ro.kRed):
 	histo.FindObject('stats').SetY1NDC(0.6)
 	histo.FindObject('stats').SetY2NDC(0.9)
 
-def AddLineToStats(canvas, key, value=0, samplelinekey='Mean'):
+def SetDefault1DCanvasSettings(canvas):
+	canvas.SetGridx()
+	canvas.SetGridy()
+	canvas.SetTicky()
+	ro.gPad.Update()
+
+
+def AddLineToStats(canvas, keys=['Mean_{Fit}'], values=[0], samplelinekey='Mean'):
 	if canvas:
 		ps = canvas.GetPrimitive('stats')
 		ps.SetName('mystats')
 		lol = ps.GetListOfLines()
 		sampleline = ps.GetLineWith(samplelinekey)
-		line = ro.TLatex(0, 0, '{k} = {v:.2f}'.format(k=key, v=value))
-		line.SetTextAlign(sampleline.GetTextAlign())
-		line.SetTextAngle(sampleline.GetTextAngle())
-		line.SetTextColor(sampleline.GetTextColor())
-		line.SetTextFont(sampleline.GetTextFont())
-		line.SetTextSize(sampleline.GetTextSize())
-		lol.Add(line)
+		for it, key in enumerate(keys):
+			line = ro.TLatex(0, 0, '{k} = {v:.4f}'.format(k=key, v=values[it]))
+			line.SetTextAlign(sampleline.GetTextAlign())
+			line.SetTextAngle(sampleline.GetTextAngle())
+			line.SetTextColor(sampleline.GetTextColor())
+			line.SetTextFont(sampleline.GetTextFont())
+			line.SetTextSize(sampleline.GetTextSize())
+			lol.Add(line)
 		canvas.Modified()
 
 def GetMinimumBranch(tree, bra, cut=''):
@@ -145,6 +153,38 @@ def GetMaximumBranch(tree, bra, cut=''):
 	tree.SetEventList(0)
 	event_list.Delete()
 	return val
+
+def Correct_Path(path, times=2):
+	abs_path = ''
+	if path[0] == '~':
+		abs_path += os.path.expanduser('~')
+		abs_path += path[1:]
+	elif os.path.isabs(path):
+		abs_path += path
+	else:
+		abs_path += os.path.abspath(path)
+	if times != 1:
+		return Correct_Path(abs_path, 1)
+	return abs_path
+
+def RoundInt(n, nptype='int32'):
+	val = np.floor(np.add(n, 0.5, dtype='f8'), dtype='f8').astype(nptype)
+	if nptype.lower().startswith('i') or nptype.lower().startswith('ui'):
+		return int(val)
+	elif nptype.lower().startswith('f'):
+		return float(val)
+	return val
+
+def TruncateFloat(num_float, resol=0):
+	'''
+	Truncates a float to the specified number of digits and decimals
+	:param num_float: float to be truncated
+	:param resol: gives the resolution. if 0, it means it does not matter.
+	:return: truncated value to the specified resolution
+	'''
+	temp_float = num_float if resol == 0 else float(np.multiply(resol, RoundInt(np.divide(num_float, resol, dtype='f8')), dtype='f8'))
+	return temp_float
+
 
 if __name__ == '__main__':
 	print 'blaaaa'

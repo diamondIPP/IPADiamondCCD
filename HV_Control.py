@@ -23,7 +23,7 @@ from Utils import *
 class HV_Control:
 	def __init__(self, settings):
 		self.settings = settings
-		self.hv_supply, self.ch, self.bias, self.current_limit, self.hot_start = settings.hv_supply, settings.hv_ch, settings.bias, settings.current_limit, settings.hot_start
+		self.hv_supply, self.ch, self.bias, self.current_limit, self.hot_start, self.address = settings.hv_supply, settings.hv_ch, settings.bias, settings.current_limit, settings.hot_start, settings.hv_address
 		self.filename, self.dut = settings.filename, settings.dut
 		self.Pics_folder_path = settings.pics_folder_path
 		self.doControlHV = False if self.hv_supply == '' else True
@@ -66,9 +66,9 @@ class HV_Control:
 		self.CreateHVClientConfig()
 
 	def CreateHVClientConfig(self):
-		num_supplies = 8
+		num_supplies = 9
 		supplies_num = range(1, num_supplies + 1)
-		supplies_ids = {1: 'Keithley1', 2: 'Keithley2410', 3: 'Keithley237', 4: 'Keithley6517', 5: '', 6: 'Keithley2657A', 7: 'ISEG-NHS-6220x', 8: 'ISEG-NHS-6220n'}
+		supplies_ids = {1: 'Keithley1', 2: 'Keithley2410', 3: 'Keithley237', 4: 'Keithley6517', 5: '', 6: 'Keithley2657A', 7: 'ISEG-NHS-6220x', 8: 'ISEG-NHS-6220n', 9: 'Keithley6517B'}
 		conf_file = open('config/hv_{f}.cfg'.format(f=self.filename), 'w')
 
 		conf_file.write('[Main]\n')
@@ -85,10 +85,7 @@ class HV_Control:
 			conf_file.write('module_name: ISEG\n')
 			conf_file.write('nChannels: 6\n')
 			conf_file.write('active_channels: [{ch}]\n'.format(ch=self.ch))
-			if self.hv_supply == 'ISEG-NHS-6220x':
-				conf_file.write('address: /dev/iseg\n')
-			else:
-				conf_file.write('address: /dev/iseg2\n')
+			conf_file.write('address: {a}\n'.format(a=self.address))
 			conf_file.write('# in V/s\n')
 			conf_file.write('ramp: {r}\n'.format(r=self.ramp))
 			conf_file.write('config_file: iseg.cfg\n')
@@ -96,7 +93,7 @@ class HV_Control:
 			conf_file.write('\n[HV{s}]\n'.format(s=self.supply_number))
 			conf_file.write('name: {n}\n'.format(n=self.hv_supply))
 			conf_file.write('model: 2410\n')
-			conf_file.write('address: /dev/keithley4\n')
+			conf_file.write('address: {a}\n'.format(a=self.address))
 			conf_file.write('compliance: {c} nA\n'.format(c=self.current_limit*1e9))
 			conf_file.write('ramp: {r}\n'.format(r=self.ramp))
 			conf_file.write('max_step: 10\n')
@@ -105,6 +102,20 @@ class HV_Control:
 			conf_file.write('max_bias: 1000\n')
 			conf_file.write('baudrate: 57600\n')
 			conf_file.write('output: front\n')
+			# TODO: write the other cases for the other supplies
+		elif self.hv_supply == 'Keithley6517B':
+			conf_file.write('\n[HV{s}]\n'.format(s=self.supply_number))
+			conf_file.write('name: {n}\n'.format(n=self.hv_supply))
+			conf_file.write('model: 6517\n')
+			conf_file.write('address: {a}\n'.format(a=self.address))
+			conf_file.write('compliance: {c} nA\n'.format(c=self.current_limit*1e9))
+			conf_file.write('ramp: {r}\n'.format(r=self.ramp))
+			conf_file.write('max_step: 10\n')
+			conf_file.write('bias: 0\n')
+			conf_file.write('min_bias: -1000\n')
+			conf_file.write('max_bias: 1000\n')
+			conf_file.write('baudrate: 57600\n')
+			conf_file.write('output: rear\n')
 			# TODO: write the other cases for the other supplies
 
 		conf_file.close()
@@ -143,7 +154,7 @@ class HV_Control:
 		os.symlink('iseg_{f}.cfg'.format(f=self.filename), 'config/iseg.cfg')
 
 	def UnlinkConfigFile(self, name):
-		if os.path.isfile('config/{n}'.format(n=name)):
+		if os.path.isfile('config/{n}'.format(n=name)) or os.path.islink('config/{n}'.format(n=name)):
 			if os.path.islink('config/{n}'.format(n=name)):
 				os.unlink('config/{n}'.format(n=name))
 			else:
@@ -154,25 +165,57 @@ class HV_Control:
 		self.ReadLastLine()
 		delta_voltage = abs(self.last_line['voltage'] - self.bias)
 		do_ramp = False
-		if delta_voltage > 2:
+		if delta_voltage >= 1:
 			do_ramp = True
 			print 'Ramping voltage... ', ; sys.stdout.flush()
-		while delta_voltage > 2 and max_tries != 0:
+		while delta_voltage >= 1 and max_tries != 0:
 			self.CorrectBias(delta_voltage)
 			self.ReadLastLine()
 			delta_voltage = abs(self.last_line['voltage'] - self.bias)
 			max_tries -= 1
 			if max_tries == 0:
-				print '\nCould not set the desired voltage\n'
-				return
+				print '\nCould not set the desired voltage. Taking data with {v}V\n'.format(v=self.last_line['voltage'])
 		if do_ramp: print 'Done'
 
 	def GetLastLogFilePath(self):
 		list_logs = glob.glob('{d}/*.log'.format(d=self.logs_dir))
 		if not list_logs:
 			return
-		self.log_file = max(list_logs, key=os.path.getctime)
+		self.log_file = max(list_logs, key=os.path.getmtime)
 		del list_logs
+
+	def FindLogFilePath(self, timesec, timens):
+		list_logs = glob.glob('{d}/*.log'.format(d=self.logs_dir))
+		if not list_logs:
+			return
+		list_logs.sort(key=lambda x: os.path.getmtime(x))
+		position = 0
+		for it, filet in enumerate(list_logs):
+			if os.path.getmtime(filet) >= timesec + timens * 1e-9:
+				position = it
+				break
+		position = -1 if position == 0 else position
+		self.log_file = list_logs[position]
+
+	def FindLineInLog(self, timesec, timens):
+		lines = []
+		if self.log_file:
+			current_log = open('{f}'.format(f=self.log_file), 'r')
+			lines = current_log.readlines()
+			lines = [line.split() for line in lines if len(line.split()) >= 3 and IsFloat(line.split()[1]) and IsFloat(line.split()[2])]
+			current_log.close()
+		tempTime = ro.TTimeStamp()
+		tempTime.Set(1970, 1, 1, 0, 0, timesec, timens, True, 0)
+		tempYear, tempMonth, tempDay = np.zeros(1, 'int32'), np.zeros(1, 'int32'), np.zeros(1, 'int32')
+		tempHour, tempMinute, tempSecond = np.zeros(1, 'int32'), np.zeros(1, 'int32'), np.zeros(1, 'int32')
+		tempTime.GetDate(False, 0, tempYear, tempMonth, tempDay)
+		tempTime.GetTime(False, 0, tempHour, tempMinute, tempSecond)
+		if len(lines) > 0:
+			lines2 = np.array([ro.TTimeStamp(int(tempYear), int(tempMonth), int(tempDay), int(line[0].split(':')[0]), int(line[0].split(':')[1]), int(line[0].split(':')[2]), 0, False, 0).AsDouble() for line in lines], 'f8')
+			pos = abs(lines2 - tempTime.AsDouble()).argmin()
+			tempdic = {'time_s': lines2[pos], 'voltage': float(lines[pos][1]), 'current': float(lines[pos][2])}
+			return tempdic
+		return {'time_s': timesec + 1e-9 * timens, 'voltage': 0, 'current': 0}
 
 	def ReadLastLine(self, nEvent=0):
 		self.GetLastLogFilePath()
@@ -185,7 +228,7 @@ class HV_Control:
 		temp_time = time.time()
 		self.last_line['event'] = nEvent
 		self.last_line['seconds'] = int(temp_time)
-		self.last_line['nanoseconds'] = int(1e9 * abs(temp_time - int(temp_time)))
+		self.last_line['nanoseconds'] = int(1e9 * abs(temp_time - self.last_line['seconds']))
 		if not lines:
 			return
 		if len(lines) >= 1:
@@ -221,20 +264,37 @@ class HV_Control:
 		del self.out_file, temp_array
 		self.out_file = None
 
+	def SearchForData(self, time_sec, time_ns):
+		# todo
+		pass
+
 	def CloseClient(self):
 		if self.process:
 			self.process.stdin.write('exit\n')
 			self.process.stdin.flush()
 			time.sleep(1)
-			self.MoveLogFolder()
+			self.MoveLogsAndConfig()
 			os.remove(self.out_file_name)
 
-	def MoveLogFolder(self):
+	def MoveLogsAndConfig(self):
 		path_dir = '{d}/Runs/{f}/HV_{f}'.format(d=self.settings.outdir, f=self.filename)
-		if os.path.isdir(path_dir):
-			shutil.rmtree(path_dir)
+		if os.path.isdir(path_dir) or os.path.isfile(path_dir):
+			print 'HV directory already exists. Recreating'
+			if os.path.isdir(path_dir):
+				shutil.rmtree(path_dir)
+			else:
+				os.remove(path_dir)
 		shutil.move(self.filename, path_dir)
+		'Moved hv logs to output folder'
+		if os.path.isfile('config/hv_{f}.cfg'.format(f=self.filename)):
+			shutil.move('config/hv_{f}.cfg'.format(f=self.filename), path_dir)
+			print 'Moved hv config file to output folder'
+			if self.hv_supply.lower().startswith('iseg'):
+				shutil.move('config/iseg_{f}.cfg'.format(f=self.filename), path_dir)
 		del path_dir
+		if os.path.islink('config/keithley.cfg'):
+			os.unlink('config/keithley.cfg')
+			print 'Unlinked config/keithley.cfg'
 
 if __name__ == '__main__':
 	print 'blaaaa'
