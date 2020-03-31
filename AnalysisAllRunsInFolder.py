@@ -26,7 +26,8 @@ class AnalysisAllRunsInFolder:
 		if len(runstemp) < 1:
 			ExitMessage('The directory does not have any runs', os.EX_USAGE)
 		# self.num_cores = 1
-		self.runs = runstemp
+		self.runs = [runi for runi in runstemp if os.path.isdir(runi)]
+		self.runs.sort(key=lambda x: float(x.split('_')[-1].split('mV')[0].split('V')[0]))
 		self.num_runs = len(self.runs)
 		if self.num_runs < 1: ExitMessage('There is not even the required data to convert one run', os.EX_DATAERR)
 		self.voltages = []
@@ -39,22 +40,67 @@ class AnalysisAllRunsInFolder:
 		self.canvas = None
 		self.fit = None
 		self.cal_pickle = None
+		self.LoadPickle()
+
+	def LoadPickle(self):
+		cal_files = glob.glob('{d}/signal_*.cal'.format(d=self.runsdir))
+		if len(cal_files) > 0:
+			self.cal_pickle = pickle.load(open(cal_files[0], 'rb'))
+			self.voltages = self.cal_pickle['voltages']
+			self.signalIn = self.cal_pickle['signal_in']
+			self.signalInSigma = self.cal_pickle['signal_in_sigma']
+			self.signalOut = self.cal_pickle['signal_out']
+			self.signalOutSigma = self.cal_pickle['signal_out_sigma']
+			self.caen_ch = self.cal_pickle['caen_ch']
+			name = 'Signal_vs_CalStep_ch_' + str(self.caen_ch) if self.are_cal_runs else 'Signal_vs_CalStep_ch_' + str(self.caen_ch)
+			xpoints = np.array([self.signalIn[volt] for volt in self.voltages], 'f8') if len(self.signalIn.keys()) >= 1 else np.array(self.voltages, 'f8')
+			xpointserrs = np.array([self.signalInSigma[volt] for volt in self.voltages], 'f8') if len(self.signalInSigma.keys()) >= 1 else np.zeros(len(self.voltages), 'f8')
+			self.graph = ro.TGraphErrors(len(self.voltages), xpoints, np.array([self.signalOut[volt] for volt in self.voltages], 'f8'), xpointserrs, np.array([self.signalOutSigma[volt] for volt in self.voltages], 'f8'))
+			self.graph.SetNameTitle(name, name)
+			self.graph.GetXaxis().SetTitle('vcal step [mV]')
+			self.graph.GetYaxis().SetTitle('signal [mV]')
+			self.graph.SetMarkerStyle(7)
+			self.graph.SetMarkerColor(ro.kBlack)
+			self.graph.SetLineColor(ro.kBlack)
+			if self.are_cal_runs:
+				self.fit = ro.TF1('fit_' + name, 'pol1', -1000, 1000)
+				self.fit.SetLineColor(ro.kRed)
+				self.fit.SetNpx(10000)
+				self.fit.SetParameters(np.array([self.cal_pickle['fit_p0'], self.cal_pickle['fit_p1']], 'f8'))
+				self.fit.SetParErrors(np.array([self.cal_pickle['fit_p0_error'], self.cal_pickle['fit_p1_error']], 'f8'))
+				self.fit.SetNDF(self.cal_pickle['fit_ndf'])
+				self.fit.SetChisquare(self.cal_pickle['fit_chi2'])
+			else:
+				self.fit = None
+			print 'Loaded pickle', cal_files[0]
+			return
+		print 'There is no pickle to load'
+
+	def PlotFromPickle(self):
+		if self.cal_pickle:
+			if self.graph:
+				self.canvas = ro.TCanvas('c_' + self.graph.GetName(), 'c_' + self.graph.GetName(), 1)
+				self.graph.Draw('AP')
+			if self.fit:
+				self.fit.Draw('same')
 
 	def DoAll(self):
 		self.time0 = time.time()
-		self.LoopRuns()
+		if not self.cal_pickle or self.overwrite:
+			self.LoopRuns()
 		self.PlotSignals()
 		if self.are_cal_runs:
 			self.FitLine()
 			self.FillPickle()
 			self.SavePickle()
 		self.SaveCanvas()
+		print 'Finished in', time.time() - self.time0, 'seconds'
 
 	def LoopRuns(self):
+		# ro.gROOT.SetBatch(True)
 		for run in self.runs:
 			if os.path.isdir(run):
 				configfile = self.config if not self.are_cal_runs or '_out_' in run else self.configInput
-				ro.gROOT.SetBatch(1)
 				print '\nAnalysing in batch mode run:', run
 				print 'Using config file:', configfile
 				print 'Overwriting analysis tree if it exists' if self.overwrite else 'Not overwriting analysis tree if it exists'
@@ -82,6 +128,7 @@ class AnalysisAllRunsInFolder:
 					self.signalIn[anaRun.bias] = -signalRun if anaRun.bias < 0 else signalRun
 					self.signalInSigma[anaRun.bias] = signalSigmaRun
 		self.voltages = sorted(set(self.voltages))
+		# ro.gROOT.SetBatch(False)
 
 	def PlotSignals(self):
 		if len(self.voltages) > 0:
@@ -110,10 +157,10 @@ class AnalysisAllRunsInFolder:
 			self.graph.SetMarkerColor(ro.kBlack)
 			self.graph.SetLineColor(ro.kBlack)
 
-			ro.gROOT.SetBatch(0)
-
 			self.canvas = ro.TCanvas('c_' + self.graph.GetName(), 'c_' + self.graph.GetName(), 1)
 			self.graph.Draw('AP')
+			self.canvas.SetGridx()
+			self.canvas.SetGridy()
 
 	def FitLine(self):
 		ro.Math.MinimizerOptions.SetDefaultMinimizer(*fit_method)
@@ -122,7 +169,7 @@ class AnalysisAllRunsInFolder:
 		ro.gStyle.SetOptFit(1111)
 		func = ro.TF1('fit_' + self.graph.GetName(), 'pol1', -1000, 1000)
 		func.SetLineColor(ro.kRed)
-		func.SetNpx(int(10 * (2 ** 14 - 1)))
+		func.SetNpx(10000)
 		self.graph.Fit('fit_' + self.graph.GetName(), 'QM0', '', -1000, 1000)
 		if func.GetProb() < 0.9:
 			self.graph.Fit('fit_' + self.graph.GetName(), 'QM0', '', -1000, 1000)
@@ -138,17 +185,17 @@ class AnalysisAllRunsInFolder:
 						   'signal_out': self.signalOut,
 						   'signal_out_sigma': self.signalOutSigma,
 						   'caen_ch': self.caen_ch,
-						   'fit_p0': self.fit.GetParameter(0),
-						   'fit_p0_error': self.fit.GetParError(0),
-						   'fit_p1': self.fit.GetParameter(1),
-						   'fit_p1_error': self.fit.GetParError(1),
-						   'fit_prob': self.fit.GetProb(),
-						   'fit_chi2': self.fit.GetChisquare(),
-						   'fit_ndf': self.fit.GetNDF()
+						   'fit_p0': self.fit.GetParameter(0) if self.fit else 0,
+						   'fit_p0_error': self.fit.GetParError(0) if self.fit else 0,
+						   'fit_p1': self.fit.GetParameter(1) if self.fit else 0,
+						   'fit_p1_error': self.fit.GetParError(1) if self.fit else 0,
+						   'fit_prob': self.fit.GetProb() if self.fit else 0,
+						   'fit_chi2': self.fit.GetChisquare() if self.fit else 0,
+						   'fit_ndf': self.fit.GetNDF() if self.fit else 0
 						   }
 
 	def SavePickle(self):
-		pickleName = 'signal_cal_{c}.cal'.format(c=self.caen_ch)
+		pickleName = 'signal_cal_{c}.cal'.format(c=self.caen_ch) if self.are_cal_runs else 'signal_{c}.cal'.format(c=self.caen_ch)
 		if not self.cal_pickle:
 			self.FillPickle()
 		if os.path.isfile('{d}/{f}'.format(d=self.runsdir, f=pickleName)):
@@ -157,7 +204,7 @@ class AnalysisAllRunsInFolder:
 				return
 		with open('{d}/{f}'.format(d=self.runsdir, f=pickleName), 'wb') as fpickle:
 			pickle.dump(self.cal_pickle, fpickle, pickle.HIGHEST_PROTOCOL)
-		print 'Saved calibration pickle', pickleName, 'in', self.runsdir
+		print 'Saved pickle', pickleName, 'in', self.runsdir
 
 	def SaveCanvas(self):
 		self.canvas.SaveAs('{d}/{n}.png'.format(d=self.runsdir, n=self.graph.GetName()))

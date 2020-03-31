@@ -122,6 +122,11 @@ class AnalysisCaenCCD:
 		self.random = None
 		self.toy_histos = []
 
+		self.signal_cal_folder = ''
+		self.vcal_tree = None
+		self.charge_tree = None
+		self.cal_circuit_settings = ''
+
 		if infile == '' and directory != '.':
 			print 'Is analysis of data after 06/18...'
 			self.LoadInputTree()
@@ -192,6 +197,12 @@ class AnalysisCaenCCD:
 					self.fit_max = parser.getfloat('ANALYSIS', 'fit_max')
 				if parser.has_option('ANALYSIS', 'delta_v'):
 					self.delta_v_signal = parser.getfloat('ANALYSIS', 'delta_v')
+
+			if parser.has_section('CALIBRATION'):
+				if parser.has_option('CALIBRATION', 'signal_cal_folder'):
+					self.signal_cal_folder = parser.get('CALIBRATION', 'signal_cal_folder')
+				if parser.has_option('CALIBRATION', 'cal_circuit_settings'):
+					self.cal_circuit_settings = parser.get('CALIBRATION', 'cal_circuit_settings')
 
 			if parser.has_section('CUTS'):
 				if parser.has_option('CUTS', 'bad_pedestal'):
