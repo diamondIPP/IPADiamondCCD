@@ -25,7 +25,7 @@ from Utils import *
 
 class VcalToElectrons:
     def __init__(self, configfile=''):
-        self.configPath = Correct_Path(configfile)
+        self.configPath = Correct_Path(configfile) if configfile != '' else ''
         # in Ohms
         self.r2 = ufloat(467, 4.036)
         self.r3 = ufloat(4.505, 0.032)
