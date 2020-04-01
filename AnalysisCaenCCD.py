@@ -19,6 +19,7 @@ from Settings_Caen import Settings_Caen
 from HV_Control import HV_Control
 from Utils import *
 from Langaus import LanGaus
+from VcalToElectrons import VcalToElectrons
 # from memory_profiler import profile
 
 trig_rand_time = 0.2
@@ -123,9 +124,9 @@ class AnalysisCaenCCD:
 		self.toy_histos = []
 
 		self.signal_cal_folder = ''
-		self.vcal_tree = None
-		self.charge_tree = None
+		self.signal_cal_fit_params = {'p0': 0, 'p1': 0, 'p0_error': 0, 'p1_error': 0, 'prob': 0, 'chi2': 0, 'ndf': 0}
 		self.cal_circuit_settings = ''
+		self.vcal_to_q = VcalToElectrons()
 
 		if infile == '' and directory != '.':
 			print 'Is analysis of data after 06/18...'
@@ -150,7 +151,7 @@ class AnalysisCaenCCD:
 		self.analysisTreeNameStem = self.in_tree_name + '.analysis'
 		self.analysisTreeName = self.analysisTreeNameStem
 
-		self.load_entries = 100000
+		self.load_entries = 100000  # needed for sparing memory while loading vectors.
 		self.start_entry = 0
 		self.loaded_entries = 0
 		self.suffix = None
@@ -200,9 +201,9 @@ class AnalysisCaenCCD:
 
 			if parser.has_section('CALIBRATION'):
 				if parser.has_option('CALIBRATION', 'signal_cal_folder'):
-					self.signal_cal_folder = parser.get('CALIBRATION', 'signal_cal_folder')
+					self.signal_cal_folder = Correct_Path(parser.get('CALIBRATION', 'signal_cal_folder'))
 				if parser.has_option('CALIBRATION', 'cal_circuit_settings'):
-					self.cal_circuit_settings = parser.get('CALIBRATION', 'cal_circuit_settings')
+					self.cal_circuit_settings = Correct_Path(parser.get('CALIBRATION', 'cal_circuit_settings'))
 
 			if parser.has_section('CUTS'):
 				if parser.has_option('CUTS', 'bad_pedestal'):
@@ -281,7 +282,7 @@ class AnalysisCaenCCD:
 		if doCuts0: self.CreateCut0()
 
 		if not self.hasBranch['peakPosition'] or not np.array([self.hasBranch[key0] for key0 in self.analysisScalarsBranches]).all():
-			self.suffix = None if self.in_root_tree.GetEntries <= self.load_entries else self.start_entry
+			self.suffix = None if self.in_root_tree.GetEntries() <= self.load_entries else self.start_entry
 			while self.loaded_entries < self.in_root_tree.GetEntries():
 				self.CloseAnalysisROOTFile()
 				self.OpenAnalysisROOTFile('RECREATE')
@@ -303,26 +304,27 @@ class AnalysisCaenCCD:
 				if self.suffix >= 0:
 					self.suffix += 1
 			if self.suffix >= 0:
-				print 'Merging files...'
 				self.CloseAnalysisROOTFile()
-				if os.path.isfile('{d}/{f}.root'.format(d=self.outDir, f=self.analysisTreeNameStem)):
-					os.remove('{d}/{f}.root'.format(d=self.outDir, f=self.analysisTreeNameStem))
-				mergep = subp.Popen(['hadd', '-k', '-O', '-n', '0', '{d}/{f}.root'.format(d=self.outDir, f=self.analysisTreeNameStem)] + ['{d}/{f}{s}.root'.format(d=self.outDir, f=self.analysisTreeNameStem, s=si) for si in xrange(self.suffix)],  bufsize=-1, stdin=subp.PIPE, stdout=subp.PIPE, close_fds=True)
-				while mergep.poll() is None:
-					time.sleep(2)
-				pid = mergep.pid
-				mergep.stdin.close()
-				mergep.stdout.close()
-				if mergep.wait() is None:
-					mergep.kill()
-				try:
-					os.kill(pid, 15)
-				except OSError:
-					pass
-				del mergep
-				print 'Finished merging files'
-				for si in xrange(self.suffix):
-					os.remove('{d}/{f}{s}.root'.format(d=self.outDir, f=self.analysisTreeNameStem, s=si))
+				if self.suffix >=0:
+					print 'Merging files...'
+					if os.path.isfile('{d}/{f}.root'.format(d=self.outDir, f=self.analysisTreeNameStem)):
+						os.remove('{d}/{f}.root'.format(d=self.outDir, f=self.analysisTreeNameStem))
+					mergep = subp.Popen(['hadd', '-k', '-O', '-n', '0', '{d}/{f}.root'.format(d=self.outDir, f=self.analysisTreeNameStem)] + ['{d}/{f}{s}.root'.format(d=self.outDir, f=self.analysisTreeNameStem, s=si) for si in xrange(self.suffix)],  bufsize=-1, stdin=subp.PIPE, stdout=subp.PIPE, close_fds=True)
+					while mergep.poll() is None:
+						time.sleep(2)
+					pid = mergep.pid
+					mergep.stdin.close()
+					mergep.stdout.close()
+					if mergep.wait() is None:
+						mergep.kill()
+					try:
+						os.kill(pid, 15)
+					except OSError:
+						pass
+					del mergep
+					print 'Finished merging files'
+					for si in xrange(self.suffix):
+						os.remove('{d}/{f}{s}.root'.format(d=self.outDir, f=self.analysisTreeNameStem, s=si))
 				self.suffix = None
 				self.OpenAnalysisROOTFile('READ')
 		if not self.is_cal_run or self.cal_run_type == 'out':
@@ -429,16 +431,22 @@ class AnalysisCaenCCD:
 	def CreateCut0(self):
 		if self.cut0.GetTitle() != '':
 			self.cut0.SetTitle('')
+		tempCut = self.ReturnBasicCut0()
+		self.cut0 += tempCut
+
+	def ReturnBasicCut0(self):
+		tempCut = ro.TCut('tempCut', '')
 		if self.doBadPedestalCut and 'badPedestal' in self.branches1DTotal:
-			self.cut0 += ro.TCut('badPedCut', 'badPedestal==0')
+			tempCut += ro.TCut('badPedCut', 'badPedestal==0')
 		if self.doVetoedEventCut and 'vetoedEvent' in self.branches1DTotal:
-			self.cut0 += ro.TCut('vetoedEventCut', 'vetoedEvent==0')
+			tempCut += ro.TCut('vetoedEventCut', 'vetoedEvent==0')
 		if self.badShapeCut == 1 and 'badShape' in self.branches1DTotal:
-			self.cut0 += ro.TCut('badShapeCut', 'badShape!=1')
+			tempCut += ro.TCut('badShapeCut', 'badShape!=1')
 		elif self.badShapeCut == 2 and 'badShape' in self.branches1DTotal:
-			self.cut0 += ro.TCut('badShapeCut', 'badShape==0')
+			tempCut += ro.TCut('badShapeCut', 'badShape==0')
 		if 'currentHV' in self.branches1DTotal:
-			self.cut0 += ro.TCut('currentCut', 'abs(currentHV)<{cc}'.format(cc=self.currentCut))
+			tempCut += ro.TCut('currentCut', 'abs(currentHV)<{cc}'.format(cc=self.currentCut))
+		return tempCut
 
 	def ResetCut0(self):
 		self.cut0.Clear()
@@ -484,6 +492,28 @@ class AnalysisCaenCCD:
 				self.dicWavesVectLoaded[branch] = True
 				if self.verb: print 'Done'
 				del temp
+
+	def LoadSignalScalars(self):
+		if not self.eventVect or not self.sigVect or not self.pedSigmaVect:
+			branchesLoad = ['event', 'signal', 'pedestalSigma']
+			print 'Loading {b} branches...'.format(b=':'.join(branchesLoad)), ; sys.stdout.flush()
+			tempCut = ro.TCut('cutScalars', '')
+			tempCut += self.ReturnBasicCut0()
+			leng = self.analysisTree.Draw(':'.join(branchesLoad), tempCut, 'goff')
+			if leng == -1:
+				ExitMessage('Error, could not load the branches: {b}. Try again :('.format(b=':'.join(branchesLoad)))
+			while leng > self.analysisTree.GetEstimate():
+				self.analysisTree.SetEstimate(leng)
+				leng = self.analysisTree.Draw(':'.join(branchesLoad), tempCut, 'goff')
+			events = leng
+			dicBranches = {}
+			for pos, branch in enumerate(branchesLoad):
+				temp = self.analysisTree.GetVal(pos)
+				dicBranches[branch] = np.array([temp[ev] for ev in xrange(events)], 'f4')
+			self.eventVect = dicBranches['event'].astype('uint32')
+			self.sigVect = dicBranches['signal'].astype('f4')
+			self.pedSigmaVect = dicBranches['pedestalSigma'].astype('f4')
+			print 'Done'
 
 	def ExplicitVectorsFromDictionary(self):
 		if self.hasBranch['voltageSignal']:
@@ -1178,6 +1208,116 @@ class AnalysisCaenCCD:
 	def SaveAllCanvas(self):
 		self.SaveCanvasInlist(self.canvas.keys())
 
+	def AddVcalFriend(self):
+		if not self.analysisTree.GetFriend('vcalTree'):
+			if os.path.isfile('{d}/{f}.vcal.root'.format(d=self.outDir, f=self.analysisTreeName)):
+				self.analysisTree.AddFriend('vcalTree', '{d}/{f}.vcal.root'.format(d=self.outDir, f=self.analysisTreeName))
+			else:
+				self.CreateVcalFriend()
+				self.AddVcalFriend()
+
+	def CreateVcalFriend(self):
+		if self.signal_cal_folder != '':
+			if os.path.isdir(self.signal_cal_folder):
+				root_files = glob.glob('{d}/Signal_vs_CalStep_ch*.root'.format(d=self.signal_cal_folder))
+				if len(root_files) > 0:
+					tempf = ro.TFile(root_files[0], 'READ')
+					cal_name = tempf.GetName().strip('.root')
+					if tempf.FindKey('c_' + cal_name):
+						tempc = tempf.Get('c_' + cal_name)
+						if tempc.FindObject('fit_' + cal_name):
+							tempfit = tempc.GetPrimitive('fit_' + cal_name)
+							self.signal_cal_fit_params['p0'] = tempfit.GetParameter(0)
+							self.signal_cal_fit_params['p1'] = tempfit.GetParameter(1)
+							self.signal_cal_fit_params['p0_error'] = tempfit.GetParError(0)
+							self.signal_cal_fit_params['p1_error'] = tempfit.GetParError(1)
+							self.signal_cal_fit_params['prob'] = tempfit.GetProb()
+							self.signal_cal_fit_params['chi2'] = tempfit.GetChisquare()
+							self.signal_cal_fit_params['ndf'] = tempfit.GetNDF()
+							self.FillVcalFriend()
+
+	def SignalToVcal(self, vsignal, typenp='f4'):
+		if self.signal_cal_fit_params['p1'] != 0:
+			return np.divide(np.subtract(vsignal, self.signal_cal_fit_params['p0'], dtype='f8'), self.signal_cal_fit_params['p1'], dtype='f8').astype(typenp)
+		return 0
+
+	def FillVcalFriend(self):
+		self.LoadSignalScalars()
+		print 'Creating vcal root tree:'
+		vcalfile = ro.TFile('{d}/{f}.vcal.root'.format(d=self.outDir, f=self.analysisTreeName), 'RECREATE')
+		vcaltree = ro.TTree('vcalTree', 'vcalTree')
+		vcalSignalEv = np.zeros(1, 'f4')
+		vcalPedSigmaEv = np.zeros(1, 'f4')
+		vcaltree.Branch('signalVcal', vcalSignalEv, 'signalVcal/F')
+		vcaltree.Branch('pedSigmaVcal', vcalPedSigmaEv, 'pedSigmaVcal/F')
+		self.utils.CreateProgressBar(self.eventVect.max() + 1)
+		self.utils.bar.start()
+		for ev in xrange(self.eventVect.max() + 1):
+			if ev in self.eventVect:
+				try:
+					argum = np.argwhere(ev == self.eventVect).flatten()
+					sigVcal = self.SignalToVcal(self.sigVect[argum])
+					pedSigmVcal = self.SignalToVcal(self.pedSigmaVect[argum])
+					vcalSignalEv.itemset(sigVcal)
+					vcalPedSigmaEv.itemset(pedSigmVcal)
+				except ValueError:
+					ExitMessage('Could not fill event {ev}. :S'.format(ev=ev))
+			else:
+				vcalSignalEv.itemset(0)
+				vcalPedSigmaEv.itemset(0)
+			vcaltree.Fill()
+			self.utils.bar.update(ev + 1)
+		vcalfile.Write()
+		vcalfile.Close()
+		self.utils.bar.finish()
+		print 'Finished creating vcalTree in {d}/{f}.vcal.root'.format(d=self.outDir, f=self.analysisTreeName)
+
+	def AddChargeFriend(self):
+		if not self.analysisTree.GetFriend('chargeTree'):
+			if os.path.isfile('{d}/{f}.charge.root'.format(d=self.outDir, f=self.analysisTreeName)):
+				self.analysisTree.AddFriend('chargeTree', '{d}/{f}.charge.root'.format(d=self.outDir, f=self.analysisTreeName))
+			else:
+				self.CreateChargeFriend()
+				self.AddChargeFriend()
+
+	def CreateChargeFriend(self):
+		if self.cal_circuit_settings != '':
+			if os.path.isfile(self.cal_circuit_settings):
+				self.vcal_to_q = VcalToElectrons(self.cal_circuit_settings)
+		self.FillChargeFriend()
+
+	def FillChargeFriend(self):
+		self.LoadSignalScalars()
+		print 'Creating charge root tree:'
+		chargefile = ro.TFile('{d}/{f}.charge.root'.format(d=self.outDir, f=self.analysisTreeName), 'RECREATE')
+		chargetree = ro.TTree('chargeTree', 'chargeTree')
+		chargeSignalEv = np.zeros(1, 'f4')
+		chargePedSigmaEv = np.zeros(1, 'f4')
+		chargetree.Branch('signalCharge', chargeSignalEv, 'signalCharge/F')
+		chargetree.Branch('pedSigmaCharge', chargePedSigmaEv, 'pedSigmaCharge/F')
+		self.utils.CreateProgressBar(self.eventVect.max() + 1)
+		self.utils.bar.start()
+		for ev in xrange(self.eventVect.max() + 1):
+			if ev in self.eventVect:
+				try:
+					argum = np.argwhere(ev == self.eventVect).flatten()
+					sigVcal = self.SignalToVcal(self.sigVect[argum])
+					pedSigmVcal = self.SignalToVcal(self.pedSigmaVect[argum])
+					chargeSignalEv.itemset(self.vcal_to_q.Q_in_e_from_mV(sigVcal).nominal_value)
+					chargePedSigmaEv.itemset(self.vcal_to_q.Q_in_e_from_mV(pedSigmVcal).nominal_value)
+				except ValueError:
+					ExitMessage('Could not fill event {ev}. :S'.format(ev=ev))
+			else:
+				chargeSignalEv.itemset(0)
+				chargePedSigmaEv.itemset(0)
+			chargetree.Fill()
+			self.utils.bar.update(ev + 1)
+		chargefile.Write()
+		chargefile.Close()
+		self.utils.bar.finish()
+		print 'Finished creating chargeTree in {d}/{f}.charge.root'.format(d=self.outDir, f=self.analysisTreeName)
+
+
 # def main():
 # 	parser = OptionParser()
 # 	parser.add_option('-d', '--inDir', dest='inDir', default='.', type='string', help='Directory containing the run files')
@@ -1261,6 +1401,7 @@ if __name__ == '__main__':
 	# ana.LoadPickles()
 	if autom:
 		ana.AnalysisWaves()
+		ana.AddVcalFriend()
 		ana.PlotPedestal('Pedestal', cuts=ana.cut0.GetTitle())
 		ana.PlotWaveforms('SelectedWaveforms', 'signal', cuts=ana.cut0.GetTitle())
 		ana.canvas['SelectedWaveforms'].SetLogz()
