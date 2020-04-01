@@ -495,7 +495,7 @@ class AnalysisCaenCCD:
 
 	def LoadSignalScalars(self):
 		if not self.eventVect or not self.sigVect or not self.pedSigmaVect:
-			branchesLoad = ['event', 'signal', 'pedestalSigma']
+			branchesLoad = ['event', 'signal', 'pedestal']
 			print 'Loading {b} branches...'.format(b=':'.join(branchesLoad)), ; sys.stdout.flush()
 			tempCut = ro.TCut('cutScalars', '')
 			tempCut += self.ReturnBasicCut0()
@@ -512,7 +512,7 @@ class AnalysisCaenCCD:
 				dicBranches[branch] = np.array([temp[ev] for ev in xrange(events)], 'f4')
 			self.eventVect = dicBranches['event'].astype('uint32')
 			self.sigVect = dicBranches['signal'].astype('f4')
-			self.pedSigmaVect = dicBranches['pedestalSigma'].astype('f4')
+			self.pedVect = dicBranches['pedestal'].astype('f4')
 			print 'Done'
 
 	def ExplicitVectorsFromDictionary(self):
@@ -967,25 +967,47 @@ class AnalysisCaenCCD:
 		self.canvas[name].Modified()
 		ro.gPad.Update()
 
-	def PlotSignal(self, name='signal', bins=0, cuts='', option='e', minx=-10, maxx=990):
-		if self.bias >= 0:
-			plotvar = '-1000*signal' if not self.is_cal_run or self.cal_run_type == 'out' else '1000*signal'
-			# vmax, vmin, deltav = -self.analysisTree.GetMinimum('signal'), -self.analysisTree.GetMaximum('signal'), self.signal_ch.adc_to_volts_cal['p1'] * 100
-			plotVarName = '-Signal [mV]' if not self.is_cal_run or self.cal_run_type == 'out' else 'Signal [mV]'
+	def PlotSignal(self, name='signal', bins=0, cuts='', option='e', minx=-10, maxx=990, branch='signal'):
+		if 'vcal' in branch.lower():
+			if self.bias >= 0:
+				plotvar = '1000*' + branch if not self.is_cal_run or self.cal_run_type == 'out' else '-1000*' + branch
+				# vmax, vmin, deltav = -self.analysisTree.GetMinimum('signal'), -self.analysisTree.GetMaximum('signal'), self.signal_ch.adc_to_volts_cal['p1'] * 100
+				plotVarName = branch + ' [mV]' if not self.is_cal_run or self.cal_run_type == 'out' else '-' + branch + ' [mV]'
+			else:
+				plotvar = '-1000*' + branch if not self.is_cal_run or self.cal_run_type == 'out' else '1000*' + branch
+				# vmax, vmin, deltav = -self.analysisTree.GetMinimum('signal'), -self.analysisTree.GetMaximum('signal'), self.signal_ch.adc_to_volts_cal['p1'] * 100
+				plotVarName = '-' + branch + ' [mV]' if not self.is_cal_run or self.cal_run_type == 'out' else branch + ' [mV]'
+
+		elif 'charge' in branch.lower():
+			if self.bias >= 0:
+				plotvar = branch if not self.is_cal_run or self.cal_run_type == 'out' else '-' + branch
+				# vmax, vmin, deltav = -self.analysisTree.GetMinimum('signal'), -self.analysisTree.GetMaximum('signal'), self.signal_ch.adc_to_volts_cal['p1'] * 100
+				plotVarName = branch + ' [e]' if not self.is_cal_run or self.cal_run_type == 'out' else '-' + branch + ' [e]'
+			else:
+				plotvar = '-' + branch if not self.is_cal_run or self.cal_run_type == 'out' else branch
+				# vmax, vmin, deltav = -self.analysisTree.GetMinimum('signal'), -self.analysisTree.GetMaximum('signal'), self.signal_ch.adc_to_volts_cal['p1'] * 100
+				plotVarName = '-' + branch + ' [e]' if not self.is_cal_run or self.cal_run_type == 'out' else branch + ' [e]'
+
 		else:
-			plotvar = '1000*signal' if not self.is_cal_run or self.cal_run_type == 'out' else '-1000*signal'
-			# vmin, vmax, deltav = self.analysisTree.GetMinimum('signal'), self.analysisTree.GetMaximum('signal'), self.signal_ch.adc_to_volts_cal['p1'] * 100
-			plotVarName = 'Signal [mV]' if not self.is_cal_run or self.cal_run_type == 'out' else '-Signal [mV]'
+			if self.bias >= 0:
+				plotvar = '-1000*' + branch if not self.is_cal_run or self.cal_run_type == 'out' else '1000*' + branch
+				# vmax, vmin, deltav = -self.analysisTree.GetMinimum('signal'), -self.analysisTree.GetMaximum('signal'), self.signal_ch.adc_to_volts_cal['p1'] * 100
+				plotVarName = '-' + branch + ' [mV]' if not self.is_cal_run or self.cal_run_type == 'out' else branch + ' [mV]'
+			else:
+				plotvar = '1000*' + branch if not self.is_cal_run or self.cal_run_type == 'out' else '-1000*' + branch
+				# vmin, vmax, deltav = self.analysisTree.GetMinimum('signal'), self.analysisTree.GetMaximum('signal'), self.signal_ch.adc_to_volts_cal['p1'] * 100
+				plotVarName = branch + ' [mV]' if not self.is_cal_run or self.cal_run_type == 'out' else '-' + branch + ' [mV]'
 		deltav = self.delta_v_signal
-		vmin, vmax = minx, maxx
+		(vmin, vmax) = (minx, maxx) if 'charge' not in branch.lower() else (TruncateFloat(self.vcal_to_q.Q_in_e_from_mV(minx).nominal_value, 1000.), TruncateFloat(self.vcal_to_q.Q_in_e_from_mV(maxx).nominal_value, 1000.))
 		deltav = deltav if bins == 0 else (vmax - vmin) / float(bins)
+		deltav = deltav if 'charge' not in branch.lower() else TruncateFloat(self.vcal_to_q.Q_in_e_from_mV(deltav).nominal_value, 100.)
 		self.DrawHisto(name, vmin - deltav/2.0, vmax + deltav/2.0, deltav, plotvar, plotVarName, cuts, option)
 
-	def PlotPedestal(self, name='pedestal', bins=0, cuts='', option='e', minx=0, maxx=0):
-		vmin = minx if minx != 0 else GetMinimumBranch(self.analysisTree, 'pedestal', cuts) * 1000
-		vmax = maxx if maxx != 0 else GetMaximumBranch(self.analysisTree, 'pedestal', cuts) * 1000
+	def PlotPedestal(self, name='pedestal', bins=0, cuts='', option='e', minx=0, maxx=0, branch='pedestal'):
+		vmin = minx if minx != 0 else GetMinimumBranch(self.analysisTree, branch, cuts) * 1000 if 'charge' not in branch.lower() else GetMinimumBranch(self.analysisTree, branch, cuts)
+		vmax = maxx if maxx != 0 else GetMaximumBranch(self.analysisTree, branch, cuts) * 1000 if 'charge' not in branch.lower() else GetMaximumBranch(self.analysisTree, branch, cuts)
 		deltax = (vmax - vmin) / 100.0 if bins == 0 else (vmax - vmin) / float(bins)
-		self.DrawHisto(name, vmin - deltax/2.0, vmax + deltax/2.0, deltax, '1000*pedestal', 'Pedestal[mV]', cuts, option)
+		self.DrawHisto(name, vmin - deltax/2.0, vmax + deltax/2.0, deltax, '{f}*{b}'.format(f=1000 if 'charge' not in branch.lower() else 1, b=branch), '{b} {u}'.format(b=branch, u='[e]' if 'charge' in branch.lower() else '[mV]'), cuts, option)
 		func = ro.TF1('fit_' + name, 'gaus', vmin, vmax)
 		func.SetNpx(1000)
 		mean_p, sigma_p = self.histo[name].GetMean(), self.histo[name].GetRMS()
@@ -996,7 +1018,7 @@ class AnalysisCaenCCD:
 		fit = self.histo[name].Fit('fit_' + name, 'QEMS', '', mean_p - 2 * sigma_p, mean_p + 2 * sigma_p)
 		params = np.array((fit.Parameter(0), fit.Parameter(1), fit.Parameter(2)), 'float64')
 		func.SetParameters(params)
-		self.DrawHisto(name, vmin - deltax/2.0, vmax + deltax/2.0, deltax, '1000*pedestal', 'Pedestal[mV]', cuts, option)
+		self.DrawHisto(name, vmin - deltax / 2.0, vmax + deltax / 2.0, deltax, '{f}*{b}'.format(f=1000 if 'charge' not in branch.lower() else 1, b=branch), '{b} {u}'.format(b=branch, u='[e]' if 'charge' in branch.lower() else '[mV]'), cuts, option)
 		fit = self.histo[name].Fit('fit_' + name, 'QEMS', '', params[1] - 2 * params[2], params[1] + 2 * params[2])
 		SetDefaultFitStats(self.histo[name], func)
 		self.pedestal_sigma = func.GetParameter(2) if not self.is_cal_run or self.cal_run_type == 'out' else self.histo[name].GetRMS()
@@ -1227,9 +1249,9 @@ class AnalysisCaenCCD:
 						tempc = tempf.Get('c_' + cal_name)
 						if tempc.FindObject('fit_' + cal_name):
 							tempfit = tempc.GetPrimitive('fit_' + cal_name)
-							self.signal_cal_fit_params['p0'] = tempfit.GetParameter(0)
+							self.signal_cal_fit_params['p0'] = tempfit.GetParameter(0) / 1000.  # fit in mV
 							self.signal_cal_fit_params['p1'] = tempfit.GetParameter(1)
-							self.signal_cal_fit_params['p0_error'] = tempfit.GetParError(0)
+							self.signal_cal_fit_params['p0_error'] = tempfit.GetParError(0) / 1000.  # fit in mV
 							self.signal_cal_fit_params['p1_error'] = tempfit.GetParError(1)
 							self.signal_cal_fit_params['prob'] = tempfit.GetProb()
 							self.signal_cal_fit_params['chi2'] = tempfit.GetChisquare()
@@ -1247,9 +1269,9 @@ class AnalysisCaenCCD:
 		vcalfile = ro.TFile('{d}/{f}.vcal.root'.format(d=self.outDir, f=self.analysisTreeName), 'RECREATE')
 		vcaltree = ro.TTree('vcalTree', 'vcalTree')
 		vcalSignalEv = np.zeros(1, 'f4')
-		vcalPedSigmaEv = np.zeros(1, 'f4')
+		vcalPedEv = np.zeros(1, 'f4')
 		vcaltree.Branch('signalVcal', vcalSignalEv, 'signalVcal/F')
-		vcaltree.Branch('pedSigmaVcal', vcalPedSigmaEv, 'pedSigmaVcal/F')
+		vcaltree.Branch('pedestalVcal', vcalPedEv, 'pedestalVcal/F')
 		self.utils.CreateProgressBar(self.eventVect.max() + 1)
 		self.utils.bar.start()
 		for ev in xrange(self.eventVect.max() + 1):
@@ -1257,14 +1279,14 @@ class AnalysisCaenCCD:
 				try:
 					argum = np.argwhere(ev == self.eventVect).flatten()
 					sigVcal = self.SignalToVcal(self.sigVect[argum])
-					pedSigmVcal = self.SignalToVcal(self.pedSigmaVect[argum])
+					pedVcal = self.SignalToVcal(self.pedVect[argum])
 					vcalSignalEv.itemset(sigVcal)
-					vcalPedSigmaEv.itemset(pedSigmVcal)
+					vcalPedEv.itemset(pedVcal)
 				except ValueError:
 					ExitMessage('Could not fill event {ev}. :S'.format(ev=ev))
 			else:
 				vcalSignalEv.itemset(0)
-				vcalPedSigmaEv.itemset(0)
+				vcalPedEv.itemset(0)
 			vcaltree.Fill()
 			self.utils.bar.update(ev + 1)
 		vcalfile.Write()
@@ -1292,24 +1314,24 @@ class AnalysisCaenCCD:
 		chargefile = ro.TFile('{d}/{f}.charge.root'.format(d=self.outDir, f=self.analysisTreeName), 'RECREATE')
 		chargetree = ro.TTree('chargeTree', 'chargeTree')
 		chargeSignalEv = np.zeros(1, 'f4')
-		chargePedSigmaEv = np.zeros(1, 'f4')
+		chargePedEv = np.zeros(1, 'f4')
 		chargetree.Branch('signalCharge', chargeSignalEv, 'signalCharge/F')
-		chargetree.Branch('pedSigmaCharge', chargePedSigmaEv, 'pedSigmaCharge/F')
+		chargetree.Branch('pedestalCharge', chargePedEv, 'pedestalCharge/F')
 		self.utils.CreateProgressBar(self.eventVect.max() + 1)
 		self.utils.bar.start()
 		for ev in xrange(self.eventVect.max() + 1):
 			if ev in self.eventVect:
 				try:
 					argum = np.argwhere(ev == self.eventVect).flatten()
-					sigVcal = self.SignalToVcal(self.sigVect[argum])
-					pedSigmVcal = self.SignalToVcal(self.pedSigmaVect[argum])
+					sigVcal = self.SignalToVcal(self.sigVect[argum]) * 1000.  # in mV
+					pedVcal = self.SignalToVcal(self.pedVect[argum]) * 1000.  # in mV
 					chargeSignalEv.itemset(self.vcal_to_q.Q_in_e_from_mV(sigVcal).nominal_value)
-					chargePedSigmaEv.itemset(self.vcal_to_q.Q_in_e_from_mV(pedSigmVcal).nominal_value)
+					chargePedEv.itemset(self.vcal_to_q.Q_in_e_from_mV(pedVcal).nominal_value)
 				except ValueError:
 					ExitMessage('Could not fill event {ev}. :S'.format(ev=ev))
 			else:
 				chargeSignalEv.itemset(0)
-				chargePedSigmaEv.itemset(0)
+				chargePedEv.itemset(0)
 			chargetree.Fill()
 			self.utils.bar.update(ev + 1)
 		chargefile.Write()
@@ -1402,7 +1424,11 @@ if __name__ == '__main__':
 	if autom:
 		ana.AnalysisWaves()
 		ana.AddVcalFriend()
-		ana.PlotPedestal('Pedestal', cuts=ana.cut0.GetTitle())
+		ana.AddChargeFriend()
+		ana.PlotPedestal('Pedestal', cuts=ana.cut0.GetTitle(), branch='pedestal')
+		if not ana.is_cal_run:
+			ana.PlotPedestal('PedestalVcal', cuts=ana.cut0.GetTitle(), branch='pedestalVcal')
+			ana.PlotPedestal('PedestalCharge', cuts=ana.cut0.GetTitle(), branch='pedestalCharge')
 		ana.PlotWaveforms('SelectedWaveforms', 'signal', cuts=ana.cut0.GetTitle())
 		ana.canvas['SelectedWaveforms'].SetLogz()
 		ana.PlotWaveforms('SelectedWaveformsPedCor', 'signal_ped_corrected', cuts=ana.cut0.GetTitle())
@@ -1410,6 +1436,11 @@ if __name__ == '__main__':
 		ana.PlotSignal('PH', cuts=ana.cut0.GetTitle())
 		if not ana.is_cal_run:
 			ana.FitLanGaus('PH')
+			ana.PlotSignal('PHvcal', cuts=ana.cut0.GetTitle(), branch='signalVcal')
+			ana.FitLanGaus('PHvcal')
+			ana.PlotSignal('PHcharge', cuts=ana.cut0.GetTitle(), branch='signalCharge')
+			ana.FitLanGaus('PHcharge')
+
 			ana.PlotHVCurrents('HVCurrents', '', 5)
 		else:
 			ana.FitConvolutedGaussians('PH')
