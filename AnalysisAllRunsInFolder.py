@@ -27,7 +27,10 @@ class AnalysisAllRunsInFolder:
 			ExitMessage('The directory does not have any runs', os.EX_USAGE)
 		# self.num_cores = 1
 		self.runs = [runi for runi in runstemp if os.path.isdir(runi)]
-		self.runs.sort(key=lambda x: float(x.split('_')[-1].split('mV')[0].split('V')[0]))
+		if self.are_cal_runs:
+			self.runs.sort(key=lambda x: float(x.split('_')[-1].split('mV')[0].split('V')[0]))
+		else:
+			self.runs.sort(key=lambda x: float(x.split('_Pos_')[-1].split('V')[0]) if 'Pos' in x else -1*float(x.split('_Neg_')[-1].split('V')[0]))
 		self.num_runs = len(self.runs)
 		if self.num_runs < 1: ExitMessage('There is not even the required data to convert one run', os.EX_DATAERR)
 		self.voltages = []
