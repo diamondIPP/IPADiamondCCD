@@ -494,7 +494,9 @@ class AnalysisCaenCCD:
 				del temp
 
 	def LoadSignalScalars(self):
-		if not self.eventVect or not self.sigVect or not self.pedSigmaVect:
+		try:
+			temp = self.eventVect[0] + self.sigVect[0] + self.pedVect[0]
+		except Exception:
 			branchesLoad = ['event', 'signal', 'pedestal']
 			print 'Loading {b} branches...'.format(b=':'.join(branchesLoad)), ; sys.stdout.flush()
 			tempCut = ro.TCut('cutScalars', '')
@@ -1244,7 +1246,7 @@ class AnalysisCaenCCD:
 				root_files = glob.glob('{d}/Signal_vs_CalStep_ch*.root'.format(d=self.signal_cal_folder))
 				if len(root_files) > 0:
 					tempf = ro.TFile(root_files[0], 'READ')
-					cal_name = tempf.GetName().strip('.root')
+					cal_name = tempf.GetName().strip('.root').split('/')[-1]
 					if tempf.FindKey('c_' + cal_name):
 						tempc = tempf.Get('c_' + cal_name)
 						if tempc.FindObject('fit_' + cal_name):
@@ -1256,7 +1258,9 @@ class AnalysisCaenCCD:
 							self.signal_cal_fit_params['prob'] = tempfit.GetProb()
 							self.signal_cal_fit_params['chi2'] = tempfit.GetChisquare()
 							self.signal_cal_fit_params['ndf'] = tempfit.GetNDF()
-							self.FillVcalFriend()
+					tempf.Close()
+					if self.signal_cal_fit_params['p1'] != 0:
+						self.FillVcalFriend()
 
 	def SignalToVcal(self, vsignal, typenp='f4'):
 		if self.signal_cal_fit_params['p1'] != 0:
@@ -1272,9 +1276,10 @@ class AnalysisCaenCCD:
 		vcalPedEv = np.zeros(1, 'f4')
 		vcaltree.Branch('signalVcal', vcalSignalEv, 'signalVcal/F')
 		vcaltree.Branch('pedestalVcal', vcalPedEv, 'pedestalVcal/F')
-		self.utils.CreateProgressBar(self.eventVect.max() + 1)
+		totEvents = self.settings.num_events
+		self.utils.CreateProgressBar(totEvents + 1)
 		self.utils.bar.start()
-		for ev in xrange(self.eventVect.max() + 1):
+		for ev in xrange(totEvents):
 			if ev in self.eventVect:
 				try:
 					argum = np.argwhere(ev == self.eventVect).flatten()
@@ -1317,9 +1322,10 @@ class AnalysisCaenCCD:
 		chargePedEv = np.zeros(1, 'f4')
 		chargetree.Branch('signalCharge', chargeSignalEv, 'signalCharge/F')
 		chargetree.Branch('pedestalCharge', chargePedEv, 'pedestalCharge/F')
-		self.utils.CreateProgressBar(self.eventVect.max() + 1)
+		totevents = self.settings.num_events
+		self.utils.CreateProgressBar(totevents + 1)
 		self.utils.bar.start()
-		for ev in xrange(self.eventVect.max() + 1):
+		for ev in xrange(totevents):
 			if ev in self.eventVect:
 				try:
 					argum = np.argwhere(ev == self.eventVect).flatten()

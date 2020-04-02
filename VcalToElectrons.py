@@ -73,7 +73,7 @@ class VcalToElectrons:
 
     def Q_in_e_from_mV(self, vcal=0, vcal_sigma=0):
         vtemp = np.multiply(self.vgain, np.divide(ufloat(vcal, vcal_sigma), 1000))
-        return np.multiply(vtemp, self.cap_in)
+        return np.divide(np.multiply(vtemp, np.multiply(self.cap_in, 1e-12)), spc.elementary_charge)
 
 if __name__ == '__main__':
     parser = OptionParser()
