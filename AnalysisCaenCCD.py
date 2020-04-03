@@ -24,8 +24,8 @@ from VcalToElectrons import VcalToElectrons
 
 trig_rand_time = 0.2
 wait_time_hv = 7
-BRANCHES1DTOTAL = ['event', 'vetoedEvent', 'badShape', 'badPedestal', 'voltageHV', 'currentHV', 'timeHV', 'peakPosition', 'pedestal', 'pedestalSigma', 'signalAndPedestal', 'signalAndPedestalSigma', 'signal']
-BRANCHES1DTYPE = {'event': 'uint32', 'vetoedEvent': 'bool', 'badShape': 'int8', 'badPedestal': 'bool', 'voltageHV': 'float32', 'currentHV': 'float32', 'timeHV.AsDouble()': 'float64', 'timeHV.Convert()': 'uint32', 'peakPosition': 'float32', 'pedestal': 'float32', 'pedestalSigma': 'float32', 'signalAndPedestal': 'float32','signalAndPedestalSigma': 'float32', 'signal': 'float32'}
+BRANCHES1DTOTAL = ['event', 'vetoedEvent', 'badShape', 'badPedestal', 'satEvent', 'voltageHV', 'currentHV', 'timeHV', 'peakPosition', 'pedestal', 'pedestalSigma', 'signalAndPedestal', 'signalAndPedestalSigma', 'signal']
+BRANCHES1DTYPE = {'event': 'uint32', 'vetoedEvent': 'bool', 'badShape': 'int8', 'badPedestal': 'bool', 'satEvent': 'bool', 'voltageHV': 'float32', 'currentHV': 'float32', 'timeHV.AsDouble()': 'float64', 'timeHV.Convert()': 'uint32', 'peakPosition': 'float32', 'pedestal': 'float32', 'pedestalSigma': 'float32', 'signalAndPedestal': 'float32','signalAndPedestalSigma': 'float32', 'signal': 'float32'}
 BRANCHESWAVESTOTAL = ['time', 'voltageSignal', 'voltageTrigger', 'voltageVeto']
 BRANCHESWAVESTYPE = {'time': 'float64', 'voltageSignal': 'float64', 'voltageTrigger': 'float64', 'voltageVeto': 'float64'}
 BRANCHES1DLOAD = ['event', 'voltageHV', 'currentHV', 'timeHV.Convert()', 'timeHV.AsDouble()', 'peakPosition']
@@ -63,6 +63,7 @@ class AnalysisCaenCCD:
 		self.doBadPedestalCut = True
 		self.badShapeCut = 2
 		self.doVetoedEventCut = True
+		self.doSatCut = True
 		self.peakTimeCut = 2e-9
 		self.peakTimeCut0 = 2e-9
 		self.currentCut = 10e-9
@@ -444,6 +445,8 @@ class AnalysisCaenCCD:
 			tempCut += ro.TCut('badShapeCut', 'badShape!=1')
 		elif self.badShapeCut == 2 and 'badShape' in self.branches1DTotal:
 			tempCut += ro.TCut('badShapeCut', 'badShape==0')
+		if self.doSatCut and 'satEvent' in self.branches1DTotal:
+			tempCut += ro.TCut('satEventCut', 'satEvent==0')
 		if 'currentHV' in self.branches1DTotal:
 			tempCut += ro.TCut('currentCut', 'abs(currentHV)<{cc}'.format(cc=self.currentCut))
 		return tempCut
@@ -829,12 +832,18 @@ class AnalysisCaenCCD:
 		self.signalWaveSigmaVect = self.signalWaveVect.std(axis=0)
 
 	def DrawHisto(self, name, xmin, xmax, deltax, var, varname, cuts='', option='e'):
+		if not IsFloat(xmin) or not IsFloat(xmax) or not IsFloat(deltax):
+			print 'Won\'t create histogram as the limits are not well defined (xmin, xmax, deltax): {mi}, {ma}, {dx}'.format(mi=xmin, ma=xmax, dx=deltax)
+			return
+		elif deltax <= 0 or xmin >= xmax:
+			print 'Won\'t create histogram as the limits are not well defined (xmin, xmax, deltax): {mi}, {ma}, {dx}'.format(mi=xmin, ma=xmax, dx=deltax)
+			return
 		ro.TFormula.SetMaxima(100000)
 		if self.histo.has_key(name):
 			if self.histo[name]:
 				self.histo[name].Delete()
 			del self.histo[name]
-		self.histo[name] = ro.TH1F('h_' + name, 'h_' + name, int(np.floor((xmax - xmin) / deltax + 0.5)), xmin, xmax)
+		self.histo[name] = ro.TH1F('h_' + name, 'h_' + name, RoundInt(float(xmax - xmin) / deltax), xmin, xmax)
 		self.histo[name].GetXaxis().SetTitle(varname)
 		self.histo[name].GetYaxis().SetTitle('entries')
 		if 'goff' not in option:
@@ -856,12 +865,18 @@ class AnalysisCaenCCD:
 		ro.TFormula.SetMaxima(1000)
 
 	def DrawProfile(self, name, varx, xmin, xmax, deltax, xname, vary, ymin, ymax, yname, cuts='', options='e hist'):
+		if not IsFloat(xmin) or not IsFloat(xmax) or not IsFloat(deltax) or not IsFloat(ymin) or not IsFloat(ymax):
+			print 'Won\'t create profile as the limits are not well defined (xmin, xmax, deltax, ymin, ymax): {mi}, {ma}, {dx}, {ym}, {yma}'.format(mi=xmin, ma=xmax, dx=deltax, ym=ymin, yma=ymax)
+			return
+		elif deltax <= 0 or xmin >= xmax or ymin >= ymax:
+			print 'Won\'t create profile as the limits are not well defined (xmin, xmax, deltax, ymin, ymax): {mi}, {ma}, {dx}, {ym}, {yma}'.format(mi=xmin, ma=xmax, dx=deltax, ym=ymin, yma=ymax)
+			return
 		ro.TFormula.SetMaxima(100000)
 		if self.profile.has_key(name):
 			if self.profile[name]:
 				self.profile[name].Delete()
 			del self.profile[name]
-		self.profile[name] = ro.TProfile('h_' + name, 'h_' + name, int(np.floor((xmax - xmin) / deltax + 0.5) + 2), xmin - deltax, xmax + deltax, ymin, ymax)
+		self.profile[name] = ro.TProfile('h_' + name, 'h_' + name, int(RoundInt(float(xmax - xmin) / deltax) + 2), xmin - deltax, xmax + deltax, ymin, ymax)
 		self.profile[name].GetXaxis().SetTitle(xname)
 		self.profile[name].GetYaxis().SetTitle(yname)
 		if 'goff' not in options:
@@ -883,12 +898,18 @@ class AnalysisCaenCCD:
 		ro.TFormula.SetMaxima(1000)
 
 	def DrawHisto2D(self, name, varx, xmin, xmax, deltax, xname, vary, ymin, ymax, deltay, yname, cuts='', option='colz', num_evts=1000000000, start_ev=0):
+		if not IsFloat(xmin) or not IsFloat(xmax) or not IsFloat(deltax) or not IsFloat(ymin) or not IsFloat(ymax) or not IsFloat(deltay):
+			print 'Won\'t create histogram as the limits are not well defined (xmin, xmax, deltax, ymin, ymax, deltay): {mi}, {ma}, {dx}, {ym}, {yma}, {dy}'.format(mi=xmin, ma=xmax, dx=deltax, ym=ymin, yma=ymax, dy=deltay)
+			return
+		elif deltax <= 0 or xmin >= xmax or deltay <= 0 or ymin >= ymax:
+			print 'Won\'t create histogram as the limits are not well defined (xmin, xmax, deltax, ymin, ymax, deltay): {mi}, {ma}, {dx}, {ym}, {yma}, {dy}'.format(mi=xmin, ma=xmax, dx=deltax, ym=ymin, yma=ymax, dy=deltay)
+			return
 		ro.TFormula.SetMaxima(100000)
 		if self.histo.has_key(name):
 			if self.histo[name]:
 				self.histo[name].Delete()
 			del self.histo[name]
-		self.histo[name] = ro.TH2F('h_' + name, 'h_' + name, int(np.floor((xmax - xmin) / deltax + 0.5) + 2), xmin - deltax, xmax + deltax, int(np.floor((ymax - ymin) / deltay + 0.5) + 2), ymin - deltay, ymax + deltay)
+		self.histo[name] = ro.TH2F('h_' + name, 'h_' + name, int(RoundInt(float(xmax - xmin) / deltax) + 2), xmin - deltax, xmax + deltax, int(RoundInt(float(ymax - ymin) / deltay) + 2), ymin - deltay, ymax + deltay)
 		self.histo[name].GetXaxis().SetTitle(xname)
 		self.histo[name].GetYaxis().SetTitle(yname)
 		self.histo[name].GetZaxis().SetTitle('entries')
@@ -910,31 +931,30 @@ class AnalysisCaenCCD:
 			SetDefault2DStats(self.histo[name])
 		ro.TFormula.SetMaxima(1000)
 
-	def PlotPeakPositionDistributions2(self, name='peakPosDist', low_t=1e-6, up_t=3e-6, nbins=500, cut=''):
-		self.DrawHisto(name, low_t, up_t, (up_t - low_t) / nbins, 'peakPosition', 'Peak Position [s]', cut, 'e')
-		self.histo[name].GetXaxis().SetRangeUser(self.histo[name].GetMean() - 5 * self.histo[name].GetRMS(), self.histo[name].GetMean() + 5 * self.histo[name].GetRMS())
-		func = ro.TF1('fit_' + name, 'gaus', low_t, up_t)
-		func.SetNpx(1000)
-		mean_p = (self.histo[name].GetMean() + self.histo[name].GetBinCenter(self.histo[name].GetMaximumBin()))/2.0
-		params = np.array((self.histo[name].GetEntries(), mean_p, self.histo[name].GetRMS()), 'float64')
-		func.SetParameters(params)
-		fit = self.histo[name].Fit('fit_' + name, 'QEMS', '', mean_p - 1.5 * self.histo[name].GetRMS(), mean_p + 1.5 * self.histo[name].GetRMS())
-		params = np.array((fit.Parameter(0), fit.Parameter(1), fit.Parameter(2)), 'float64')
-		func.SetParameters(params)
-		fit = self.histo[name].Fit('fit_' + name, 'QEMS', '', params[1] - 2 * params[2], params[1] + 2 * params[2])
-		SetDefaultFitStats(self.histo[name], func)
-		self.peakTime = fit.Parameter(1)
-
 	def PlotPeakPositionDistributions(self, name='peakPosDist', low_t=1, up_t=4, nbins=200, cut=''):
-		good_binning = False
 		nbins2 = nbins
-		while not good_binning:
-			self.DrawHisto(name, low_t, up_t, float(up_t - low_t) / nbins2, 'peakPosition*1000000', 'Peak Position [us]', cut, 'e')
-			empty_bins = 0
-			for bin in xrange(1, self.histo[name].GetNbinsX() + 1):
-				empty_bins += 1 if self.histo[name].GetBinContent(bin) < 1 else 0
-			good_binning = True if nbins2 - empty_bins >= 12 else False
-			nbins2 *= 2
+		funcArgs = (name, low_t, up_t, float(up_t - low_t) / nbins2, 'peakPosition*1000000', 'Peak Position [us]', cut, 'e')
+		self.DrawHisto(*funcArgs)
+		if not name in self.histo.keys():
+			print 'There was a problem creating the histogram {n}'.format(n=name)
+			return
+		if not self.histo[name] or IsHistogramEmpty(self.histo[name]):
+			print 'There was a problem with the created histogram {n}'.format(n=name)
+			return
+		deltax = CheckBinningForFit(self, name, self.DrawHisto, funcArgs, 3, 12)
+		# while not good_binning:
+		# 	self.DrawHisto(name, low_t, up_t, float(up_t - low_t) / nbins2, 'peakPosition*1000000', 'Peak Position [us]', cut, 'e')
+		# 	if name in self.histo.keys():
+		# 		if self.histo[name] and not IsHistogramEmpty(self.histo[name]):
+		# 			filledBins = CheckFilledBinsHisto(self.histo[name])
+		# 			good_binning = True if filledBins >= 12 else False
+		# 			nbins2 *= 2
+		# 		else:
+		# 			print 'There was a problem with the created histogram {n}'.format(n=name)
+		# 			return
+		# 	else:
+		# 		print 'There was a problem creating the histogram {n}'.format(n=name)
+		# 		return
 		self.histo[name].GetXaxis().SetRangeUser(self.histo[name].GetMean() - 5 * self.histo[name].GetRMS(), self.histo[name].GetMean() + 5 * self.histo[name].GetRMS())
 		func = ro.TF1('fit_' + name, 'gaus(0)+gaus(3)', low_t, up_t)
 		func.SetNpx(1000)
@@ -1000,16 +1020,30 @@ class AnalysisCaenCCD:
 				# vmin, vmax, deltav = self.analysisTree.GetMinimum('signal'), self.analysisTree.GetMaximum('signal'), self.signal_ch.adc_to_volts_cal['p1'] * 100
 				plotVarName = branch + ' [mV]' if not self.is_cal_run or self.cal_run_type == 'out' else '-' + branch + ' [mV]'
 		deltav = self.delta_v_signal
-		(vmin, vmax) = (minx, maxx) if 'charge' not in branch.lower() else (TruncateFloat(self.vcal_to_q.Q_in_e_from_mV(minx).nominal_value, 1000.), TruncateFloat(self.vcal_to_q.Q_in_e_from_mV(maxx).nominal_value, 1000.))
+		(vmin, vmax) = (minx, maxx) if 'charge' not in branch.lower() else (TruncateFloat(self.vcal_to_q.Q_in_e_from_mV(minx).nominal_value, 100.), TruncateFloat(self.vcal_to_q.Q_in_e_from_mV(maxx).nominal_value, 100.))
 		deltav = deltav if bins == 0 else (vmax - vmin) / float(bins)
-		deltav = deltav if 'charge' not in branch.lower() else TruncateFloat(self.vcal_to_q.Q_in_e_from_mV(deltav).nominal_value, 100.)
+		deltav = deltav if 'charge' not in branch.lower() else TruncateFloat(self.vcal_to_q.Q_in_e_from_mV(deltav).nominal_value, 10.)
 		self.DrawHisto(name, vmin - deltav/2.0, vmax + deltav/2.0, deltav, plotvar, plotVarName, cuts, option)
+		funcArgs = (name, vmin - deltav/2.0, vmax + deltav/2.0, deltav, plotvar, plotVarName, cuts, option)
+		truncateResol = 0.1 if 'charge' not in branch.lower() else 10.
+		self.delta_v_signal = CheckBinningForFit(self, name, self.DrawHisto, funcArgs, 3, 7, truncateResol)
 
 	def PlotPedestal(self, name='pedestal', bins=0, cuts='', option='e', minx=0, maxx=0, branch='pedestal'):
 		vmin = minx if minx != 0 else GetMinimumBranch(self.analysisTree, branch, cuts) * 1000 if 'charge' not in branch.lower() else GetMinimumBranch(self.analysisTree, branch, cuts)
 		vmax = maxx if maxx != 0 else GetMaximumBranch(self.analysisTree, branch, cuts) * 1000 if 'charge' not in branch.lower() else GetMaximumBranch(self.analysisTree, branch, cuts)
 		deltax = (vmax - vmin) / 100.0 if bins == 0 else (vmax - vmin) / float(bins)
 		self.DrawHisto(name, vmin - deltax/2.0, vmax + deltax/2.0, deltax, '{f}*{b}'.format(f=1000 if 'charge' not in branch.lower() else 1, b=branch), '{b} {u}'.format(b=branch, u='[e]' if 'charge' in branch.lower() else '[mV]'), cuts, option)
+		if not name in self.histo.keys():
+			print 'The dictionary histogram does not have the key ' + name
+			return
+		if not self.histo[name] or IsHistogramEmpty(self.histo[name]):
+			print 'The created histogram {n} is empty'.format(n=name)
+			return
+		lowbin, highbin = self.histo[name].FindFirstBinAbove(0), self.histo[name].FindLastBinAbove(0)
+		vmin, vmax = self.histo[name].GetBinLowEdge(lowbin), self.histo[name].GetBinLowEdge(highbin + 1)
+		funcArgs = (name, vmin, vmax, deltax, '{f}*{b}'.format(f=1000 if 'charge' not in branch.lower() else 1, b=branch), '{b} {u}'.format(b=branch, u='[e]' if 'charge' in branch.lower() else '[mV]'), cuts, option)
+		truncateResol = 0.1 if 'charge' not in branch.lower() else 10.
+		deltax = CheckBinningForFit(self, name, self.DrawHisto, funcArgs, 3, 6, truncateResol)
 		func = ro.TF1('fit_' + name, 'gaus', vmin, vmax)
 		func.SetNpx(1000)
 		mean_p, sigma_p = self.histo[name].GetMean(), self.histo[name].GetRMS()
@@ -1125,6 +1159,9 @@ class AnalysisCaenCCD:
 			timehv = np.array([timehv[i] for i in xrange(leng)])
 			xmin, xmax, deltax = np.floor(timehv.min()), np.ceil(timehv.max()), deltat
 			ymin, ymax = self.analysisTree.GetMinimum('currentHV'), self.analysisTree.GetMaximum('currentHV')
+			if ymin == ymax:
+				ymin -= 1e-10
+				ymax += 1e-10
 			self.DrawProfile(name, 'timeHV.AsDouble()', xmin, xmax, deltax, 'time', 'currentHV', ymin, ymax, 'Current', cuts, options)
 			self.profile[name].SetStats(0)
 			# def FitLanGaus(self, name, conv_steps=100, color=ro.kRed, xmin=-10000000, xmax=-10000000):
@@ -1138,7 +1175,10 @@ class AnalysisCaenCCD:
 			self.line[name+'_n'].Draw('same')
 			self.profile[name].GetXaxis().SetTimeDisplay(1)
 
-	def FitLanGaus(self, name, conv_steps=100, color=ro.kRed):
+	def FitLanGaus(self, name, conv_steps=100, color=ro.kRed, doToyStats=False):
+		if not name in self.canvas.keys() or not name in self.histo.keys():
+			print 'Can\'t do Langaus fit as there is aproblem with the histogram'
+			return
 		self.canvas[name].cd()
 		self.langaus[name] = LanGaus(self.histo[name])
 		self.langaus[name].LanGausFit(conv_steps, xmin=self.fit_min, xmax=self.fit_max)
@@ -1153,34 +1193,42 @@ class AnalysisCaenCCD:
 		self.langaus[name].fit.SetLineColor(color)
 		self.line[name].Draw('same')
 		ro.gPad.Update()
-		print 'Fit {n}: <PH> = {f}'.format(n=name, f=fitmean)
 		print u'Histo {n}: <PH> = {f} \u00B1 {f2}'.format(n=name, f=self.histo[name].GetMean(), f2=self.histo[name].GetMeanError())
+		print 'Fit {n}: <PH> = {f}'.format(n=name, f=fitmean)
 		print 'Fit {n}: MP_fit = {f}'.format(n=name, f=self.langaus[name].fit_mp)
-		self.toy_histos = [self.histo[name].Clone('h_' + name + '_toy_' + str(it)) for it in xrange(100)]
-		self.utils.CreateProgressBar(len(self.toy_histos))
-		self.utils.bar.start()
-		for itj, toyhisto in enumerate(self.toy_histos):
-			toyhisto.SetTitle(toyhisto.GetName())
-			toyhisto.Reset()
-			for it in xrange(self.langaus[name].entries_under_curve):
-				toyhisto.Fill(self.langaus[name].fit.GetRandom(self.langaus[name].fit.GetXmin(), self.langaus[name].fit.GetXmax()))
-			self.utils.bar.update(itj + 1)
-		self.utils.bar.finish()
-		toys_means = np.array([toyhisto.GetMean() for toyhisto in self.toy_histos], 'f8')
-		toys_means_errors = np.array([toyhisto.GetMeanError() for toyhisto in self.toy_histos], 'f8')
-		toys_means_weights = np.divide(1., np.power(toys_means_errors, 2., dtype='f8'), dtype='f8')
-		mean_toys = np.average(toys_means, weights=toys_means_weights)
+		lineToAddInStats = ['Mean_{Fit}', 'MP_{Fit}']
+		valuesLineToAddInStats = [fitmean, self.langaus[name].fit_mp]
+		if doToyStats:
+			self.toy_histos = [self.histo[name].Clone('h_' + name + '_toy_' + str(it)) for it in xrange(100)]
+			self.utils.CreateProgressBar(len(self.toy_histos))
+			self.utils.bar.start()
+			for itj, toyhisto in enumerate(self.toy_histos):
+				toyhisto.SetTitle(toyhisto.GetName())
+				toyhisto.Reset()
+				for it in xrange(self.langaus[name].entries_under_curve):
+					toyhisto.Fill(self.langaus[name].fit.GetRandom(self.langaus[name].fit.GetXmin(), self.langaus[name].fit.GetXmax()))
+				self.utils.bar.update(itj + 1)
+			self.utils.bar.finish()
+			toys_means = np.array([toyhisto.GetMean() for toyhisto in self.toy_histos], 'f8')
+			toys_means_errors = np.array([toyhisto.GetMeanError() for toyhisto in self.toy_histos], 'f8')
+			toys_means_weights = np.divide(1., np.power(toys_means_errors, 2., dtype='f8'), dtype='f8')
+			mean_toys = np.average(toys_means, weights=toys_means_weights)
+			lineToAddInStats.append('Mean_{100toys}')
+			valuesLineToAddInStats.append(mean_toys)
+			print '100 Toys Fit {n}: <PH> = {f}'.format(n=name, f=mean_toys)
 		self.histo[name].FindObject('stats').SetX1NDC(0.55)
 		self.histo[name].FindObject('stats').SetX2NDC(0.9)
 		self.histo[name].FindObject('stats').SetY1NDC(0.5)
 		self.histo[name].FindObject('stats').SetY2NDC(0.9)
-		AddLineToStats(self.canvas[name], ['Mean_{Fit}', 'MP_{Fit}', 'Mean_{100toys}'], [fitmean, self.langaus[name].fit_mp, mean_toys])
+		AddLineToStats(self.canvas[name], lineToAddInStats, valuesLineToAddInStats)
 		self.histo[name].SetStats(0)
 		self.canvas[name].Modified()
 		ro.gPad.Update()
-		print '100 Toys Fit {n}: <PH> = {f}'.format(n=name, f=mean_toys)
 
 	def FitConvolutedGaussians(self, name, conv_steps=100, color=ro.kRed):
+		if not name in self.canvas.keys() or not name in self.histo.keys():
+			print 'Can\'t do Langaus fit as there is aproblem with the histogram'
+			return
 		self.canvas[name].cd()
 		# self.langaus[name] = LanGaus(self.histo[name])
 		# self.langaus[name].LanGausFit(conv_steps, xmin=self.fit_min, xmax=self.fit_max)

@@ -185,6 +185,66 @@ def TruncateFloat(num_float, resol=0):
 	temp_float = num_float if resol == 0 else float(np.multiply(resol, RoundInt(np.divide(num_float, resol, dtype='f8')), dtype='f8'))
 	return temp_float
 
+def CheckEmptyBinsHisto(histo):
+	emptybins = 0
+	nbinsx = histo.GetNbinsX()
+	nbinsy = histo.GetNbinsY()
+	nbinsz = histo.GetNbinsZ()
+	nbinsTot = nbinsx * nbinsy * nbinsz
+	for bin in xrange(1, nbinsTot + 1):
+		emptybins += 1 if histo.GetBinContent(bin) < 1 else 0
+	return emptybins
+
+def IsHistogramEmpty(histo):
+	if histo.GetEntries() > 0:
+		return False
+	return True
+
+def CheckFilledBinsHisto(histo):
+	emptyBins = CheckEmptyBinsHisto(histo)
+	nbinsx = histo.GetNbinsX()
+	nbinsy = histo.GetNbinsY()
+	nbinsz = histo.GetNbinsZ()
+	nbinsTot = nbinsx * nbinsy * nbinsz
+	return nbinsTot - emptyBins
+
+def CheckBinningForFit(anaObject, histoKey, drawFunc, funcArgs, deltaPosInfuncArgs, fitParamsMin=6, truncateResol=0):
+	good_binning = False
+	while not good_binning:
+		drawFunc(*funcArgs)
+		if histoKey in anaObject.histo.keys():
+			if anaObject.histo[histoKey] and not IsHistogramEmpty(anaObject.histo[histoKey]):
+				filledBins = CheckFilledBinsHisto(anaObject.histo[histoKey])
+				entries = anaObject.histo[histoKey].GetEntries()
+				minBins = RoundInt(max(fitParamsMin, entries ** (2/5.)))
+				maxBins = RoundInt(entries ** (10/17.))
+				if minBins <= maxBins:
+					delta = funcArgs[deltaPosInfuncArgs]
+					good_binning = False
+					if filledBins < minBins:
+						delta /= 2.
+						funcArgs = tuple([funcArgs[i] if i != deltaPosInfuncArgs else delta for i in xrange(len(funcArgs))])
+					elif filledBins > maxBins:
+						delta *= 1.7179869184
+						funcArgs = tuple([funcArgs[i] if i != deltaPosInfuncArgs else delta for i in xrange(len(funcArgs))])
+					else:
+						good_binning = True
+					delta = TruncateFloat(delta, truncateResol) if truncateResol != 0 else delta
+				else:
+					# only take into account the necessary filled Parameters for the fit
+					delta = funcArgs[deltaPosInfuncArgs]
+					good_binning = False
+					if filledBins > minBins:
+						delta *= 1.25
+						funcArgs = tuple([funcArgs[i] if i != deltaPosInfuncArgs else delta for i in xrange(len(funcArgs))])
+					elif filledBins <= minBins - 1:
+						delta /= 1.5
+						funcArgs = tuple([funcArgs[i] if i != deltaPosInfuncArgs else delta for i in xrange(len(funcArgs))])
+					else:
+						good_binning = True
+					delta = TruncateFloat(delta, truncateResol) if truncateResol != 0 else delta
+
+	return funcArgs[deltaPosInfuncArgs]
 
 if __name__ == '__main__':
 	print 'blaaaa'
