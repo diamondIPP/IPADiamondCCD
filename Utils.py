@@ -208,7 +208,7 @@ def CheckFilledBinsHisto(histo):
 	nbinsTot = nbinsx * nbinsy * nbinsz
 	return nbinsTot - emptyBins
 
-def CheckBinningForFit(anaObject, histoKey, drawFunc, funcArgs, deltaPosInfuncArgs, fitParamsMin=6, truncateResol=0):
+def CheckBinningForFit(anaObject, histoKey, drawFunc, funcArgs, deltaPosInfuncArgs, fitParamsMin=6, truncateResol=0, forceMinParLimit=False):
 	good_binning = False
 	while not good_binning:
 		drawFunc(*funcArgs)
@@ -216,7 +216,7 @@ def CheckBinningForFit(anaObject, histoKey, drawFunc, funcArgs, deltaPosInfuncAr
 			if anaObject.histo[histoKey] and not IsHistogramEmpty(anaObject.histo[histoKey]):
 				filledBins = CheckFilledBinsHisto(anaObject.histo[histoKey])
 				entries = anaObject.histo[histoKey].GetEntries()
-				minBins = RoundInt(max(fitParamsMin, entries ** (2/5.)))
+				minBins = RoundInt(max(fitParamsMin, entries ** (2/5.))) if not forceMinParLimit else fitParamsMin
 				maxBins = RoundInt(entries ** (10/17.))
 				if minBins <= maxBins:
 					delta = funcArgs[deltaPosInfuncArgs]
@@ -230,6 +230,8 @@ def CheckBinningForFit(anaObject, histoKey, drawFunc, funcArgs, deltaPosInfuncAr
 					else:
 						good_binning = True
 					delta = TruncateFloat(delta, truncateResol) if truncateResol != 0 else delta
+					if delta == 0 and truncateResol != 0:
+						return truncateResol
 				else:
 					# only take into account the necessary filled Parameters for the fit
 					delta = funcArgs[deltaPosInfuncArgs]
@@ -243,6 +245,8 @@ def CheckBinningForFit(anaObject, histoKey, drawFunc, funcArgs, deltaPosInfuncAr
 					else:
 						good_binning = True
 					delta = TruncateFloat(delta, truncateResol) if truncateResol != 0 else delta
+				if delta == 0 and truncateResol != 0:
+					return truncateResol
 
 	return funcArgs[deltaPosInfuncArgs]
 

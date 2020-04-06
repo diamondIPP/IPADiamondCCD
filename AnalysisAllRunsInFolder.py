@@ -127,9 +127,9 @@ class AnalysisAllRunsInFolder:
 				self.canvasCharge = ro.TCanvas('c_' + self.graphCharge.GetName(), 'c_' + self.graphCharge.GetName(), 1)
 				self.graphCharge.Draw('AP')
 
-	def DoAll(self):
+	def DoAll(self, updateHistos=False):
 		self.time0 = time.time()
-		if not self.cal_pickle or self.overwrite:
+		if not self.cal_pickle or self.overwrite or updateHistos:
 			self.LoopRuns()
 		self.PlotSignals()
 		if self.are_cal_runs:
@@ -168,19 +168,19 @@ class AnalysisAllRunsInFolder:
 					anaRun.FitLanGaus('PHvcal')
 					anaRun.PlotSignal('PHcharge', cuts=anaRun.cut0.GetTitle(), branch='signalCharge')
 					anaRun.FitLanGaus('PHcharge')
-
 					anaRun.PlotHVCurrents('HVCurrents', '', 5)
+					anaRun.PlotDiaVoltage('DUTVoltage', '', 5)
 				else:
 					anaRun.FitConvolutedGaussians('PH')
 				anaRun.SaveAllCanvas()
 
 				signalRun = np.double(anaRun.histo['PH'].GetMean())
-				signalSigmaRun = np.sqrt(np.abs(np.power(anaRun.histo['PH'].GetRMS(), 2, dtype='f8') - np.power(anaRun.pedestal_sigma, 2, dtype='f8')), dtype='f8')
+				signalSigmaRun = np.sqrt(np.power(anaRun.histo['PH'].GetRMS(), 2, dtype='f8') - np.power(anaRun.pedestal_sigma, 2, dtype='f8'), dtype='f8') if anaRun.histo['PH'].GetRMS() > anaRun.pedestal_sigma else anaRun.histo['PH'].GetRMS()
 				if not anaRun.is_cal_run:
 					signalRunVcal = np.double(anaRun.histo['PHvcal'].GetMean())
-					signalSigmaRunVcal = np.sqrt(np.abs(np.power(anaRun.histo['PHvcal'].GetRMS(), 2, dtype='f8') - np.power(anaRun.pedestal_sigma, 2, dtype='f8')), dtype='f8')
+					signalSigmaRunVcal = np.sqrt(np.power(anaRun.histo['PHvcal'].GetRMS(), 2, dtype='f8') - np.power(anaRun.pedestal_vcal_sigma, 2, dtype='f8'), dtype='f8') if anaRun.histo['PHvcal'].GetRMS() > anaRun.pedestal_vcal_sigma else anaRun.histo['PHvcal'].GetRMS()
 					signalRunCharge = np.double(anaRun.histo['PHcharge'].GetMean())
-					signalSigmaRunCharge = np.sqrt(np.abs(np.power(anaRun.histo['PHcharge'].GetRMS(), 2, dtype='f8') - np.power(anaRun.pedestal_sigma, 2, dtype='f8')), dtype='f8')
+					signalSigmaRunCharge = np.sqrt(np.power(anaRun.histo['PHcharge'].GetRMS(), 2, dtype='f8') - np.power(anaRun.pedestal_charge_sigma, 2, dtype='f8'), dtype='f8')  if anaRun.histo['PHcharge'].GetRMS() > anaRun.pedestal_charge_sigma else anaRun.histo['PHcharge'].GetRMS()
 				if not self.are_cal_runs or '_out_' in run:
 					self.signalOut[anaRun.bias] = signalRun if anaRun.bias < 0 else -signalRun
 					self.signalOutSigma[anaRun.bias] = signalSigmaRun

@@ -24,11 +24,11 @@ from VcalToElectrons import VcalToElectrons
 
 trig_rand_time = 0.2
 wait_time_hv = 7
-BRANCHES1DTOTAL = ['event', 'vetoedEvent', 'badShape', 'badPedestal', 'satEvent', 'voltageHV', 'currentHV', 'timeHV', 'peakPosition', 'pedestal', 'pedestalSigma', 'signalAndPedestal', 'signalAndPedestalSigma', 'signal']
-BRANCHES1DTYPE = {'event': 'uint32', 'vetoedEvent': 'bool', 'badShape': 'int8', 'badPedestal': 'bool', 'satEvent': 'bool', 'voltageHV': 'float32', 'currentHV': 'float32', 'timeHV.AsDouble()': 'float64', 'timeHV.Convert()': 'uint32', 'peakPosition': 'float32', 'pedestal': 'float32', 'pedestalSigma': 'float32', 'signalAndPedestal': 'float32','signalAndPedestalSigma': 'float32', 'signal': 'float32'}
+BRANCHES1DTOTAL = ['event', 'vetoedEvent', 'badShape', 'badPedestal', 'satEvent', 'voltageDia', 'voltageHV', 'currentHV', 'timeHV', 'peakPosition', 'pedestal', 'pedestalSigma', 'signalAndPedestal', 'signalAndPedestalSigma', 'signal']
+BRANCHES1DTYPE = {'event': 'uint32', 'vetoedEvent': 'bool', 'badShape': 'int8', 'badPedestal': 'bool', 'satEvent': 'bool', 'voltageDia': 'float32', 'voltageHV': 'float32', 'currentHV': 'float32', 'timeHV.AsDouble()': 'float64', 'timeHV.Convert()': 'uint32', 'peakPosition': 'float32', 'pedestal': 'float32', 'pedestalSigma': 'float32', 'signalAndPedestal': 'float32','signalAndPedestalSigma': 'float32', 'signal': 'float32'}
 BRANCHESWAVESTOTAL = ['time', 'voltageSignal', 'voltageTrigger', 'voltageVeto']
 BRANCHESWAVESTYPE = {'time': 'float64', 'voltageSignal': 'float64', 'voltageTrigger': 'float64', 'voltageVeto': 'float64'}
-BRANCHES1DLOAD = ['event', 'voltageHV', 'currentHV', 'timeHV.Convert()', 'timeHV.AsDouble()', 'peakPosition']
+BRANCHES1DLOAD = ['event', 'voltageDia', 'voltageHV','currentHV', 'timeHV.Convert()', 'timeHV.AsDouble()', 'peakPosition']
 BRANCHESWAVESLOAD = ['time', 'voltageSignal']
 ANALYSISSCALARBRANCHES = ['pedestal', 'pedestalSigma', 'signalAndPedestal', 'signalAndPedestalSigma', 'signal']
 fit_method = ('Minuit2', 'Migrad', )
@@ -67,9 +67,15 @@ class AnalysisCaenCCD:
 		self.peakTimeCut = 2e-9
 		self.peakTimeCut0 = 2e-9
 		self.currentCut = 10e-9
+		self.voltageDiaMaxOffset = 10  # value in
+		self.voltageDiaMaxSigmas = 3  # value in sigmas
+		self.voltageDiaMean = 0
+		self.voltageDiaSpread = 0
 		self.fit_min = -10000000
 		self.fit_max = -10000000
 		self.pedestal_sigma = 0
+		self.pedestal_vcal_sigma = 0
+		self.pedestal_charge_sigma = 0
 
 		self.analysisTreeExisted = False
 
@@ -120,6 +126,7 @@ class AnalysisCaenCCD:
 		self.profile = {}
 		self.histo = {}
 		self.langaus = {}
+		self.graph = {}
 		self.line = {}
 		self.random = None
 		self.toy_histos = []
@@ -217,6 +224,12 @@ class AnalysisCaenCCD:
 					self.peakTimeCut = parser.getfloat('CUTS', 'peak_position') * 1e-6
 				if parser.has_option('CUTS', 'current_cut'):
 					self.currentCut = parser.getfloat('CUTS', 'current_cut') * 1e-9
+				if parser.has_option('CUTS', 'sat_events'):
+					self.doSatCut = parser.getboolean('CUTS', 'sat_events')
+				if parser.has_option('CUTS', 'dia_voltage_offset'):
+					self.voltageDiaMaxOffset = parser.getfloat('CUTS', 'dia_voltage_offset')
+				if parser.has_option('CUTS', 'dia_voltage_spread'):
+					self.voltageDiaMaxSigmas = parser.getfloat('CUTS', 'dia_voltage_spread')
 			print 'Done'
 
 	def SetFromSettingsFile(self):
@@ -239,6 +252,7 @@ class AnalysisCaenCCD:
 			root_files = [filei for filei in root_files if 'HVCurrents' not in filei]
 			root_files = [filei for filei in root_files if 'peakPosDist' not in filei]
 			root_files = [filei for filei in root_files if 'SelectedWaveforms' not in filei]
+			root_files = [filei for filei in root_files if 'DUTVoltage' not in filei]
 			if len(root_files) == 1:
 				self.in_tree_name = root_files[0].split('/')[-1].split('.root')[0]
 			elif len(root_files) == 0:
@@ -281,7 +295,6 @@ class AnalysisCaenCCD:
 		optiont = 'RECREATE' if self.overw else 'UPDATE'
 		self.OpenAnalysisROOTFile(optiont)
 		if doCuts0: self.CreateCut0()
-
 		if not self.hasBranch['peakPosition'] or not np.array([self.hasBranch[key0] for key0 in self.analysisScalarsBranches]).all():
 			self.suffix = None if self.in_root_tree.GetEntries() <= self.load_entries else self.start_entry
 			while self.loaded_entries < self.in_root_tree.GetEntries():
@@ -331,6 +344,8 @@ class AnalysisCaenCCD:
 		if not self.is_cal_run or self.cal_run_type == 'out':
 			self.PlotPeakPositionDistributions()
 		self.AddPeakPositionCut()
+		self.PlotHVDiaDistribution(cut=self.cut0.GetTitle())
+		self.AddDiamondVoltageCut()
 
 	def OpenAnalysisROOTFile(self, mode='READ'):
 		self.analysisTreeName = self.analysisTreeNameStem + str(self.suffix) if self.suffix >= 0 else self.analysisTreeNameStem
@@ -720,6 +735,12 @@ class AnalysisCaenCCD:
 	def AddPeakPositionCut(self):
 		self.cut0 += ro.TCut('peakTimeCut', 'abs(peakPosition-{pp})<={ppc}'.format(pp=self.peakTime, ppc=self.peakTimeCut))
 
+	def AddDiamondVoltageCut(self):
+		if 'voltageDia' in self.branches1DTotal:
+			if self.voltageDiaMaxSigmas != 0 and self.voltageDiaSpread != 0:
+				self.cut0 += ro.TCut('voltageDiaSpreadCut', 'abs(voltageDia-{vm})<{s}*{vs}'.format(vm=self.voltageDiaMean, s=self.voltageDiaMaxSigmas, vs=self.voltageDiaSpread))
+			self.cut0 += ro.TCut('voltageDiaOffsetCut', 'abs(voltageDia-{b})<{v}'.format(b=self.bias, v=self.voltageDiaMaxOffset))
+
 	def FindPedestalPosition(self):
 		print 'Calculating position of pedestals...', ;sys.stdout.flush()
 		self.pedestalTimeIndices = [np.argwhere(np.bitwise_and(self.pedestalTEndPos - self.pedestalIntegrationTime <= timeVectEvi, timeVectEvi <= self.pedestalTEndPos)).flatten() for timeVectEvi in self.timeVect]
@@ -967,9 +988,9 @@ class AnalysisCaenCCD:
 		params = np.array((const_p[0], mean_p[0], rms_p[0], const_p[1], mean_p[1], rms_p[1]), 'float64')
 		func.SetParameters(params)
 		func.SetParLimits(0, 0, self.histo[name].GetMaximum() * 2)
-		func.SetParLimits(2, 0.001, self.histo[name].GetRMS() * 2)
+		func.SetParLimits(2, 0.01, self.histo[name].GetRMS() * 2)
 		func.SetParLimits(3, 0, self.histo[name].GetMaximum() * 2)
-		func.SetParLimits(5, 0.001, self.histo[name].GetRMS() * 2)
+		func.SetParLimits(5, 0.01, self.histo[name].GetRMS() * 2)
 		if skew >= 0:
 			func.SetParLimits(1, self.histo[name].GetMean() - 4 * self.histo[name].GetRMS(), self.histo[name].GetMean())
 			func.SetParLimits(4, self.histo[name].GetMean(), self.histo[name].GetMean() + 4 * self.histo[name].GetRMS())
@@ -988,6 +1009,23 @@ class AnalysisCaenCCD:
 		self.peakTime = np.divide(xpeak, 1e6, dtype='f8')
 		self.canvas[name].Modified()
 		ro.gPad.Update()
+
+	def PlotHVDiaDistribution(self, name='DUTVoltageHisto', low_v=0, up_v=0, nbins=500, cut=''):
+		resVoltage = 0.025
+		minv = low_v if low_v != 0 and up_v != 0 else self.analysisTree.GetMinimum('voltageDia')
+		maxv = up_v if low_v != 0 and up_v != 0 else self.analysisTree.GetMaximum('voltageDia')
+		deltav = max(float(maxv - minv) / nbins, resVoltage)
+		funcArgs = (name, minv, maxv + resVoltage, resVoltage, 'voltageDia', 'Voltage on Diamond [V]', cut, 'e')
+		self.DrawHisto(*funcArgs)
+		if not name in self.histo.keys():
+			print 'There was a problem creating the histogram' + name
+			return
+		if not self.histo[name] or IsHistogramEmpty(self.histo[name]):
+			print 'There was a problem with the created histogram' + name
+			return
+		deltax = CheckBinningForFit(self, name, self.DrawHisto, funcArgs, 3, 6, resVoltage, True)
+		self.voltageDiaMean = self.histo[name].GetMean()
+		self.voltageDiaSpread = self.histo[name].GetRMS()
 
 	def PlotSignal(self, name='signal', bins=0, cuts='', option='e', minx=-10, maxx=990, branch='signal'):
 		if 'vcal' in branch.lower():
@@ -1039,6 +1077,9 @@ class AnalysisCaenCCD:
 		if not self.histo[name] or IsHistogramEmpty(self.histo[name]):
 			print 'The created histogram {n} is empty'.format(n=name)
 			return
+		if self.histo[name].GetMean() == 0 and self.histo[name].GetRMS() == 0:
+			print 'The created histogram {n} is empty'.format(n=name)
+			return
 		lowbin, highbin = self.histo[name].FindFirstBinAbove(0), self.histo[name].FindLastBinAbove(0)
 		vmin, vmax = self.histo[name].GetBinLowEdge(lowbin), self.histo[name].GetBinLowEdge(highbin + 1)
 		funcArgs = (name, vmin, vmax, deltax, '{f}*{b}'.format(f=1000 if 'charge' not in branch.lower() else 1, b=branch), '{b} {u}'.format(b=branch, u='[e]' if 'charge' in branch.lower() else '[mV]'), cuts, option)
@@ -1057,7 +1098,13 @@ class AnalysisCaenCCD:
 		self.DrawHisto(name, vmin - deltax / 2.0, vmax + deltax / 2.0, deltax, '{f}*{b}'.format(f=1000 if 'charge' not in branch.lower() else 1, b=branch), '{b} {u}'.format(b=branch, u='[e]' if 'charge' in branch.lower() else '[mV]'), cuts, option)
 		fit = self.histo[name].Fit('fit_' + name, 'QEMS', '', params[1] - 2 * params[2], params[1] + 2 * params[2])
 		SetDefaultFitStats(self.histo[name], func)
-		self.pedestal_sigma = func.GetParameter(2) if not self.is_cal_run or self.cal_run_type == 'out' else self.histo[name].GetRMS()
+		# self.pedestal_sigma = func.GetParameter(2) if not self.is_cal_run or self.cal_run_type == 'out' else self.histo[name].GetRMS()
+		if 'charge' in branch.lower():
+			self.pedestal_charge_sigma = self.histo[name].GetRMS()
+		elif 'vcal' in branch.lower():
+			self.pedestal_vcal_sigma = self.histo[name].GetRMS()
+		else:
+			self.pedestal_sigma = self.histo[name].GetRMS()
 
 	def PlotWaveforms(self, name='SignalWaveform', type='signal', vbins=0, cuts='', option='colz', start_ev=0, num_evs=0, do_logz=False):
 		var = '1000*(voltageSignal-pedestal)' if 'signal_ped_cor' in type.lower() else '1000*voltageSignal' if 'signal' in type.lower() else '1000*voltageTrigger' if 'trig' in type.lower() else '1000*voltageVeto' if 'veto' in type.lower() else ''
@@ -1151,6 +1198,7 @@ class AnalysisCaenCCD:
 		                 tf+self.settings.time_res/2.0, (vmax-vmin)/self.settings.sigRes, vmin, vmax])
 
 	def PlotHVCurrents(self, name='HVCurrents', cuts='', deltat=30., options='e hist'):
+		print 'Plotting HV current'
 		if self.in_root_tree.GetLeaf('timeHV').GetTypeName() == 'TDatime':
 			print 'Time format is TDataime. Not implemented yet :P'
 		else:
@@ -1173,11 +1221,70 @@ class AnalysisCaenCCD:
 			self.line[name+'_n'].SetLineStyle(2)
 			self.line[name+'_n'].SetLineColor(ro.kRed)
 			self.line[name+'_n'].Draw('same')
+			self.graph[name] = ro.TGraphErrors(1, np.array([float(xmax + xmin) / 2.], 'f8'), np.array([0], 'f8'), np.array([float(xmax - xmin) / 2.], 'f8'), np.array([self.currentCut], 'f8'))
+			self.graph[name].SetNameTitle('g_'+ name, 'g_'+ name)
+			self.graph[name].SetFillColor(ro.kRed)
+			self.graph[name].SetFillStyle(3003)
+			self.graph[name].Draw('same f 2')
+			self.profile[name].GetXaxis().SetTimeDisplay(1)
+
+	def PlotDiaVoltage(self, name='DUTVoltage', cuts='', deltat=30, options='e hist'):
+		print 'Plotting DUT voltage'
+		if self.in_root_tree.GetLeaf('timeHV').GetTypeName() == 'TDatime':
+			print 'Time format is TDataime. Not implemented yet :P'
+		else:
+			leng = self.analysisTree.Draw('timeHV.AsDouble()', cuts, 'goff')
+			timehv = self.analysisTree.GetVal(0)
+			timehv = np.array([timehv[i] for i in xrange(leng)])
+			xmin, xmax, deltax = np.floor(timehv.min()), np.ceil(timehv.max()), deltat
+			ymin, ymax = self.analysisTree.GetMinimum('voltageDia'), self.analysisTree.GetMaximum('voltageDia')
+			if ymin == ymax:
+				ymin -= 1
+				ymax += 1
+			self.DrawProfile(name, 'timeHV.AsDouble()', xmin, xmax, deltax, 'time', 'voltageDia', ymin, ymax, 'DUT Voltage [V]', cuts, options)
+			self.profile[name].SetStats(0)
+			self.line[name + '1_p'] = ro.TLine(self.profile[name].GetXaxis().GetXmin(), self.bias + self.voltageDiaMaxOffset, self.profile[name].GetXaxis().GetXmax(), self.bias + self.voltageDiaMaxOffset)
+			self.line[name + '1_p'].SetLineStyle(2)
+			self.line[name + '1_p'].SetLineColor(ro.kRed)
+			self.line[name + '1_p'].Draw('same')
+			self.line[name + '1_n'] = ro.TLine(self.profile[name].GetXaxis().GetXmin(), self.bias - self.voltageDiaMaxOffset, self.profile[name].GetXaxis().GetXmax(), self.bias - self.voltageDiaMaxOffset)
+			self.line[name + '1_n'].SetLineStyle(2)
+			self.line[name + '1_n'].SetLineColor(ro.kRed)
+			self.line[name + '1_n'].Draw('same')
+			self.graph[name + '1'] = ro.TGraphErrors(1, np.array([float(xmax + xmin) / 2.], 'f8'), np.array([self.bias], 'f8'), np.array([float(xmax - xmin) / 2.], 'f8'), np.array([self.voltageDiaMaxOffset], 'f8'))
+			self.graph[name + '1'].SetNameTitle('g_'+ name + '1', 'g_'+ name + '1')
+			self.graph[name + '1'].SetFillColor(ro.kRed)
+			self.graph[name + '1'].SetFillStyle(3003)
+			self.graph[name + '1'].Draw('same f 2')
+			self.profile[name].GetYaxis().SetRangeUser(self.bias - self.voltageDiaMaxOffset, self.bias + self.voltageDiaMaxOffset)
+			if self.voltageDiaMaxSigmas != 0:
+				yming = self.bias - self.voltageDiaMaxOffset if self.bias - self.voltageDiaMaxOffset < self.voltageDiaMean - self.voltageDiaMaxSigmas * self.voltageDiaSpread else self.voltageDiaMean - self.voltageDiaMaxSigmas * self.voltageDiaSpread
+				ymaxg = self.bias + self.voltageDiaMaxOffset if self.bias + self.voltageDiaMaxOffset > self.voltageDiaMean + self.voltageDiaMaxSigmas * self.voltageDiaSpread else self.voltageDiaMean + self.voltageDiaMaxSigmas * self.voltageDiaSpread
+				self.profile[name].GetYaxis().SetRangeUser(yming, ymaxg)
+				self.line[name + '2_p'] = ro.TLine(self.profile[name].GetXaxis().GetXmin(), self.voltageDiaMean + self.voltageDiaMaxSigmas * self.voltageDiaSpread, self.profile[name].GetXaxis().GetXmax(), self.voltageDiaMean + self.voltageDiaMaxSigmas * self.voltageDiaSpread)
+				self.line[name + '2_p'].SetLineStyle(2)
+				self.line[name + '2_p'].SetLineColor(ro.kBlue)
+				self.line[name + '2_p'].Draw('same')
+				self.line[name + '2_n'] = ro.TLine(self.profile[name].GetXaxis().GetXmin(), self.voltageDiaMean - self.voltageDiaMaxSigmas * self.voltageDiaSpread, self.profile[name].GetXaxis().GetXmax(), self.voltageDiaMean - self.voltageDiaMaxSigmas * self.voltageDiaSpread)
+				self.line[name + '2_n'].SetLineStyle(2)
+				self.line[name + '2_n'].SetLineColor(ro.kBlue)
+				self.line[name + '2_n'].Draw('same')
+				self.graph[name + '2'] = ro.TGraphErrors(1, np.array([float(xmax + xmin) / 2.], 'f8'), np.array([self.voltageDiaMean], 'f8'), np.array([float(xmax - xmin) / 2.], 'f8'), np.array([self.voltageDiaMaxSigmas * self.voltageDiaSpread], 'f8'))
+				self.graph[name + '2'].SetNameTitle('g_' + name + '2', 'g_' + name + '2')
+				self.graph[name + '2'].SetFillColor(ro.kBlue)
+				self.graph[name + '2'].SetFillStyle(3003)
+				self.graph[name + '2'].Draw('same f 2')
 			self.profile[name].GetXaxis().SetTimeDisplay(1)
 
 	def FitLanGaus(self, name, conv_steps=100, color=ro.kRed, doToyStats=False):
 		if not name in self.canvas.keys() or not name in self.histo.keys():
-			print 'Can\'t do Langaus fit as there is aproblem with the histogram'
+			print 'Can\'t do Langaus fit as there is a problem with the histogram'
+			return
+		if not self.canvas[name] or not self.histo[name]:
+			print 'Can\'t do Langaus fit as there is a problem with the histogram'
+			return
+		if self.histo[name].GetEntries() == 0 or self.histo[name].GetMean()== 0 and self.histo[name].GetRMS() == 0:
+			print 'Can\'t do Langaus fit as there is a problem with the histogram'
 			return
 		self.canvas[name].cd()
 		self.langaus[name] = LanGaus(self.histo[name])
@@ -1228,6 +1335,12 @@ class AnalysisCaenCCD:
 	def FitConvolutedGaussians(self, name, conv_steps=100, color=ro.kRed):
 		if not name in self.canvas.keys() or not name in self.histo.keys():
 			print 'Can\'t do Langaus fit as there is aproblem with the histogram'
+			return
+		if not self.canvas[name] or not self.histo[name]:
+			print 'Can\'t do Langaus fit as there is a problem with the histogram'
+			return
+		if self.histo[name].GetEntries() == 0 or self.histo[name].GetMean()== 0 and self.histo[name].GetRMS() == 0:
+			print 'Can\'t do Langaus fit as there is a problem with the histogram'
 			return
 		self.canvas[name].cd()
 		# self.langaus[name] = LanGaus(self.histo[name])
@@ -1455,6 +1568,7 @@ if __name__ == '__main__':
 	parser.add_option('-a', '--automatic', dest='auto', default=False, help='Toggles automatic basic analysis', action='store_true')
 	parser.add_option('-o', '--overwrite', dest='overwrite', default=False, help='Toggles overwriting of the analysis tree', action='store_true')
 	parser.add_option('--batch', dest='dobatch', default=False, help='Toggles batch mode with no plotting', action='store_true')
+	parser.add_option('--debug', dest='dodebug', default=False, help='Toggles debug mode', action='store_true')
 
 	(options, args) = parser.parse_args()
 	directory = str(options.inDir)
@@ -1466,6 +1580,7 @@ if __name__ == '__main__':
 	autom = bool(options.auto)
 	overw = bool(options.overwrite)
 	doBatch = bool(options.dobatch)
+	doDebug = bool(options.dodebug)
 
 	ana = AnalysisCaenCCD(directory, config, infile, bias, overw, verb)
 
@@ -1477,27 +1592,41 @@ if __name__ == '__main__':
 	# ana.LoadPickles()
 	if autom:
 		ana.AnalysisWaves()
+		if doDebug: ipdb.set_trace()
 		ana.AddVcalFriend()
+		if doDebug: ipdb.set_trace()
 		ana.AddChargeFriend()
+		if doDebug: ipdb.set_trace()
 		ana.PlotPedestal('Pedestal', cuts=ana.cut0.GetTitle(), branch='pedestal')
+		if doDebug: ipdb.set_trace()
 		if not ana.is_cal_run:
 			ana.PlotPedestal('PedestalVcal', cuts=ana.cut0.GetTitle(), branch='pedestalVcal')
+			if doDebug: ipdb.set_trace()
 			ana.PlotPedestal('PedestalCharge', cuts=ana.cut0.GetTitle(), branch='pedestalCharge')
+			if doDebug: ipdb.set_trace()
 		ana.PlotWaveforms('SelectedWaveforms', 'signal', cuts=ana.cut0.GetTitle())
+		if doDebug: ipdb.set_trace()
 		ana.canvas['SelectedWaveforms'].SetLogz()
 		ana.PlotWaveforms('SelectedWaveformsPedCor', 'signal_ped_corrected', cuts=ana.cut0.GetTitle())
+		if doDebug: ipdb.set_trace()
 		ana.canvas['SelectedWaveformsPedCor'].SetLogz()
 		ana.PlotSignal('PH', cuts=ana.cut0.GetTitle())
+		if doDebug: ipdb.set_trace()
 		if not ana.is_cal_run:
 			ana.FitLanGaus('PH')
 			ana.PlotSignal('PHvcal', cuts=ana.cut0.GetTitle(), branch='signalVcal')
+			if doDebug: ipdb.set_trace()
 			ana.FitLanGaus('PHvcal')
 			ana.PlotSignal('PHcharge', cuts=ana.cut0.GetTitle(), branch='signalCharge')
+			if doDebug: ipdb.set_trace()
 			ana.FitLanGaus('PHcharge')
-
 			ana.PlotHVCurrents('HVCurrents', '', 5)
+			if doDebug: ipdb.set_trace()
+			ana.PlotDiaVoltage('DUTVoltage', '', 5)
+			if doDebug: ipdb.set_trace()
 		else:
 			ana.FitConvolutedGaussians('PH')
+		if doDebug: ipdb.set_trace()
 		ana.SaveAllCanvas()
 	# return ana
 	# ana = main()
