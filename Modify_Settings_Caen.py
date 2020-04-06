@@ -88,24 +88,28 @@ class Modify_Pickles_Caen:
 					channelObj.base_line_adcs = RoundInt(np.divide(np.subtract(0, channelObj.adc_to_volts_cal['p0'], dtype='f8'), channelObj.adc_to_volts_cal['p1'], dtype='f8'), 'uint16')
 					print 'Set', channelObj.type, 'p0 to:', channelObj.adc_to_volts_cal['p0'], ', p1 to:', channelObj.adc_to_volts_cal['p1'], ', base_line_adcs to:', channelObj.base_line_adcs, 'and base_line_u_adcs to:', channelObj.base_line_u_adcs
 
-		if not 'voltage_calib_dir' in self.settings.__dict__.keys():
-			print 'The adc voltage calibration directory was not defined for this run. ', ; sys.stdout.flush()
-			if vcaldir != '':
-				self.voltage_cal_dir = vcaldir
-				print 'Using parsed directory:', vcaldir
+		if self.settings:
+			if not 'voltage_calib_dir' in self.settings.__dict__.keys():
+				print 'The adc voltage calibration directory was not defined for this run. ', ; sys.stdout.flush()
+				if vcaldir != '':
+					self.voltage_cal_dir = vcaldir
+					print 'Using parsed directory:', vcaldir
+				else:
+					print 'Please enter it:'
 			else:
-				print 'Please enter it:'
+				self.voltage_cal_dir = self.settings.voltage_calib_dir if vcaldir == '' else vcaldir
+			CheckForDir()
+			Get_voltage_calibration()
+			# ipdb.set_trace()
+			if self.signal_ch:
+				Set_Channel(self.signal_ch)
+			if self.trigger_ch:
+				Set_Channel(self.trigger_ch)
+			if self.veto_ch:
+				Set_Channel(self.veto_ch)
 		else:
-			self.voltage_cal_dir = self.settings.voltage_calib_dir if vcaldir == '' else vcaldir
-		CheckForDir()
-		Get_voltage_calibration()
-		# ipdb.set_trace()
-		if self.signal_ch:
-			Set_Channel(self.signal_ch)
-		if self.trigger_ch:
-			Set_Channel(self.trigger_ch)
-		if self.veto_ch:
-			Set_Channel(self.veto_ch)
+			print 'The settings file pickle is currupt for this run'
+			return
 
 
 def main():
