@@ -19,6 +19,8 @@ from Settings_Caen import Settings_Caen
 from HV_Control import HV_Control
 from Utils import *
 from Langaus import LanGaus
+from Crystalball import Crystalball
+from GausTail import GausTail
 from VcalToElectrons import VcalToElectrons
 # from memory_profiler import profile
 
@@ -32,6 +34,7 @@ BRANCHES1DLOAD = ['event', 'voltageDia', 'voltageHV','currentHV', 'timeHV.Conver
 BRANCHESWAVESLOAD = ['time', 'voltageSignal']
 ANALYSISSCALARBRANCHES = ['pedestal', 'pedestalSigma', 'signalAndPedestal', 'signalAndPedestalSigma', 'signal']
 fit_method = ('Minuit2', 'Migrad', )
+LOAD_IGNORE_NAMES = ['analysis', 'pedestal', 'waveform', 'voltage', 'signal', 'dist', 'currents', 'ph', 'veto', 'trigger', 'peak', 'blag']
 
 class AnalysisCaenCCD:
 	def __init__(self, directory='.', config='CAENAnalysisConfig.cfg', infile='', bias=0.0, overw=False, verbose=False):
@@ -245,14 +248,18 @@ class AnalysisCaenCCD:
 			ExitMessage('The directory {d} does not exist! Exiting...'.format(d=self.inDir), os.EX_DATAERR)
 		if self.in_tree_name == '':
 			root_files = glob.glob('{d}/*.root'.format(d=self.inDir))
-			root_files = [filei for filei in root_files if 'analysis' not in filei]
-			root_files = [filei for filei in root_files if 'Pedestal' not in filei]
-			root_files = [filei for filei in root_files if 'SelectedWaveformsPedCor' not in filei]
-			root_files = [filei for filei in root_files if 'PH' not in filei]
-			root_files = [filei for filei in root_files if 'HVCurrents' not in filei]
-			root_files = [filei for filei in root_files if 'peakPosDist' not in filei]
-			root_files = [filei for filei in root_files if 'SelectedWaveforms' not in filei]
-			root_files = [filei for filei in root_files if 'DUTVoltage' not in filei]
+			for name in LOAD_IGNORE_NAMES:
+				root_files = [filei for filei in root_files if name not in filei.lower()]
+			# root_files = [filei for filei in root_files if 'analysis' not in filei]
+			# root_files = [filei for filei in root_files if 'Pedestal' not in filei]
+			# root_files = [filei for filei in root_files if 'SelectedWaveformsPedCor' not in filei]
+			# root_files = [filei for filei in root_files if 'PH' not in filei]
+			# root_files = [filei for filei in root_files if 'HVCurrents' not in filei]
+			# root_files = [filei for filei in root_files if 'peakPosDist' not in filei]
+			# root_files = [filei for filei in root_files if 'SelectedWaveforms' not in filei]
+			# root_files = [filei for filei in root_files if 'DUTVoltage' not in filei]
+			# root_files = [filei for filei in root_files if 'waveform' not in filei.lower()]
+			# root_files = [filei for filei in root_files if 'signal' not in filei.lower()]
 			if len(root_files) == 1:
 				self.in_tree_name = root_files[0].split('/')[-1].split('.root')[0]
 			elif len(root_files) == 0:
@@ -374,11 +381,15 @@ class AnalysisCaenCCD:
 				else:
 					ExitMessage('Can\'t open the file {f}.root in {m} mode because it does not exist!!! Exiting...'.format(f=self.analysisTreeName, m=mode), os.EX_DATAERR)
 
-	def LoadAnalysisTree(self):
+	def LoadAnalysisTree(self, mode='UPDATE'):
 		self.analysisTreeExisted = True
-		if not self.analysisFile.IsOpen():
-			print 'Analysis file is closed. Opening it in update mode...'
-			self.OpenAnalysisROOTFile('UPDATE')
+		if self.analysisFile:
+			if not self.analysisFile.IsOpen():
+				print 'Analysis file is closed. Opening it in {m} mode...'.format(m=mode.lower())
+				self.OpenAnalysisROOTFile(mode)
+		else:
+			print 'The file has not been opened. Call method OpenAnalysisROOTFile first'
+			return
 		self.analysisFile.cd()
 		self.analysisTree = self.analysisFile.Get(self.analysisTreeName)
 		if not self.analysisTree:
@@ -586,7 +597,7 @@ class AnalysisCaenCCD:
 			par1 = self.peakTime
 			par2 = 1e-6
 			par3 = -1 if self.bias < 0 else 1
-			par4 = 1 if self.bias < 0 else -1
+			par4 = 0.1e-6 if self.bias < 0 else -0.1e-6
 			fit_fcn.SetParameter(0, par0)
 			fit_fcn.SetParLimits(0, 0 if self.bias < 0 else -100, 100 if self.bias < 0 else 0)
 			par1Min, par1Max = par1 - 1.5e-6, par1 + 1.5e-6
@@ -604,7 +615,7 @@ class AnalysisCaenCCD:
 			for it2 in xrange(3):
 				fit_res = ro.TGraph(len(timei), timei, self.signalWaveVect[it]).Fit('fit_{it}'.format(it=it), 'QBN0S', '', xmin, xmax)
 				xpeak = fit_fcn.GetMaximumX(xmin, xmax) if self.bias < 0 else fit_fcn.GetMinimumX(xmin, xmax)
-				xwindow = 600e-9 if it == 2 else 400e-9
+				xwindow = 600e-9 if it2 == 0 else 400e-9
 				if xpeak + xwindow > par1Max:
 					xmin, xmax = par1Max - 2 * xwindow, par1Max
 				elif xpeak - xwindow < par1Min:
@@ -952,6 +963,21 @@ class AnalysisCaenCCD:
 			SetDefault2DStats(self.histo[name])
 		ro.TFormula.SetMaxima(1000)
 
+	def DrawGraphFromTree(self, name, varx, xname, vary, yname, cuts='', option='AP', num_evts=100, start_ev=0):
+		ro.TFormula.SetMaxima(100000)
+		if self.graph.has_key(name):
+			if self.graph[name]:
+				self.graph[name].Delete()
+			del self.graph[name]
+		option = option.replace('goff', '')  # does not work if goff is present. Root has to draw the graph!
+		CreateCanvasInDic(self.canvas, name)
+		self.canvas[name].cd()
+		self.analysisTree.Draw('{y}:{x}'.format(y=vary, x=varx), cuts, option, num_evts, start_ev)
+		self.graph[name] = ro.gPad.GetPrimitive('Graph')
+		self.graph[name].SetTitle(name)
+		self.graph[name].GetXaxis().SetTitle(xname)
+		self.graph[name].GetYaxis().SetTitle(yname)
+
 	def PlotPeakPositionDistributions(self, name='peakPosDist', low_t=1, up_t=4, nbins=200, cut=''):
 		nbins2 = nbins
 		funcArgs = (name, low_t, up_t, float(up_t - low_t) / nbins2, 'peakPosition*1000000', 'Peak Position [us]', cut, 'e')
@@ -1106,10 +1132,10 @@ class AnalysisCaenCCD:
 		else:
 			self.pedestal_sigma = self.histo[name].GetRMS()
 
-	def PlotWaveforms(self, name='SignalWaveform', type='signal', vbins=0, cuts='', option='colz', start_ev=0, num_evs=0, do_logz=False):
-		var = '1000*(voltageSignal-pedestal)' if 'signal_ped_cor' in type.lower() else '1000*voltageSignal' if 'signal' in type.lower() else '1000*voltageTrigger' if 'trig' in type.lower() else '1000*voltageVeto' if 'veto' in type.lower() else ''
+	def PlotWaveforms(self, name='SignalWaveform', sigtype='signal', vbins=0, cuts='', option='colz', start_ev=0, num_evs=0, do_logz=False):
+		var = '1000*(voltageSignal-pedestal)' if 'signal_ped_cor' in sigtype.lower() else '1000*voltageSignal' if 'signal' in sigtype.lower() else '1000*voltageTrigger' if 'trig' in sigtype.lower() else '1000*voltageVeto' if 'veto' in sigtype.lower() else ''
 		if var == '':
-			print 'type should be "signal", "signal_ped_corrected", "trigger" or "veto"'
+			print 'sigtype should be "signal", "signal_ped_corrected", "trigger" or "veto"'
 			return
 		# cuts0 = self.cut0.GetTitle() if cuts == '' else cuts
 		vname = ('signal - ped' if var == '1000*(voltageSignal-pedestal)' else 'signal' if var == '1000*voltageSignal' else 'trigger' if var == '1000*voltageTrigger' else 'veto' if var == '1000*voltageVeto' else '') + ' [mV]'
@@ -1387,8 +1413,9 @@ class AnalysisCaenCCD:
 			ExitMessage('The directory does not exist!!!!', os.EX_UNAVAILABLE)
 		for canv in lista:
 			if self.canvas.has_key(canv):
-				self.canvas[canv].SaveAs('{d}/{c}.png'.format(d=self.inDir, c=canv))
-				self.canvas[canv].SaveAs('{d}/{c}.root'.format(d=self.inDir, c=canv))
+				if self.canvas[canv]:
+					self.canvas[canv].SaveAs('{d}/{c}.png'.format(d=self.inDir, c=canv))
+					self.canvas[canv].SaveAs('{d}/{c}.root'.format(d=self.inDir, c=canv))
 
 	def SaveAllCanvas(self):
 		self.SaveCanvasInlist(self.canvas.keys())

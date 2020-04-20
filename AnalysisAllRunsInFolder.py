@@ -144,7 +144,6 @@ class AnalysisAllRunsInFolder:
 		for run in self.runs:
 			if os.path.isdir(run):
 				configfile = self.config if not self.are_cal_runs or '_out_' in run else self.configInput
-				print '\nAnalysing in batch mode run:', run
 				print 'Using config file:', configfile
 				print 'Overwriting analysis tree if it exists' if self.overwrite else 'Not overwriting analysis tree if it exists'
 				anaRun = AnalysisCaenCCD(run, configfile, overw=self.overwrite)

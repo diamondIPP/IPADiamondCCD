@@ -77,8 +77,9 @@ class Converter_Caen:
 
 		self.trigger_search_window = 0.2e-6
 		self.veto_window_around_trigg = 50e-9
-		self.peak_pos_estimate = 2.131e-6
-		self.peak_pos_window = 0.5e-6
+		self.peak_pos_estimate = 2e-6
+		self.peak_pos_window_low = 1.5e-6
+		self.peak_pos_window_high = 3e-6
 
 		self.array_points = np.arange(self.points, dtype=np.dtype('int32'))
 
@@ -439,24 +440,46 @@ class Converter_Caen:
 
 	def DefineSignalBaseLineAndPeakPosition(self):
 		self.condition_base_line = np.array(self.array_points <= self.trigPos, dtype='?')
-		# values 2.2 and 0.5 us come from shape of signal
-		self.condition_peak_pos = np.array(np.abs(self.array_points - (self.peak_pos_estimate/float(self.time_res) + self.trigPos)) <= self.peak_pos_window/float(self.time_res), dtype='?')
+		# values shaper of the signal indicates it should peak at ~2us. The window is set between 1.5us before and 3us after the peak position designed by the shaper
+		self.condition_peak_pos = np.array(np.abs(self.array_points - ((self.peak_pos_estimate + (self.peak_pos_window_high - self.peak_pos_window_low) / 2.)/float(self.time_res) + self.trigPos)) <= ((self.peak_pos_window_high + self.peak_pos_window_low) / 2.)/float(self.time_res), dtype='?')
+
+	# def IsEventBadShape(self):
+	# 	# mean = np.extract(self.condition_base_line, self.sigADC).mean()
+	# 	sigma = np.extract(self.condition_base_line, self.sigADC).std()
+	# 	lim_inf = self.condition_peak_pos.argmax()
+	# 	lim_sup = self.points - self.condition_peak_pos[::-1].argmax() - 1
+	# 	peak_pos = self.sigADC.argmin() if self.polarity == 1 else self.sigADC.argmax()
+	# 	if lim_inf < peak_pos < lim_sup:
+	# 		# The event has a good shape
+	# 		return 0
+	# 	else:
+	# 		modified_adc = self.sigADC - sigma if self.polarity == 1 else self.sigADC + sigma
+	# 		modified_adc[lim_inf] += 2*sigma if self.polarity == 1 else -2*sigma
+	# 		modified_adc[lim_sup] += 2*sigma if self.polarity == 1 else -2*sigma
+	# 		peak_pos = modified_adc.argmin() if self.polarity == 1 else modified_adc.argmax()
+	# 		if lim_inf < peak_pos < lim_sup:
+	# 			# Can't tell if the event has a bad shape
+	# 			return -1
+	# 		else:
+	# 			# Event has bad shape
+	# 			return 1
 
 	def IsEventBadShape(self):
 		# mean = np.extract(self.condition_base_line, self.sigADC).mean()
 		sigma = np.extract(self.condition_base_line, self.sigADC).std()
 		lim_inf = self.condition_peak_pos.argmax()
 		lim_sup = self.points - self.condition_peak_pos[::-1].argmax() - 1
-		peak_pos = self.sigADC.argmin() if self.polarity == 1 else self.sigADC.argmax()
-		if lim_inf < peak_pos < lim_sup:
+		peak_pos = RoundInt(self.peak_pos_estimate / self.time_res + self.trigPos)
+		sigInf, sigPeak, sigSup = self.sigADC[lim_inf] * (-self.polarity), self.sigADC[peak_pos] * (-self.polarity), self.sigADC[lim_sup] * (-self.polarity)
+		# if lim_inf < peak_pos < lim_sup:
+		if sigPeak > sigInf and sigPeak > sigSup:
 			# The event has a good shape
 			return 0
 		else:
-			modified_adc = self.sigADC - sigma if self.polarity == 1 else self.sigADC + sigma
-			modified_adc[lim_inf] += 2*sigma if self.polarity == 1 else -2*sigma
-			modified_adc[lim_sup] += 2*sigma if self.polarity == 1 else -2*sigma
-			peak_pos = modified_adc.argmin() if self.polarity == 1 else modified_adc.argmax()
-			if lim_inf < peak_pos < lim_sup:
+			sigInf -= 2 * sigma
+			sigSup -= 2 * sigma
+			sigPeak += 2 * sigma
+			if sigPeak > sigInf and sigPeak > sigSup:
 				# Can't tell if the event has a bad shape
 				return -1
 			else:

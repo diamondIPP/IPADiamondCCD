@@ -250,6 +250,14 @@ def CheckBinningForFit(anaObject, histoKey, drawFunc, funcArgs, deltaPosInfuncAr
 
 	return funcArgs[deltaPosInfuncArgs]
 
+def CreateCanvasInDic(canvasDic, name):
+	if canvasDic.has_key(name):
+		if canvasDic[name]:
+			canvasDic.Close()
+		del canvasDic[name]
+	canvasDic[name] = ro.TCanvas('c_' + name, 'c_' + name, 1)
+
+
 if __name__ == '__main__':
 	print 'blaaaa'
 
