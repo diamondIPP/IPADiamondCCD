@@ -111,7 +111,7 @@ class AnalysisAllRunsInFolder:
 				self.fit = None
 			print 'Loaded pickle', cal_files[0]
 			return
-		print 'There is no pickle to load'
+		print 'There is no pickle to load yet'
 
 	def PlotFromPickle(self):
 		if self.cal_pickle:
@@ -142,6 +142,7 @@ class AnalysisAllRunsInFolder:
 	def LoopRuns(self):
 		# ro.gROOT.SetBatch(True)
 		for run in self.runs:
+			print 'Analysing run:', run
 			if os.path.isdir(run):
 				configfile = self.config if not self.are_cal_runs or '_out_' in run else self.configInput
 				print 'Using config file:', configfile

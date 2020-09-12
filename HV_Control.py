@@ -274,7 +274,7 @@ class HV_Control:
 			self.process.stdin.flush()
 			time.sleep(1)
 			self.MoveLogsAndConfig()
-			os.remove(self.out_file_name)
+			# os.remove(self.out_file_name)
 
 	def MoveLogsAndConfig(self):
 		path_dir = '{d}/Runs/{f}/HV_{f}'.format(d=self.settings.outdir, f=self.filename)
@@ -291,6 +291,8 @@ class HV_Control:
 			print 'Moved hv config file to output folder'
 			if self.hv_supply.lower().startswith('iseg'):
 				shutil.move('config/iseg_{f}.cfg'.format(f=self.filename), path_dir)
+			shutil.move(self.out_file_name, path_dir)
+			print 'Moved hv data structure to output folder'
 		del path_dir
 		if os.path.islink('config/keithley.cfg'):
 			os.unlink('config/keithley.cfg')

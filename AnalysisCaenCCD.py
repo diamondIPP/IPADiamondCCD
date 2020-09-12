@@ -249,7 +249,7 @@ class AnalysisCaenCCD:
 		if self.in_tree_name == '':
 			root_files = glob.glob('{d}/*.root'.format(d=self.inDir))
 			for name in LOAD_IGNORE_NAMES:
-				root_files = [filei for filei in root_files if name not in filei.lower()]
+				root_files = [filei for filei in root_files if name not in filei.split('/')[-1].lower()]
 			# root_files = [filei for filei in root_files if 'analysis' not in filei]
 			# root_files = [filei for filei in root_files if 'Pedestal' not in filei]
 			# root_files = [filei for filei in root_files if 'SelectedWaveformsPedCor' not in filei]
@@ -579,8 +579,9 @@ class AnalysisCaenCCD:
 		# par0lim = {'low': 1e-30, 'up': 1e30} if self.bias >= 0 else {'low': -1e30, 'up': -1e-30}
 		# par0ini = 3.14 if self.bias >= 0 else -3.14
 		ro.Math.MinimizerOptions.SetDefaultMinimizer(*fit_method)
-		ro.Math.MinimizerOptions.SetDefaultMaxFunctionCalls(1000000)
-		ro.Math.MinimizerOptions.SetDefaultTolerance(0.01)
+		ro.Math.MinimizerOptions.SetDefaultMaxFunctionCalls(10000)
+		# ro.Math.MinimizerOptions.SetDefaultMaxFunctionCalls(1000000)
+		ro.Math.MinimizerOptions.SetDefaultTolerance(0.1)
 		ro.gErrorIgnoreLevel = ro.kFatal
 		self.peak_positions = []
 		print 'Calculating peak positions...'
@@ -1003,36 +1004,39 @@ class AnalysisCaenCCD:
 		# 		print 'There was a problem creating the histogram {n}'.format(n=name)
 		# 		return
 		self.histo[name].GetXaxis().SetRangeUser(self.histo[name].GetMean() - 5 * self.histo[name].GetRMS(), self.histo[name].GetMean() + 5 * self.histo[name].GetRMS())
-		func = ro.TF1('fit_' + name, 'gaus(0)+gaus(3)', low_t, up_t)
-		func.SetNpx(1000)
-		skew = self.histo[name].GetSkewness()
-		const_p = [self.histo[name].GetMaximum() * i for i in [1.5, 0.5]]
-		mean_p_i = [-0.5, 0.5] if skew >= 0 else [0.5, -0.5]
-		mean_p = [self.histo[name].GetMean() + i * self.histo[name].GetRMS() for i in mean_p_i]
-		rms_p_i = [0.5, 1.5] if skew >= 0 else [1.5, 0.5]
-		rms_p = [self.histo[name].GetRMS() * i for i in rms_p_i]
-		params = np.array((const_p[0], mean_p[0], rms_p[0], const_p[1], mean_p[1], rms_p[1]), 'float64')
-		func.SetParameters(params)
-		func.SetParLimits(0, 0, self.histo[name].GetMaximum() * 2)
-		func.SetParLimits(2, 0.01, self.histo[name].GetRMS() * 2)
-		func.SetParLimits(3, 0, self.histo[name].GetMaximum() * 2)
-		func.SetParLimits(5, 0.01, self.histo[name].GetRMS() * 2)
-		if skew >= 0:
-			func.SetParLimits(1, self.histo[name].GetMean() - 4 * self.histo[name].GetRMS(), self.histo[name].GetMean())
-			func.SetParLimits(4, self.histo[name].GetMean(), self.histo[name].GetMean() + 4 * self.histo[name].GetRMS())
-		else:
-			func.SetParLimits(1, self.histo[name].GetMean(), self.histo[name].GetMean() + 4 * self.histo[name].GetRMS())
-			func.SetParLimits(4, self.histo[name].GetMean() - 4 * self.histo[name].GetRMS(), self.histo[name].GetMean())
+		self.peakTime = self.histo[name].GetBinCenter(self.histo[name].GetMaximumBin())
+		if self.histo[name].Integral() > 9:
+			func = ro.TF1('fit_' + name, 'gaus(0)+gaus(3)', low_t, up_t)
+			func.SetNpx(1000)
+			skew = self.histo[name].GetSkewness()
+			const_p = [self.histo[name].GetMaximum() * i for i in [1.5, 0.5]]
+			mean_p_i = [-0.5, 0.5] if skew >= 0 else [0.5, -0.5]
+			mean_p = [self.histo[name].GetMean() + i * self.histo[name].GetRMS() for i in mean_p_i]
+			rms_p_i = [0.5, 1.5] if skew >= 0 else [1.5, 0.5]
+			rms_p = [self.histo[name].GetRMS() * i for i in rms_p_i]
+			params = np.array((const_p[0], mean_p[0], rms_p[0], const_p[1], mean_p[1], rms_p[1]), 'float64')
+			func.SetParameters(params)
+			func.SetParLimits(0, 0, self.histo[name].GetMaximum() * 2)
+			func.SetParLimits(2, 0.01, self.histo[name].GetRMS() * 2)
+			func.SetParLimits(3, 0, self.histo[name].GetMaximum() * 2)
+			func.SetParLimits(5, 0.01, self.histo[name].GetRMS() * 2)
+			if skew >= 0:
+				func.SetParLimits(1, self.histo[name].GetMean() - 4 * self.histo[name].GetRMS(), self.histo[name].GetMean())
+				func.SetParLimits(4, self.histo[name].GetMean(), self.histo[name].GetMean() + 4 * self.histo[name].GetRMS())
+			else:
+				func.SetParLimits(1, self.histo[name].GetMean(), self.histo[name].GetMean() + 4 * self.histo[name].GetRMS())
+				func.SetParLimits(4, self.histo[name].GetMean() - 4 * self.histo[name].GetRMS(), self.histo[name].GetMean())
 
-		fit = self.histo[name].Fit('fit_' + name, 'QEMSB', '', self.histo[name].GetMean() - 4 * self.histo[name].GetRMS(), self.histo[name].GetMean() + 4 * self.histo[name].GetRMS())
-		params = np.array([fit.Parameter(i) for i in xrange(6)], 'float64')
-		xpeak = func.GetMaximumX(self.histo[name].GetMean() - 4 * self.histo[name].GetRMS(), self.histo[name].GetMean() + 4 * self.histo[name].GetRMS())
-		func.SetParameters(params)
-		fit = self.histo[name].Fit('fit_' + name, 'QEMSB', '', xpeak - 3.5 * self.histo[name].GetRMS(), xpeak + 3.5 * self.histo[name].GetRMS())
-		# fit = self.histo[name].Fit('fit_' + name, 'QEMSB', '', params[1] - 2 * params[2], params[1] + 2 * params[2])
-		SetDefaultFitStats(self.histo[name], func)
-		xpeak = func.GetMaximumX(xpeak - 3 * self.histo[name].GetRMS(), xpeak + 3 * self.histo[name].GetRMS())
-		self.peakTime = np.divide(xpeak, 1e6, dtype='f8')
+			fit = self.histo[name].Fit('fit_' + name, 'QEMSB', '', self.histo[name].GetMean() - 4 * self.histo[name].GetRMS(), self.histo[name].GetMean() + 4 * self.histo[name].GetRMS())
+			params = np.array([fit.Parameter(i) for i in xrange(6)], 'float64')
+			xpeak = func.GetMaximumX(self.histo[name].GetMean() - 4 * self.histo[name].GetRMS(), self.histo[name].GetMean() + 4 * self.histo[name].GetRMS())
+			func.SetParameters(params)
+			fit = self.histo[name].Fit('fit_' + name, 'QEMSB', '', xpeak - 3.5 * self.histo[name].GetRMS(), xpeak + 3.5 * self.histo[name].GetRMS())
+			# fit = self.histo[name].Fit('fit_' + name, 'QEMSB', '', params[1] - 2 * params[2], params[1] + 2 * params[2])
+			SetDefaultFitStats(self.histo[name], func)
+			#TODO check if fit is good enough to update peakTime
+			xpeak = func.GetMaximumX(xpeak - 3 * self.histo[name].GetRMS(), xpeak + 3 * self.histo[name].GetRMS())
+			self.peakTime = np.divide(xpeak, 1e6, dtype='f8')
 		self.canvas[name].Modified()
 		ro.gPad.Update()
 
@@ -1449,6 +1453,8 @@ class AnalysisCaenCCD:
 					tempf.Close()
 					if self.signal_cal_fit_params['p1'] != 0:
 						self.FillVcalFriend()
+			else:
+				ExitMessage('signal cal folder does not exist!')
 
 	def SignalToVcal(self, vsignal, typenp='f4'):
 		if self.signal_cal_fit_params['p1'] != 0:

@@ -46,7 +46,9 @@ class Converter_Caen:
 		self.hv_log_files_path = None
 		self.current_hv_log_path = None
 		if self.control_hv:
-			self.hv_log_files_path = data_path + '{f}/{d}_CH{ch}'.format(f=self.filename, d=self.settings.hv_supply, ch=self.settings.hv_ch) if self.settings.simultaneous_conversion else '{d}/Runs/{f}/HV_{f}/{s}_CH{ch}'.format(d=self.settings.outdir, f=self.filename, s=self.settings.hv_supply, ch=self.settings.hv_ch)
+			self.hv_log_files_path = data_path + '/{f}/{d}_CH{ch}'.format(f=self.filename, d=self.settings.hv_supply, ch=self.settings.hv_ch) if self.settings.simultaneous_conversion else '{d}/Runs/{f}/HV_{f}/{s}_CH{ch}'.format(d=self.settings.outdir, f=self.filename, s=self.settings.hv_supply, ch=self.settings.hv_ch)
+
+			print 'HV log files are in:', self.hv_log_files_path
 
 		self.points = self.settings.points
 		self.num_events = self.settings.num_events
@@ -591,7 +593,7 @@ class Converter_Caen:
 
 if __name__ == '__main__':
 	# first argument is the path to the settings pickle file
-	# sedond argument is the path of the directory that contains the raw data.
+	# second argument is the path of the directory that contains the raw data.
 	# By default, it assumes simultaneous data conversion. If the conversion is done offline (aka. not simultaneous), then the 3rd parameter has to be given and should be '0'
 	if len(sys.argv) < 2:
 		print 'Usage is: Converter_Caen.py <settings_pickle_path> <dir_with_raw_data> 0 for offline conversion)'

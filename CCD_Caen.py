@@ -231,7 +231,7 @@ class CCD_Caen:
 				self.p.stdin.write('P')
 				self.p.stdin.flush()
 			# time.sleep(1)
-			self.p.stdin.write('w')
+			self.p.stdin.write('W')
 			self.p.stdin.flush()
 			# time.sleep(1)
 			for it in xrange(abs(events)):

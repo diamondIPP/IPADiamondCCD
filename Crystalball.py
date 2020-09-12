@@ -32,12 +32,18 @@ class Crystalball:
 		self.peakTime = peakpos
 
 	def ParametersLimits(self):
-		self.paramsLimitsLow[0], self.paramsLimitsHigh[0] = -10, 10
-		self.paramsLimitsLow[1], self.paramsLimitsHigh[1] = 0, 100
-		self.paramsLimitsLow[2], self.paramsLimitsHigh[2] = 1, 100
-		self.paramsLimitsLow[3], self.paramsLimitsHigh[3] = self.fit_range['min'], self.fit_range['max']
-		self.paramsLimitsLow[4], self.paramsLimitsHigh[4] = 0, 10e-6
-		self.paramsLimitsLow[5], self.paramsLimitsHigh[5] = -2, 2
+		self.paramsLimitsLow[0], self.paramsLimitsHigh[0] = -10,1000
+		# self.paramsLimitsLow[0], self.paramsLimitsHigh[0] = -10, 10
+		self.paramsLimitsLow[1], self.paramsLimitsHigh[1] = 0, 5
+		# self.paramsLimitsLow[1], self.paramsLimitsHigh[1] = 0, 100
+		self.paramsLimitsLow[2], self.paramsLimitsHigh[2] = 0, 20
+		# self.paramsLimitsLow[2], self.paramsLimitsHigh[2] = 0, 100
+		self.paramsLimitsLow[3], self.paramsLimitsHigh[3] = 70, 100
+		# self.paramsLimitsLow[3], self.paramsLimitsHigh[3] = self.fit_range['min'], self.fit_range['max']
+		self.paramsLimitsLow[4], self.paramsLimitsHigh[4] = 0, 20
+		# self.paramsLimitsLow[4], self.paramsLimitsHigh[4] = 0, 10e-6
+		self.paramsLimitsLow[5], self.paramsLimitsHigh[5] = -1000, 1000
+		# self.paramsLimitsLow[5], self.paramsLimitsHigh[5] = -2, 2
 
 	def CrystalballFunc(self, x, params):
 		if x[0] - params[3] < params[4] * params[1]:
