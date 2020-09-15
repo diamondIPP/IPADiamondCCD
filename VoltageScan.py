@@ -60,6 +60,7 @@ class VoltageScan:
 			time.sleep(self.time_sleep)
 			print 'Done'
 			written_events = self.p[volt].GetData()
+			if self.p[volt].stop_run: print 'Run stopped because current is too high'
 			self.settings.num_events = written_events
 			self.p[volt].SavePickles()
 			self.p[volt].settings.MoveBinaryFiles()

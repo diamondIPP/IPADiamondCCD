@@ -33,6 +33,9 @@ class HV_Control:
 		self.ramp = settings.hv_ramp
 		self.supply_number = 0
 		self.time_update = 2.0
+		self.r_passive = self.settings.r_passive if 'r_passive' in self.settings.__dict__.keys() else 230e6
+		self.abort_percentage_drop = 0.1
+		self.stop_run = False
 		self.out_file = None
 		self.hv_struct = self.settings.hv_struct_fmt
 		self.hv_struct_len = self.settings.hv_struct_len
@@ -218,6 +221,7 @@ class HV_Control:
 		return {'time_s': timesec + 1e-9 * timens, 'voltage': 0, 'current': 0}
 
 	def ReadLastLine(self, nEvent=0):
+		self.stop_run = False
 		self.GetLastLogFilePath()
 		if self.log_file:
 			current_log = open('{f}'.format(d=self.logs_dir, f=self.log_file), 'r')
@@ -236,7 +240,10 @@ class HV_Control:
 			if len(temp_line) >= 3:
 				if IsFloat(temp_line[1]) and IsFloat(temp_line[2]):
 					self.last_line['voltage'] = float(temp_line[1])
-					self.last_line['current'] = float(temp_line[2])
+					self.last_line['current'] = float(temp_line[2]) if abs(self.last_line['current']) < 100e-6 else 0
+					if self.last_line['voltage'] != 0:
+						if abs(self.last_line['current'] * self.r_passive) > abs(self.abort_percentage_drop * self.last_line['voltage']):
+							self.stop_run = True
 		return
 
 	def CorrectBias(self, delta_volts):
@@ -255,6 +262,7 @@ class HV_Control:
 			self.ReadLastLine(nEvent)
 			self.time0 = time.time()
 			self.WriteHVFile()
+		return self.stop_run
 
 	def WriteHVFile(self):
 		temp_array = [self.last_line['event'], self.last_line['seconds'], self.last_line['nanoseconds'], self.last_line['voltage'], self.last_line['current']]

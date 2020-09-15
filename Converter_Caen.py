@@ -394,7 +394,7 @@ class Converter_Caen:
 		# self.tempTime.Set(1970, 1, 1, 0, 0, timesec, timens, True, 0)
 		# self.tempTime.GetDate(False, 0, self.tempYear, self.tempMonth, self.tempDay)
 		# self.tempTime.GetTime(False, 0, self.tempHour, self.tempMinute, self.tempSecond)
-		tempdic = {'voltage': 0, 'current': 0}
+		tempdic = {'voltage': self.hv_data['voltage'], 'current': self.hv_data['current']}
 		if len(lines) > 0:
 			if len(lines) == 1:
 				pos = 0
@@ -404,8 +404,8 @@ class Converter_Caen:
 				# pos = abs(lines2 - self.tempTime.AsDouble()).argmin()
 				# pos = np.argmin(lines2)
 				pos = lines2.index(min(lines2))
-			tempdic['voltage'] = float(lines[pos][1])
-			tempdic['current'] = float(lines[pos][2])
+			tempdic['voltage'] = float(lines[pos][1]) if float(lines[pos][1]) != 0 else tempdic['voltage']
+			tempdic['current'] = float(lines[pos][2]) if abs(float(lines[pos][2])) < 100e-6 else tempdic['current']
 		return tempdic
 
 	def CheckData(self):
