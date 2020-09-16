@@ -221,7 +221,6 @@ class HV_Control:
 		return {'time_s': timesec + 1e-9 * timens, 'voltage': 0, 'current': 0}
 
 	def ReadLastLine(self, nEvent=0):
-		self.stop_run = False
 		self.GetLastLogFilePath()
 		if self.log_file:
 			current_log = open('{f}'.format(d=self.logs_dir, f=self.log_file), 'r')
@@ -258,6 +257,7 @@ class HV_Control:
 		time.sleep(wait_time)
 
 	def UpdateHVFile(self, nEvent=0):
+		self.stop_run = False
 		if time.time() - self.time0 >= self.time_update:
 			self.ReadLastLine(nEvent)
 			self.time0 = time.time()
