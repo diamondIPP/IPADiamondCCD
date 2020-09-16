@@ -246,7 +246,7 @@ class CCD_Caen:
 			self.p.stdin.flush()
 			while self.p.poll() is None:
 				continue
-			if self.settings.do_hv_control: temp_ignore = self.hv_control.UpdateHVFile()
+			if self.settings.do_hv_control: self.stop_run = self.stop_run or self.hv_control.UpdateHVFile()
 			self.ConcatenateBinaries()
 			self.CloseSubprocess('wave_dump', stdin=stdin, stdout=stdout)
 			self.settings.RemoveBinaries()
@@ -295,7 +295,6 @@ class CCD_Caen:
 						self.stop_run = self.stop_run or self.hv_control.UpdateHVFile(int(min(self.written_events_sig + self.sig_written, self.settings.num_events)))
 					if not self.settings.simultaneous_conversion:
 						self.settings.bar.update(int(min(self.written_events_sig + self.sig_written, self.settings.num_events)))
-					time.sleep(1)
 			del self.t1
 			self.t1 = None
 			self.CloseSubprocess('wave_dump', stdin=stdin, stdout=stdout)
@@ -475,7 +474,7 @@ class CCD_Caen:
 						ntries = ntries - 1
 			else:
 				doBreak = True
-				print 'run was stopped. Wavedump will not start'
+				print 'run was stopped. Wavedump will not start (again)'
 
 		self.CloseFiles()
 		if not self.settings.simultaneous_conversion:
@@ -487,7 +486,7 @@ class CCD_Caen:
 			while self.pconv.poll() is None:
 				time.sleep(2)
 				if self.stop_run and time.time() - temp_t > wait_time_if_stopped:
-					print 'killing converter'
+					print 'killing converter because run was stopped'
 					self.pconv.kill()
 			self.CloseSubprocess('converter', stdin=False, stdout=False)
 		return self.total_events

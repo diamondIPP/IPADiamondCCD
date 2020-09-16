@@ -94,6 +94,8 @@ class Converter_Caen:
 		# self.hourBra = self.minuteBra = self.secondBra = None
 		self.hourMinSecBra = None
 		# self.timeStampBra = None
+		self.time_struct_fmt = '@II'
+		self.time_struct_len = struct.calcsize(self.time_struct_fmt)
 		try:
 			self.time_struct_fmt = self.settings.time_struct_fmt
 			self.time_struct_len = self.settings.time_struct_len
@@ -104,6 +106,7 @@ class Converter_Caen:
 		self.t0 = time.time()
 
 		self.signal_written_events = self.trigger_written_events = self.anti_co_written_events = None
+		self.timestamp_written_events = None
 		self.fs = self.ft = self.fa = None
 		self.ftime = None
 		self.wait_for_data = None
@@ -217,6 +220,7 @@ class Converter_Caen:
 		self.signal_written_events = int(round(os.path.getsize(self.signal_path) / self.struct_len)) if os.path.isfile(self.signal_path) else 0
 		self.trigger_written_events = int(round(os.path.getsize(self.trigger_path) / self.struct_len)) if os.path.isfile(self.trigger_path) else 0
 		self.anti_co_written_events = int(round(os.path.getsize(self.veto_path) / self.struct_len)) if self.doVeto and os.path.isfile(self.veto_path) else 0
+		self.timestamp_written_events = int(round(os.path.getsize(self.time_path) / self.time_struct_len)) if os.path.isfile(self.time_path) else 0
 
 	def OpenRawBinaries(self):
 		self.fs = open(self.signal_path, 'rb')
@@ -275,6 +279,7 @@ class Converter_Caen:
 		self.wait_for_data = (self.signal_written_events <= ev) or (self.trigger_written_events <= ev)
 		if self.doVeto:
 			self.wait_for_data = self.wait_for_data or (self.anti_co_written_events <= ev)
+		self.wait_for_data = self.wait_for_data or (self.timestamp_written_events <= ev)
 
 	def WaitForData(self, ev):
 		t1 = time.time()
@@ -290,6 +295,8 @@ class Converter_Caen:
 				if self.doVeto:
 					if not self.fa.closed:
 						self.fa.close()
+				if not self.ftime.closed:
+					self.ftime.close()
 				self.GetBinariesNumberWrittenEvents()
 				self.CheckFilesSizes(ev)
 				if not self.wait_for_data:

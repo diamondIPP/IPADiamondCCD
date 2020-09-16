@@ -242,6 +242,7 @@ class HV_Control:
 					self.last_line['current'] = float(temp_line[2]) if abs(self.last_line['current']) < 100e-6 else 0
 					if self.last_line['voltage'] != 0:
 						if abs(self.last_line['current'] * self.r_passive) > abs(self.abort_percentage_drop * self.last_line['voltage']):
+							print 'due to high current, the voltage in the diamond is below 90% of the intended value. Sending termination signal to the run'
 							self.stop_run = True
 		return
 
