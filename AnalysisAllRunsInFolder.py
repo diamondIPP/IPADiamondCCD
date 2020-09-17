@@ -160,9 +160,11 @@ class AnalysisAllRunsInFolder:
 					anaRun.PlotPedestal('PedestalVcal', cuts=anaRun.cut0.GetTitle(), branch='pedestalVcal')
 					anaRun.PlotPedestal('PedestalCharge', cuts=anaRun.cut0.GetTitle(), branch='pedestalCharge')
 				anaRun.PlotWaveforms('SelectedWaveforms', 'signal', cuts=anaRun.cut0.GetTitle())
-				anaRun.canvas['SelectedWaveforms'].SetLogz()
+				if 'SelectedWaveforms' in anaRun.canvas.keys():
+					anaRun.canvas['SelectedWaveforms'].SetLogz()
 				anaRun.PlotWaveforms('SelectedWaveformsPedCor', 'signal_ped_corrected', cuts=anaRun.cut0.GetTitle())
-				anaRun.canvas['SelectedWaveformsPedCor'].SetLogz()
+				if 'SelectedWaveformsPedCor' in anaRun.canvas.keys():
+					anaRun.canvas['SelectedWaveformsPedCor'].SetLogz()
 				anaRun.PlotSignal('PH', cuts=anaRun.cut0.GetTitle())
 				if not anaRun.is_cal_run:
 					anaRun.FitLanGaus('PH')
@@ -176,15 +178,24 @@ class AnalysisAllRunsInFolder:
 					anaRun.FitConvolutedGaussians('PH')
 				anaRun.SaveAllCanvas()
 
-				signalRun = np.double(anaRun.histo['PH'].GetMean())
-				signalSigmaRun = np.sqrt(np.power(anaRun.histo['PH'].GetRMS(), 2, dtype='f8') - np.power(anaRun.pedestal_sigma, 2, dtype='f8'), dtype='f8') if anaRun.histo['PH'].GetRMS() > anaRun.pedestal_sigma else anaRun.histo['PH'].GetRMS()
+				signalRun = 0
+				signalSigmaRun = 0
+				if 'PH' in anaRun.histo.keys():
+					signalRun = np.double(anaRun.histo['PH'].GetMean())
+					signalSigmaRun = np.sqrt(np.power(anaRun.histo['PH'].GetRMS(), 2, dtype='f8') - np.power(anaRun.pedestal_sigma, 2, dtype='f8'), dtype='f8') if anaRun.histo['PH'].GetRMS() > anaRun.pedestal_sigma else anaRun.histo['PH'].GetRMS()
 				self.diaVoltages[anaRun.bias] = anaRun.voltageDiaMean
 				self.diaVoltagesSigma[anaRun.bias] = anaRun.voltageDiaSpread
 				if not anaRun.is_cal_run:
-					signalRunVcal = np.double(anaRun.histo['PHvcal'].GetMean())
-					signalSigmaRunVcal = np.sqrt(np.power(anaRun.histo['PHvcal'].GetRMS(), 2, dtype='f8') - np.power(anaRun.pedestal_vcal_sigma, 2, dtype='f8'), dtype='f8') if anaRun.histo['PHvcal'].GetRMS() > anaRun.pedestal_vcal_sigma else anaRun.histo['PHvcal'].GetRMS()
-					signalRunCharge = np.double(anaRun.histo['PHcharge'].GetMean())
-					signalSigmaRunCharge = np.sqrt(np.power(anaRun.histo['PHcharge'].GetRMS(), 2, dtype='f8') - np.power(anaRun.pedestal_charge_sigma, 2, dtype='f8'), dtype='f8')  if anaRun.histo['PHcharge'].GetRMS() > anaRun.pedestal_charge_sigma else anaRun.histo['PHcharge'].GetRMS()
+					signalRunVcal = 0
+					signalSigmaRunVcal = 0
+					signalRunCharge = 0
+					signalSigmaRunCharge = 0
+					if 'PHvcal' in anaRun.histo.keys():
+						signalRunVcal = np.double(anaRun.histo['PHvcal'].GetMean())
+						signalSigmaRunVcal = np.sqrt(np.power(anaRun.histo['PHvcal'].GetRMS(), 2, dtype='f8') - np.power(anaRun.pedestal_vcal_sigma, 2, dtype='f8'), dtype='f8') if anaRun.histo['PHvcal'].GetRMS() > anaRun.pedestal_vcal_sigma else anaRun.histo['PHvcal'].GetRMS()
+					if 'PHcharge' in anaRun.histo.keys():
+						signalRunCharge = np.double(anaRun.histo['PHcharge'].GetMean())
+						signalSigmaRunCharge = np.sqrt(np.power(anaRun.histo['PHcharge'].GetRMS(), 2, dtype='f8') - np.power(anaRun.pedestal_charge_sigma, 2, dtype='f8'), dtype='f8')  if anaRun.histo['PHcharge'].GetRMS() > anaRun.pedestal_charge_sigma else anaRun.histo['PHcharge'].GetRMS()
 				if not self.are_cal_runs or '_out_' in run:
 					self.signalOut[anaRun.bias] = signalRun if anaRun.bias < 0 else -signalRun
 					self.signalOutSigma[anaRun.bias] = signalSigmaRun

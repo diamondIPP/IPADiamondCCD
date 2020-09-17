@@ -400,8 +400,9 @@ class AnalysisCaenCCD:
 		self.UpdateBranchesLists()
 
 	def TreeHasBranch(self, branch):
-		if self.in_root_tree.GetBranch(branch) or self.analysisTree.GetBranch(branch):
-			return True
+		if self.in_root_tree:
+			if self.in_root_tree.GetBranch(branch) or self.analysisTree.GetBranch(branch):
+				return True
 		return False
 
 	def IsTimeHVaTimeStamp(self):
@@ -1055,7 +1056,7 @@ class AnalysisCaenCCD:
 		self.voltageDiaSpread = self.histo[name].GetRMS()
 
 	def PlotSignal(self, name='signal', bins=0, cuts='', option='e', minx=-10, maxx=990, branch='signal'):
-		if not self.hasBranch[branch]:
+		if not self.hasBranch['signal']:
 			return
 		if 'vcal' in branch.lower():
 			if self.bias >= 0:
@@ -1096,7 +1097,7 @@ class AnalysisCaenCCD:
 		self.delta_v_signal = CheckBinningForFit(self, name, self.DrawHisto, funcArgs, 3, 7, truncateResol)
 
 	def PlotPedestal(self, name='pedestal', bins=0, cuts='', option='e', minx=0, maxx=0, branch='pedestal'):
-		if not self.hasBranch[branch]:
+		if not self.hasBranch['pedestal']:
 			return
 		vmin = minx if minx != 0 else GetMinimumBranch(self.analysisTree, branch, cuts) * 1000 if 'charge' not in branch.lower() else GetMinimumBranch(self.analysisTree, branch, cuts)
 		vmax = maxx if maxx != 0 else GetMaximumBranch(self.analysisTree, branch, cuts) * 1000 if 'charge' not in branch.lower() else GetMaximumBranch(self.analysisTree, branch, cuts)
@@ -1231,6 +1232,8 @@ class AnalysisCaenCCD:
 		                 tf+self.settings.time_res/2.0, (vmax-vmin)/self.settings.sigRes, vmin, vmax])
 
 	def PlotHVCurrents(self, name='HVCurrents', cuts='', deltat=30., options='e hist'):
+		if not self.in_root_tree:
+			return
 		print 'Plotting HV current'
 		if self.in_root_tree.GetLeaf('timeHV').GetTypeName() == 'TDatime':
 			print 'Time format is TDataime. Not implemented yet :P'
@@ -1262,6 +1265,8 @@ class AnalysisCaenCCD:
 			self.profile[name].GetXaxis().SetTimeDisplay(1)
 
 	def PlotDiaVoltage(self, name='DUTVoltage', cuts='', deltat=30, options='e hist'):
+		if not self.in_root_tree:
+			return
 		print 'Plotting DUT voltage'
 		if self.in_root_tree.GetLeaf('timeHV').GetTypeName() == 'TDatime':
 			print 'Time format is TDataime. Not implemented yet :P'
@@ -1432,8 +1437,9 @@ class AnalysisCaenCCD:
 			if os.path.isfile('{d}/{f}.vcal.root'.format(d=self.outDir, f=self.analysisTreeName)):
 				self.analysisTree.AddFriend('vcalTree', '{d}/{f}.vcal.root'.format(d=self.outDir, f=self.analysisTreeName))
 			else:
-				self.CreateVcalFriend()
-				self.AddVcalFriend()
+				if self.hasBranch['signal']:
+					self.CreateVcalFriend()
+					self.AddVcalFriend()
 
 	def CreateVcalFriend(self):
 		if self.hasBranch['signal']:
@@ -1502,8 +1508,9 @@ class AnalysisCaenCCD:
 			if os.path.isfile('{d}/{f}.charge.root'.format(d=self.outDir, f=self.analysisTreeName)):
 				self.analysisTree.AddFriend('chargeTree', '{d}/{f}.charge.root'.format(d=self.outDir, f=self.analysisTreeName))
 			else:
-				self.CreateChargeFriend()
-				self.AddChargeFriend()
+				if self.hasBranch['signal']:
+					self.CreateChargeFriend()
+					self.AddChargeFriend()
 
 	def CreateChargeFriend(self):
 		if self.hasBranch['signal']:
@@ -1645,10 +1652,12 @@ if __name__ == '__main__':
 				if doDebug: ipdb.set_trace()
 			ana.PlotWaveforms('SelectedWaveforms', 'signal', cuts=ana.cut0.GetTitle())
 			if doDebug: ipdb.set_trace()
-			ana.canvas['SelectedWaveforms'].SetLogz()
+			if 'SelectedWaveforms' in ana.canvas.keys():
+				ana.canvas['SelectedWaveforms'].SetLogz()
 			ana.PlotWaveforms('SelectedWaveformsPedCor', 'signal_ped_corrected', cuts=ana.cut0.GetTitle())
 			if doDebug: ipdb.set_trace()
-			ana.canvas['SelectedWaveformsPedCor'].SetLogz()
+			if 'SelectedWaveformsPedCor' in ana.canvas.keys():
+				ana.canvas['SelectedWaveformsPedCor'].SetLogz()
 			ana.PlotSignal('PH', cuts=ana.cut0.GetTitle())
 			if doDebug: ipdb.set_trace()
 			if not ana.is_cal_run:
