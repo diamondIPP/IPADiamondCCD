@@ -21,7 +21,7 @@ class AnalysisAllRunsInFolder:
 		self.config = Correct_Path(config)
 		self.configInput = Correct_Path(configinput) if configinput != '' else ''
 		self.overwrite = overwrite
-		self.are_cal_runs = False if self.configInput == '' else True
+		self.are_cal_runs = False if self.configInput == '' else True # this is only true for signal calibration runs
 		runstemp = glob.glob('{d}/*'.format(d=self.runsdir))
 		if len(runstemp) < 1:
 			ExitMessage('The directory does not have any runs', os.EX_USAGE)
@@ -34,6 +34,8 @@ class AnalysisAllRunsInFolder:
 		self.num_runs = len(self.runs)
 		if self.num_runs < 1: ExitMessage('There is not even the required data to convert one run', os.EX_DATAERR)
 		self.voltages = []
+		self.diaVoltages = {}
+		self.diaVoltagesSigma = {}
 		self.signalOut = {}
 		self.signalOutSigma = {}
 		self.signalOutVcal = {}
@@ -111,7 +113,7 @@ class AnalysisAllRunsInFolder:
 				self.fit = None
 			print 'Loaded pickle', cal_files[0]
 			return
-		print 'There is no pickle to load yet'
+		print 'There is no pickle to load yet (or it is not a calibration run)'
 
 	def PlotFromPickle(self):
 		if self.cal_pickle:
@@ -176,6 +178,8 @@ class AnalysisAllRunsInFolder:
 
 				signalRun = np.double(anaRun.histo['PH'].GetMean())
 				signalSigmaRun = np.sqrt(np.power(anaRun.histo['PH'].GetRMS(), 2, dtype='f8') - np.power(anaRun.pedestal_sigma, 2, dtype='f8'), dtype='f8') if anaRun.histo['PH'].GetRMS() > anaRun.pedestal_sigma else anaRun.histo['PH'].GetRMS()
+				self.diaVoltages[anaRun.bias] = anaRun.voltageDiaMean
+				self.diaVoltagesSigma[anaRun.bias] = anaRun.voltageDiaSpread
 				if not anaRun.is_cal_run:
 					signalRunVcal = np.double(anaRun.histo['PHvcal'].GetMean())
 					signalSigmaRunVcal = np.sqrt(np.power(anaRun.histo['PHvcal'].GetRMS(), 2, dtype='f8') - np.power(anaRun.pedestal_vcal_sigma, 2, dtype='f8'), dtype='f8') if anaRun.histo['PHvcal'].GetRMS() > anaRun.pedestal_vcal_sigma else anaRun.histo['PHvcal'].GetRMS()
@@ -219,17 +223,19 @@ class AnalysisAllRunsInFolder:
 				signalOutVcalErrs = np.array([self.signalOutVcalSigma[volt] for volt in self.voltages], dtype='f8')
 				signalOCharge = np.array([self.signalOutCharge[volt] for volt in self.voltages], dtype='f8')
 				signalOutChargeErrs = np.array([self.signalOutChargeSigma[volt] for volt in self.voltages], dtype='f8')
-				self.graph = ro.TGraphErrors(len(self.voltages), np.array(self.voltages, 'f8'), signalO, np.zeros(len(self.voltages), 'f8'), signalOutErrs)
+				diaVoltages = np.array([self.diaVoltages[volt] for volt in self.voltages], dtype='f8')
+				diaVoltagesSigma = np.array([self.diaVoltagesSigma[volt] for volt in self.voltages], dtype='f8')
+				self.graph = ro.TGraphErrors(len(self.voltages), diaVoltages, signalO, diaVoltagesSigma, signalOutErrs)
 				self.graph.SetNameTitle('Signal_vs_HV', 'Signal_vs_HV')
 				self.graph.GetXaxis().SetTitle('HV [V]')
 				self.graph.GetYaxis().SetTitle('signal [mV]')
 
-				self.graphVcal = ro.TGraphErrors(len(self.voltages), np.array(self.voltages, 'f8'), signalOVcal, np.zeros(len(self.voltages), 'f8'), signalOutVcalErrs)
+				self.graphVcal = ro.TGraphErrors(len(self.voltages), diaVoltages, signalOVcal, diaVoltagesSigma, signalOutVcalErrs)
 				self.graphVcal.SetNameTitle('SignalVcal_vs_HV', 'SignalVcal_vs_HV')
 				self.graphVcal.GetXaxis().SetTitle('HV [V]')
 				self.graphVcal.GetYaxis().SetTitle('signalVcal [mV]')
 
-				self.graphCharge = ro.TGraphErrors(len(self.voltages), np.array(self.voltages, 'f8'), signalOCharge, np.zeros(len(self.voltages), 'f8'), signalOutChargeErrs)
+				self.graphCharge = ro.TGraphErrors(len(self.voltages), diaVoltages, signalOCharge, diaVoltagesSigma, signalOutChargeErrs)
 				self.graphCharge.SetNameTitle('SignalCharge_vs_HV', 'SignalCharge_vs_HV')
 				self.graphCharge.GetXaxis().SetTitle('HV [V]')
 				self.graphCharge.GetYaxis().SetTitle('signalCharge [e]')

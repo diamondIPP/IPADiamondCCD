@@ -72,7 +72,7 @@ class AnalysisCaenCCD:
 		self.currentCut = 10e-9
 		self.voltageDiaMaxOffset = 10  # value in
 		self.voltageDiaMaxSigmas = 3  # value in sigmas
-		self.voltageDiaMean = 0
+		self.voltageDiaMean = self.bias
 		self.voltageDiaSpread = 0
 		self.fit_min = -10000000
 		self.fit_max = -10000000
@@ -250,16 +250,6 @@ class AnalysisCaenCCD:
 			root_files = glob.glob('{d}/*.root'.format(d=self.inDir))
 			for name in LOAD_IGNORE_NAMES:
 				root_files = [filei for filei in root_files if name not in filei.split('/')[-1].lower()]
-			# root_files = [filei for filei in root_files if 'analysis' not in filei]
-			# root_files = [filei for filei in root_files if 'Pedestal' not in filei]
-			# root_files = [filei for filei in root_files if 'SelectedWaveformsPedCor' not in filei]
-			# root_files = [filei for filei in root_files if 'PH' not in filei]
-			# root_files = [filei for filei in root_files if 'HVCurrents' not in filei]
-			# root_files = [filei for filei in root_files if 'peakPosDist' not in filei]
-			# root_files = [filei for filei in root_files if 'SelectedWaveforms' not in filei]
-			# root_files = [filei for filei in root_files if 'DUTVoltage' not in filei]
-			# root_files = [filei for filei in root_files if 'waveform' not in filei.lower()]
-			# root_files = [filei for filei in root_files if 'signal' not in filei.lower()]
 			if len(root_files) == 1:
 				self.in_tree_name = root_files[0].split('/')[-1].split('.root')[0]
 			elif len(root_files) == 0:
@@ -275,7 +265,11 @@ class AnalysisCaenCCD:
 					ExitMessage('The given file: {f} is not part of the given list. Exiting...'.format(f=file_to_open), os.EX_DATAERR)
 		if os.path.isfile('{d}/{f}.root'.format(d=self.inDir, f=self.in_tree_name)):
 			self.in_root_file = ro.TFile('{d}/{f}.root'.format(d=self.inDir, f=self.in_tree_name))
-			self.in_root_tree = self.in_root_file.Get(self.in_tree_name)
+			if self.in_root_file.GetListOfKeys().GetSize() == 0:
+				print 'The file {d}/{f}.root is empty. Run won\'t be analysed.'.format(d=self.inDir, f=self.in_tree_name)
+			else:
+				self.in_root_tree = self.in_root_file.Get(self.in_tree_name)
+				print 'Loaded raw tree'
 		else:
 			ExitMessage('The file {f} is not inside {d}. Exiting...'.format(d=self.inDir, f=self.in_tree_name), os.EX_DATAERR)
 
@@ -303,56 +297,59 @@ class AnalysisCaenCCD:
 		self.OpenAnalysisROOTFile(optiont)
 		if doCuts0: self.CreateCut0()
 		if not self.hasBranch['peakPosition'] or not np.array([self.hasBranch[key0] for key0 in self.analysisScalarsBranches]).all():
-			self.suffix = None if self.in_root_tree.GetEntries() <= self.load_entries else self.start_entry
-			while self.loaded_entries < self.in_root_tree.GetEntries():
-				self.CloseAnalysisROOTFile()
-				self.OpenAnalysisROOTFile('RECREATE')
-				self.LoadVectorsFromTree()
-				self.ExplicitVectorsFromDictionary()
-				if self.doPeakPos:
-					self.FindRealPeakPosition()
-				else:
-					self.peak_positions = np.full(self.events, self.peakTime)
-				self.FindPedestalPosition()
-				self.FindSignalPositions(self.peakBackward, self.peakForward)
-				self.CalculatePedestalsAndSignals()
-				self.FillAnalysisBranches()
-				self.CloseAnalysisROOTFile()
-				self.CloseInputROOTFiles()
-				self.Reset_Braches_Lists_And_Dictionaries()
-				self.LoadInputTree()
-				self.OpenAnalysisROOTFile('READ')
+			if self.in_root_tree:
+				self.suffix = None if self.in_root_tree.GetEntries() <= self.load_entries else self.start_entry
+				while self.loaded_entries < self.in_root_tree.GetEntries():
+					self.CloseAnalysisROOTFile()
+					self.OpenAnalysisROOTFile('RECREATE')
+					self.LoadVectorsFromTree()
+					self.ExplicitVectorsFromDictionary()
+					if self.doPeakPos:
+						self.FindRealPeakPosition()
+					else:
+						self.peak_positions = np.full(self.events, self.peakTime)
+					self.FindPedestalPosition()
+					self.FindSignalPositions(self.peakBackward, self.peakForward)
+					self.CalculatePedestalsAndSignals()
+					self.FillAnalysisBranches()
+					self.CloseAnalysisROOTFile()
+					self.CloseInputROOTFiles()
+					self.Reset_Braches_Lists_And_Dictionaries()
+					self.LoadInputTree()
+					self.OpenAnalysisROOTFile('READ')
+					if self.suffix >= 0:
+						self.suffix += 1
 				if self.suffix >= 0:
-					self.suffix += 1
-			if self.suffix >= 0:
-				self.CloseAnalysisROOTFile()
-				if self.suffix >=0:
-					print 'Merging files...'
-					if os.path.isfile('{d}/{f}.root'.format(d=self.outDir, f=self.analysisTreeNameStem)):
-						os.remove('{d}/{f}.root'.format(d=self.outDir, f=self.analysisTreeNameStem))
-					mergep = subp.Popen(['hadd', '-k', '-O', '-n', '0', '{d}/{f}.root'.format(d=self.outDir, f=self.analysisTreeNameStem)] + ['{d}/{f}{s}.root'.format(d=self.outDir, f=self.analysisTreeNameStem, s=si) for si in xrange(self.suffix)],  bufsize=-1, stdin=subp.PIPE, stdout=subp.PIPE, close_fds=True)
-					while mergep.poll() is None:
-						time.sleep(2)
-					pid = mergep.pid
-					mergep.stdin.close()
-					mergep.stdout.close()
-					if mergep.wait() is None:
-						mergep.kill()
-					try:
-						os.kill(pid, 15)
-					except OSError:
-						pass
-					del mergep
-					print 'Finished merging files'
-					for si in xrange(self.suffix):
-						os.remove('{d}/{f}{s}.root'.format(d=self.outDir, f=self.analysisTreeNameStem, s=si))
-				self.suffix = None
-				self.OpenAnalysisROOTFile('READ')
+					self.CloseAnalysisROOTFile()
+					if self.suffix >=0:
+						print 'Merging files...'
+						if os.path.isfile('{d}/{f}.root'.format(d=self.outDir, f=self.analysisTreeNameStem)):
+							os.remove('{d}/{f}.root'.format(d=self.outDir, f=self.analysisTreeNameStem))
+						mergep = subp.Popen(['hadd', '-k', '-O', '-n', '0', '{d}/{f}.root'.format(d=self.outDir, f=self.analysisTreeNameStem)] + ['{d}/{f}{s}.root'.format(d=self.outDir, f=self.analysisTreeNameStem, s=si) for si in xrange(self.suffix)],  bufsize=-1, stdin=subp.PIPE, stdout=subp.PIPE, close_fds=True)
+						while mergep.poll() is None:
+							time.sleep(2)
+						pid = mergep.pid
+						mergep.stdin.close()
+						mergep.stdout.close()
+						if mergep.wait() is None:
+							mergep.kill()
+						try:
+							os.kill(pid, 15)
+						except OSError:
+							pass
+						del mergep
+						print 'Finished merging files'
+						for si in xrange(self.suffix):
+							os.remove('{d}/{f}{s}.root'.format(d=self.outDir, f=self.analysisTreeNameStem, s=si))
+					self.suffix = None
+					self.OpenAnalysisROOTFile('READ')
 		if not self.is_cal_run or self.cal_run_type == 'out':
-			self.PlotPeakPositionDistributions()
+			if self.hasBranch['peakPosition']:
+				self.PlotPeakPositionDistributions()
 		self.AddPeakPositionCut()
-		self.PlotHVDiaDistribution(cut=self.cut0.GetTitle())
-		self.AddDiamondVoltageCut()
+		if self.hasBranch['voltageDia']:
+			self.PlotHVDiaDistribution(cut=self.cut0.GetTitle())
+			self.AddDiamondVoltageCut()
 
 	def OpenAnalysisROOTFile(self, mode='READ'):
 		self.analysisTreeName = self.analysisTreeNameStem + str(self.suffix) if self.suffix >= 0 else self.analysisTreeNameStem
@@ -1058,6 +1055,8 @@ class AnalysisCaenCCD:
 		self.voltageDiaSpread = self.histo[name].GetRMS()
 
 	def PlotSignal(self, name='signal', bins=0, cuts='', option='e', minx=-10, maxx=990, branch='signal'):
+		if not self.hasBranch[branch]:
+			return
 		if 'vcal' in branch.lower():
 			if self.bias >= 0:
 				plotvar = '1000*' + branch if not self.is_cal_run or self.cal_run_type == 'out' else '-1000*' + branch
@@ -1097,6 +1096,8 @@ class AnalysisCaenCCD:
 		self.delta_v_signal = CheckBinningForFit(self, name, self.DrawHisto, funcArgs, 3, 7, truncateResol)
 
 	def PlotPedestal(self, name='pedestal', bins=0, cuts='', option='e', minx=0, maxx=0, branch='pedestal'):
+		if not self.hasBranch[branch]:
+			return
 		vmin = minx if minx != 0 else GetMinimumBranch(self.analysisTree, branch, cuts) * 1000 if 'charge' not in branch.lower() else GetMinimumBranch(self.analysisTree, branch, cuts)
 		vmax = maxx if maxx != 0 else GetMaximumBranch(self.analysisTree, branch, cuts) * 1000 if 'charge' not in branch.lower() else GetMaximumBranch(self.analysisTree, branch, cuts)
 		deltax = (vmax - vmin) / 100.0 if bins == 0 else (vmax - vmin) / float(bins)
@@ -1137,6 +1138,8 @@ class AnalysisCaenCCD:
 			self.pedestal_sigma = self.histo[name].GetRMS()
 
 	def PlotWaveforms(self, name='SignalWaveform', sigtype='signal', vbins=0, cuts='', option='colz', start_ev=0, num_evs=0, do_logz=False):
+		if ('signal' in sigtype.lower() and not self.hasBranch['voltageSignal']) or ('trig' in sigtype.lower() and not self.hasBranch['voltageTrigger']) or ('veto' in sigtype.lower() and not self.hasBranch['voltageVeto']):
+			return
 		var = '1000*(voltageSignal-pedestal)' if 'signal_ped_cor' in sigtype.lower() else '1000*voltageSignal' if 'signal' in sigtype.lower() else '1000*voltageTrigger' if 'trig' in sigtype.lower() else '1000*voltageVeto' if 'veto' in sigtype.lower() else ''
 		if var == '':
 			print 'sigtype should be "signal", "signal_ped_corrected", "trigger" or "veto"'
@@ -1433,28 +1436,29 @@ class AnalysisCaenCCD:
 				self.AddVcalFriend()
 
 	def CreateVcalFriend(self):
-		if self.signal_cal_folder != '':
-			if os.path.isdir(self.signal_cal_folder):
-				root_files = glob.glob('{d}/Signal_vs_CalStep_ch*.root'.format(d=self.signal_cal_folder))
-				if len(root_files) > 0:
-					tempf = ro.TFile(root_files[0], 'READ')
-					cal_name = tempf.GetName().strip('.root').split('/')[-1]
-					if tempf.FindKey('c_' + cal_name):
-						tempc = tempf.Get('c_' + cal_name)
-						if tempc.FindObject('fit_' + cal_name):
-							tempfit = tempc.GetPrimitive('fit_' + cal_name)
-							self.signal_cal_fit_params['p0'] = tempfit.GetParameter(0) / 1000.  # fit in mV
-							self.signal_cal_fit_params['p1'] = tempfit.GetParameter(1)
-							self.signal_cal_fit_params['p0_error'] = tempfit.GetParError(0) / 1000.  # fit in mV
-							self.signal_cal_fit_params['p1_error'] = tempfit.GetParError(1)
-							self.signal_cal_fit_params['prob'] = tempfit.GetProb()
-							self.signal_cal_fit_params['chi2'] = tempfit.GetChisquare()
-							self.signal_cal_fit_params['ndf'] = tempfit.GetNDF()
-					tempf.Close()
-					if self.signal_cal_fit_params['p1'] != 0:
-						self.FillVcalFriend()
-			else:
-				ExitMessage('signal cal folder does not exist!')
+		if self.hasBranch['signal']:
+			if self.signal_cal_folder != '':
+				if os.path.isdir(self.signal_cal_folder):
+					root_files = glob.glob('{d}/Signal_vs_CalStep_ch*.root'.format(d=self.signal_cal_folder))
+					if len(root_files) > 0:
+						tempf = ro.TFile(root_files[0], 'READ')
+						cal_name = tempf.GetName().strip('.root').split('/')[-1]
+						if tempf.FindKey('c_' + cal_name):
+							tempc = tempf.Get('c_' + cal_name)
+							if tempc.FindObject('fit_' + cal_name):
+								tempfit = tempc.GetPrimitive('fit_' + cal_name)
+								self.signal_cal_fit_params['p0'] = tempfit.GetParameter(0) / 1000.  # fit in mV
+								self.signal_cal_fit_params['p1'] = tempfit.GetParameter(1)
+								self.signal_cal_fit_params['p0_error'] = tempfit.GetParError(0) / 1000.  # fit in mV
+								self.signal_cal_fit_params['p1_error'] = tempfit.GetParError(1)
+								self.signal_cal_fit_params['prob'] = tempfit.GetProb()
+								self.signal_cal_fit_params['chi2'] = tempfit.GetChisquare()
+								self.signal_cal_fit_params['ndf'] = tempfit.GetNDF()
+						tempf.Close()
+						if self.signal_cal_fit_params['p1'] != 0:
+							self.FillVcalFriend()
+				else:
+					ExitMessage('signal cal folder does not exist!')
 
 	def SignalToVcal(self, vsignal, typenp='f4'):
 		if self.signal_cal_fit_params['p1'] != 0:
@@ -1502,10 +1506,11 @@ class AnalysisCaenCCD:
 				self.AddChargeFriend()
 
 	def CreateChargeFriend(self):
-		if self.cal_circuit_settings != '':
-			if os.path.isfile(self.cal_circuit_settings):
-				self.vcal_to_q = VcalToElectrons(self.cal_circuit_settings)
-		self.FillChargeFriend()
+		if self.hasBranch['signal']:
+			if self.cal_circuit_settings != '':
+				if os.path.isfile(self.cal_circuit_settings):
+					self.vcal_to_q = VcalToElectrons(self.cal_circuit_settings)
+			self.FillChargeFriend()
 
 	def FillChargeFriend(self):
 		self.LoadSignalScalars()
@@ -1624,42 +1629,43 @@ if __name__ == '__main__':
 	# ana.LoadAnalysisTree()
 	# ana.LoadPickles()
 	if autom:
-		ana.AnalysisWaves()
-		if doDebug: ipdb.set_trace()
-		ana.AddVcalFriend()
-		if doDebug: ipdb.set_trace()
-		ana.AddChargeFriend()
-		if doDebug: ipdb.set_trace()
-		ana.PlotPedestal('Pedestal', cuts=ana.cut0.GetTitle(), branch='pedestal')
-		if doDebug: ipdb.set_trace()
-		if not ana.is_cal_run:
-			ana.PlotPedestal('PedestalVcal', cuts=ana.cut0.GetTitle(), branch='pedestalVcal')
+		if ana.in_root_tree:
+			ana.AnalysisWaves()
 			if doDebug: ipdb.set_trace()
-			ana.PlotPedestal('PedestalCharge', cuts=ana.cut0.GetTitle(), branch='pedestalCharge')
+			ana.AddVcalFriend()
 			if doDebug: ipdb.set_trace()
-		ana.PlotWaveforms('SelectedWaveforms', 'signal', cuts=ana.cut0.GetTitle())
-		if doDebug: ipdb.set_trace()
-		ana.canvas['SelectedWaveforms'].SetLogz()
-		ana.PlotWaveforms('SelectedWaveformsPedCor', 'signal_ped_corrected', cuts=ana.cut0.GetTitle())
-		if doDebug: ipdb.set_trace()
-		ana.canvas['SelectedWaveformsPedCor'].SetLogz()
-		ana.PlotSignal('PH', cuts=ana.cut0.GetTitle())
-		if doDebug: ipdb.set_trace()
-		if not ana.is_cal_run:
-			ana.FitLanGaus('PH')
-			ana.PlotSignal('PHvcal', cuts=ana.cut0.GetTitle(), branch='signalVcal')
+			ana.AddChargeFriend()
 			if doDebug: ipdb.set_trace()
-			ana.FitLanGaus('PHvcal')
-			ana.PlotSignal('PHcharge', cuts=ana.cut0.GetTitle(), branch='signalCharge')
+			ana.PlotPedestal('Pedestal', cuts=ana.cut0.GetTitle(), branch='pedestal')
 			if doDebug: ipdb.set_trace()
-			ana.FitLanGaus('PHcharge')
-			ana.PlotHVCurrents('HVCurrents', '', 5)
+			if not ana.is_cal_run:
+				ana.PlotPedestal('PedestalVcal', cuts=ana.cut0.GetTitle(), branch='pedestalVcal')
+				if doDebug: ipdb.set_trace()
+				ana.PlotPedestal('PedestalCharge', cuts=ana.cut0.GetTitle(), branch='pedestalCharge')
+				if doDebug: ipdb.set_trace()
+			ana.PlotWaveforms('SelectedWaveforms', 'signal', cuts=ana.cut0.GetTitle())
 			if doDebug: ipdb.set_trace()
-			ana.PlotDiaVoltage('DUTVoltage', '', 5)
+			ana.canvas['SelectedWaveforms'].SetLogz()
+			ana.PlotWaveforms('SelectedWaveformsPedCor', 'signal_ped_corrected', cuts=ana.cut0.GetTitle())
 			if doDebug: ipdb.set_trace()
-		else:
-			ana.FitConvolutedGaussians('PH')
-		if doDebug: ipdb.set_trace()
-		ana.SaveAllCanvas()
+			ana.canvas['SelectedWaveformsPedCor'].SetLogz()
+			ana.PlotSignal('PH', cuts=ana.cut0.GetTitle())
+			if doDebug: ipdb.set_trace()
+			if not ana.is_cal_run:
+				ana.FitLanGaus('PH')
+				ana.PlotSignal('PHvcal', cuts=ana.cut0.GetTitle(), branch='signalVcal')
+				if doDebug: ipdb.set_trace()
+				ana.FitLanGaus('PHvcal')
+				ana.PlotSignal('PHcharge', cuts=ana.cut0.GetTitle(), branch='signalCharge')
+				if doDebug: ipdb.set_trace()
+				ana.FitLanGaus('PHcharge')
+				ana.PlotHVCurrents('HVCurrents', '', 5)
+				if doDebug: ipdb.set_trace()
+				ana.PlotDiaVoltage('DUTVoltage', '', 5)
+				if doDebug: ipdb.set_trace()
+			else:
+				ana.FitConvolutedGaussians('PH')
+			if doDebug: ipdb.set_trace()
+			ana.SaveAllCanvas()
 	# return ana
 	# ana = main()

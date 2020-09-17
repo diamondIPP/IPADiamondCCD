@@ -177,6 +177,8 @@ class Converter_Caen:
 		if self.simultaneous_conversion:
 			print 'Start creating root file simultaneously with data taking'
 		else:
+			print 'Checking if there is enough data'
+			self.CheckSettingsAndBinaries()
 			print 'Start creating root file'
 		self.raw_file = ro.TFile('{wd}/{r}.root'.format(wd=self.output_dir, r=self.filename), 'RECREATE')
 		self.raw_tree = ro.TTree(self.filename, self.filename)
@@ -597,6 +599,14 @@ class Converter_Caen:
 		# result = channel.ADC_to_Volts(adcs)
 		result = ChannelAdcToVolts(adcs, channel)
 		return result
+
+	def CheckSettingsAndBinaries(self):
+		self.GetBinariesNumberWrittenEvents()
+		if not self.simultaneous_conversion and (self.num_events > 10 and (self.signal_written_events < 10 or self.trigger_written_events < 10) or self.signal_written_events + self.trigger_written_events == 0):
+			if os.path.isfile('{wd}/{r}.root'.format(wd=self.output_dir, r=self.filename)):
+				os.remove('{wd}/{r}.root'.format(wd=self.output_dir, r=self.filename))
+			ExitMessage('It was a flawed run. There are not enough events for analyisis. Exiting', os.EX_NOINPUT)
+			exit()
 
 if __name__ == '__main__':
 	# first argument is the path to the settings pickle file
