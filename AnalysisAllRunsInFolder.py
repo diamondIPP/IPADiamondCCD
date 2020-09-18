@@ -146,68 +146,70 @@ class AnalysisAllRunsInFolder:
 		for run in self.runs:
 			print 'Analysing run:', run
 			if os.path.isdir(run):
-				configfile = self.config if not self.are_cal_runs or '_out_' in run else self.configInput
-				print 'Using config file:', configfile
-				print 'Overwriting analysis tree if it exists' if self.overwrite else 'Not overwriting analysis tree if it exists'
-				anaRun = AnalysisCaenCCD(run, configfile, overw=self.overwrite)
-				anaRun.AnalysisWaves()
-				anaRun.AddVcalFriend()
-				anaRun.AddChargeFriend()
-				self.voltages.append(anaRun.bias)
-				self.caen_ch = anaRun.ch_caen_signal if self.caen_ch != anaRun.ch_caen_signal else self.caen_ch
-				anaRun.PlotPedestal('Pedestal', cuts=anaRun.cut0.GetTitle(), branch='pedestal')
-				if not anaRun.is_cal_run:
-					anaRun.PlotPedestal('PedestalVcal', cuts=anaRun.cut0.GetTitle(), branch='pedestalVcal')
-					anaRun.PlotPedestal('PedestalCharge', cuts=anaRun.cut0.GetTitle(), branch='pedestalCharge')
-				anaRun.PlotWaveforms('SelectedWaveforms', 'signal', cuts=anaRun.cut0.GetTitle())
-				if 'SelectedWaveforms' in anaRun.canvas.keys():
-					anaRun.canvas['SelectedWaveforms'].SetLogz()
-				anaRun.PlotWaveforms('SelectedWaveformsPedCor', 'signal_ped_corrected', cuts=anaRun.cut0.GetTitle())
-				if 'SelectedWaveformsPedCor' in anaRun.canvas.keys():
-					anaRun.canvas['SelectedWaveformsPedCor'].SetLogz()
-				anaRun.PlotSignal('PH', cuts=anaRun.cut0.GetTitle())
-				if not anaRun.is_cal_run:
-					anaRun.FitLanGaus('PH')
-					anaRun.PlotSignal('PHvcal', cuts=anaRun.cut0.GetTitle(), branch='signalVcal')
-					anaRun.FitLanGaus('PHvcal')
-					anaRun.PlotSignal('PHcharge', cuts=anaRun.cut0.GetTitle(), branch='signalCharge')
-					anaRun.FitLanGaus('PHcharge')
-					anaRun.PlotHVCurrents('HVCurrents', '', 5)
-					anaRun.PlotDiaVoltage('DUTVoltage', '', 5)
-				else:
-					anaRun.FitConvolutedGaussians('PH')
-				anaRun.SaveAllCanvas()
+				root_files = glob.glob('{d}/*.root'.format(d=run))
+				if len(root_files) > 0:
+					configfile = self.config if not self.are_cal_runs or '_out_' in run else self.configInput
+					print 'Using config file:', configfile
+					print 'Overwriting analysis tree if it exists' if self.overwrite else 'Not overwriting analysis tree if it exists'
+					anaRun = AnalysisCaenCCD(run, configfile, overw=self.overwrite)
+					anaRun.AnalysisWaves()
+					anaRun.AddVcalFriend()
+					anaRun.AddChargeFriend()
+					self.voltages.append(anaRun.bias)
+					self.caen_ch = anaRun.ch_caen_signal if self.caen_ch != anaRun.ch_caen_signal else self.caen_ch
+					anaRun.PlotPedestal('Pedestal', cuts=anaRun.cut0.GetTitle(), branch='pedestal')
+					if not anaRun.is_cal_run:
+						anaRun.PlotPedestal('PedestalVcal', cuts=anaRun.cut0.GetTitle(), branch='pedestalVcal')
+						anaRun.PlotPedestal('PedestalCharge', cuts=anaRun.cut0.GetTitle(), branch='pedestalCharge')
+					anaRun.PlotWaveforms('SelectedWaveforms', 'signal', cuts=anaRun.cut0.GetTitle())
+					if 'SelectedWaveforms' in anaRun.canvas.keys():
+						anaRun.canvas['SelectedWaveforms'].SetLogz()
+					anaRun.PlotWaveforms('SelectedWaveformsPedCor', 'signal_ped_corrected', cuts=anaRun.cut0.GetTitle())
+					if 'SelectedWaveformsPedCor' in anaRun.canvas.keys():
+						anaRun.canvas['SelectedWaveformsPedCor'].SetLogz()
+					anaRun.PlotSignal('PH', cuts=anaRun.cut0.GetTitle())
+					if not anaRun.is_cal_run:
+						anaRun.FitLanGaus('PH')
+						anaRun.PlotSignal('PHvcal', cuts=anaRun.cut0.GetTitle(), branch='signalVcal')
+						anaRun.FitLanGaus('PHvcal')
+						anaRun.PlotSignal('PHcharge', cuts=anaRun.cut0.GetTitle(), branch='signalCharge')
+						anaRun.FitLanGaus('PHcharge')
+						anaRun.PlotHVCurrents('HVCurrents', '', 5)
+						anaRun.PlotDiaVoltage('DUTVoltage', '', 5)
+					else:
+						anaRun.FitConvolutedGaussians('PH')
+					anaRun.SaveAllCanvas()
 
-				signalRun = 0
-				signalSigmaRun = 0
-				if 'PH' in anaRun.histo.keys():
-					signalRun = np.double(anaRun.histo['PH'].GetMean())
-					signalSigmaRun = np.sqrt(np.power(anaRun.histo['PH'].GetRMS(), 2, dtype='f8') - np.power(anaRun.pedestal_sigma, 2, dtype='f8'), dtype='f8') if anaRun.histo['PH'].GetRMS() > anaRun.pedestal_sigma else anaRun.histo['PH'].GetRMS()
-				self.diaVoltages[anaRun.bias] = anaRun.voltageDiaMean
-				self.diaVoltagesSigma[anaRun.bias] = anaRun.voltageDiaSpread
-				if not anaRun.is_cal_run:
-					signalRunVcal = 0
-					signalSigmaRunVcal = 0
-					signalRunCharge = 0
-					signalSigmaRunCharge = 0
-					if 'PHvcal' in anaRun.histo.keys():
-						signalRunVcal = np.double(anaRun.histo['PHvcal'].GetMean())
-						signalSigmaRunVcal = np.sqrt(np.power(anaRun.histo['PHvcal'].GetRMS(), 2, dtype='f8') - np.power(anaRun.pedestal_vcal_sigma, 2, dtype='f8'), dtype='f8') if anaRun.histo['PHvcal'].GetRMS() > anaRun.pedestal_vcal_sigma else anaRun.histo['PHvcal'].GetRMS()
-					if 'PHcharge' in anaRun.histo.keys():
-						signalRunCharge = np.double(anaRun.histo['PHcharge'].GetMean())
-						signalSigmaRunCharge = np.sqrt(np.power(anaRun.histo['PHcharge'].GetRMS(), 2, dtype='f8') - np.power(anaRun.pedestal_charge_sigma, 2, dtype='f8'), dtype='f8')  if anaRun.histo['PHcharge'].GetRMS() > anaRun.pedestal_charge_sigma else anaRun.histo['PHcharge'].GetRMS()
-				if not self.are_cal_runs or '_out_' in run:
-					self.signalOut[anaRun.bias] = signalRun if anaRun.bias < 0 else -signalRun
-					self.signalOutSigma[anaRun.bias] = signalSigmaRun
-					if not self.are_cal_runs:
-						self.signalOutVcal[anaRun.bias] = -signalRunVcal if anaRun.bias < 0 else signalRunVcal
-						self.signalOutVcalSigma[anaRun.bias] = signalSigmaRunVcal
-						self.signalOutCharge[anaRun.bias] = -signalRunCharge if anaRun.bias < 0 else signalRunCharge
-						self.signalOutChargeSigma[anaRun.bias] = signalSigmaRunCharge
-				else:
-					self.signalIn[anaRun.bias] = -signalRun if anaRun.bias < 0 else signalRun
-					self.signalInSigma[anaRun.bias] = signalSigmaRun
-				del anaRun
+					signalRun = 0
+					signalSigmaRun = 0
+					if 'PH' in anaRun.histo.keys():
+						signalRun = np.double(anaRun.histo['PH'].GetMean())
+						signalSigmaRun = np.sqrt(np.power(anaRun.histo['PH'].GetRMS(), 2, dtype='f8') - np.power(anaRun.pedestal_sigma, 2, dtype='f8'), dtype='f8') if anaRun.histo['PH'].GetRMS() > anaRun.pedestal_sigma else anaRun.histo['PH'].GetRMS()
+					self.diaVoltages[anaRun.bias] = anaRun.voltageDiaMean
+					self.diaVoltagesSigma[anaRun.bias] = anaRun.voltageDiaSpread
+					if not anaRun.is_cal_run:
+						signalRunVcal = 0
+						signalSigmaRunVcal = 0
+						signalRunCharge = 0
+						signalSigmaRunCharge = 0
+						if 'PHvcal' in anaRun.histo.keys():
+							signalRunVcal = np.double(anaRun.histo['PHvcal'].GetMean())
+							signalSigmaRunVcal = np.sqrt(np.power(anaRun.histo['PHvcal'].GetRMS(), 2, dtype='f8') - np.power(anaRun.pedestal_vcal_sigma, 2, dtype='f8'), dtype='f8') if anaRun.histo['PHvcal'].GetRMS() > anaRun.pedestal_vcal_sigma else anaRun.histo['PHvcal'].GetRMS()
+						if 'PHcharge' in anaRun.histo.keys():
+							signalRunCharge = np.double(anaRun.histo['PHcharge'].GetMean())
+							signalSigmaRunCharge = np.sqrt(np.power(anaRun.histo['PHcharge'].GetRMS(), 2, dtype='f8') - np.power(anaRun.pedestal_charge_sigma, 2, dtype='f8'), dtype='f8')  if anaRun.histo['PHcharge'].GetRMS() > anaRun.pedestal_charge_sigma else anaRun.histo['PHcharge'].GetRMS()
+					if not self.are_cal_runs or '_out_' in run:
+						self.signalOut[anaRun.bias] = signalRun if anaRun.bias < 0 else -signalRun
+						self.signalOutSigma[anaRun.bias] = signalSigmaRun
+						if not self.are_cal_runs:
+							self.signalOutVcal[anaRun.bias] = -signalRunVcal if anaRun.bias < 0 else signalRunVcal
+							self.signalOutVcalSigma[anaRun.bias] = signalSigmaRunVcal
+							self.signalOutCharge[anaRun.bias] = -signalRunCharge if anaRun.bias < 0 else signalRunCharge
+							self.signalOutChargeSigma[anaRun.bias] = signalSigmaRunCharge
+					else:
+						self.signalIn[anaRun.bias] = -signalRun if anaRun.bias < 0 else signalRun
+						self.signalInSigma[anaRun.bias] = signalSigmaRun
+					del anaRun
 		self.voltages = sorted(set(self.voltages))
 		# ro.gROOT.SetBatch(False)
 
