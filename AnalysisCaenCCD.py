@@ -1001,7 +1001,7 @@ class AnalysisCaenCCD:
 		# 	else:
 		# 		print 'There was a problem creating the histogram {n}'.format(n=name)
 		# 		return
-		self.histo[name].GetXaxis().SetRangeUser(self.histo[name].GetMean() - 5 * self.histo[name].GetRMS(), self.histo[name].GetMean() + 5 * self.histo[name].GetRMS())
+		self.histo[name].GetXaxis().SetRangeUser(max(low_t, self.histo[name].GetMean() - 5 * self.histo[name].GetRMS()), min(up_t, self.histo[name].GetMean() + 5 * self.histo[name].GetRMS()))
 		self.peakTime = self.histo[name].GetBinCenter(self.histo[name].GetMaximumBin())
 		if self.histo[name].Integral() > 9:
 			func = ro.TF1('fit_' + name, 'gaus(0)+gaus(3)', low_t, up_t)
@@ -1025,9 +1025,9 @@ class AnalysisCaenCCD:
 				func.SetParLimits(1, self.histo[name].GetMean(), self.histo[name].GetMean() + 4 * self.histo[name].GetRMS())
 				func.SetParLimits(4, self.histo[name].GetMean() - 4 * self.histo[name].GetRMS(), self.histo[name].GetMean())
 
-			fit = self.histo[name].Fit('fit_' + name, 'QEMSB', '', self.histo[name].GetMean() - 4 * self.histo[name].GetRMS(), self.histo[name].GetMean() + 4 * self.histo[name].GetRMS())
+			fit = self.histo[name].Fit('fit_' + name, 'QEMSB', '', max(low_t, self.histo[name].GetMean() - 4 * self.histo[name].GetRMS()), min(up_t, self.histo[name].GetMean() + 4 * self.histo[name].GetRMS()))
 			params = np.array([fit.Parameter(i) for i in xrange(6)], 'float64')
-			xpeak = func.GetMaximumX(self.histo[name].GetMean() - 4 * self.histo[name].GetRMS(), self.histo[name].GetMean() + 4 * self.histo[name].GetRMS())
+			xpeak = func.GetMaximumX(max(low_t, self.histo[name].GetMean() - 4 * self.histo[name].GetRMS()), min(up_t, self.histo[name].GetMean() + 4 * self.histo[name].GetRMS()))
 			func.SetParameters(params)
 			fit = self.histo[name].Fit('fit_' + name, 'QEMSB', '', xpeak - 3.5 * self.histo[name].GetRMS(), xpeak + 3.5 * self.histo[name].GetRMS())
 			# fit = self.histo[name].Fit('fit_' + name, 'QEMSB', '', params[1] - 2 * params[2], params[1] + 2 * params[2])
@@ -1094,7 +1094,8 @@ class AnalysisCaenCCD:
 		self.DrawHisto(name, vmin - deltav/2.0, vmax + deltav/2.0, deltav, plotvar, plotVarName, cuts, option)
 		funcArgs = (name, vmin - deltav/2.0, vmax + deltav/2.0, deltav, plotvar, plotVarName, cuts, option)
 		truncateResol = 0.1 if 'charge' not in branch.lower() else 10.
-		self.delta_v_signal = CheckBinningForFit(self, name, self.DrawHisto, funcArgs, 3, 7, truncateResol)
+		temp = CheckBinningForFit(self, name, self.DrawHisto, funcArgs, 3, 7, truncateResol)
+		self.delta_v_signal = deltav if temp == 0 else temp
 
 	def PlotPedestal(self, name='pedestal', bins=0, cuts='', option='e', minx=0, maxx=0, branch='pedestal'):
 		if not self.hasBranch['pedestal']:
@@ -1116,7 +1117,8 @@ class AnalysisCaenCCD:
 		vmin, vmax = self.histo[name].GetBinLowEdge(lowbin), self.histo[name].GetBinLowEdge(highbin + 1)
 		funcArgs = (name, vmin, vmax, deltax, '{f}*{b}'.format(f=1000 if 'charge' not in branch.lower() else 1, b=branch), '{b} {u}'.format(b=branch, u='[e]' if 'charge' in branch.lower() else '[mV]'), cuts, option)
 		truncateResol = 0.1 if 'charge' not in branch.lower() else 10.
-		deltax = CheckBinningForFit(self, name, self.DrawHisto, funcArgs, 3, 6, truncateResol)
+		temp = CheckBinningForFit(self, name, self.DrawHisto, funcArgs, 3, 6, truncateResol)
+		deltax = deltax if temp == 0 else temp
 		func = ro.TF1('fit_' + name, 'gaus', vmin, vmax)
 		func.SetNpx(1000)
 		mean_p, sigma_p = self.histo[name].GetMean(), self.histo[name].GetRMS()

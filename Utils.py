@@ -216,37 +216,41 @@ def CheckBinningForFit(anaObject, histoKey, drawFunc, funcArgs, deltaPosInfuncAr
 			if anaObject.histo[histoKey] and not IsHistogramEmpty(anaObject.histo[histoKey]):
 				filledBins = CheckFilledBinsHisto(anaObject.histo[histoKey])
 				entries = anaObject.histo[histoKey].GetEntries()
-				minBins = RoundInt(max(fitParamsMin, entries ** (2/5.))) if not forceMinParLimit else fitParamsMin
-				maxBins = RoundInt(entries ** (10/17.))
-				if minBins <= maxBins:
-					delta = funcArgs[deltaPosInfuncArgs]
-					good_binning = False
-					if filledBins < minBins:
-						delta /= 2.
-						funcArgs = tuple([funcArgs[i] if i != deltaPosInfuncArgs else delta for i in xrange(len(funcArgs))])
-					elif filledBins > maxBins:
-						delta *= 1.7179869184
-						funcArgs = tuple([funcArgs[i] if i != deltaPosInfuncArgs else delta for i in xrange(len(funcArgs))])
+				if filledBins < 1 or entries < 1:
+					return 0
+				if entries != 0:
+					minBins = RoundInt(max(fitParamsMin, entries ** (2/5.))) if not forceMinParLimit else fitParamsMin
+					minBins = max(minBins, 2)
+					maxBins = RoundInt(entries ** (10/17.))
+					if minBins <= maxBins:
+						delta = funcArgs[deltaPosInfuncArgs]
+						good_binning = False
+						if filledBins < minBins:
+							delta /= 2.
+							funcArgs = tuple([funcArgs[i] if i != deltaPosInfuncArgs else delta for i in xrange(len(funcArgs))])
+						elif filledBins > maxBins:
+							delta *= 1.7179869184
+							funcArgs = tuple([funcArgs[i] if i != deltaPosInfuncArgs else delta for i in xrange(len(funcArgs))])
+						else:
+							good_binning = True
+						delta = TruncateFloat(delta, truncateResol) if truncateResol != 0 else delta
+						if delta == 0 and truncateResol != 0:
+							return truncateResol
 					else:
-						good_binning = True
-					delta = TruncateFloat(delta, truncateResol) if truncateResol != 0 else delta
+						# only take into account the necessary filled Parameters for the fit
+						delta = funcArgs[deltaPosInfuncArgs]
+						good_binning = False
+						if filledBins > minBins:
+							delta *= 1.25
+							funcArgs = tuple([funcArgs[i] if i != deltaPosInfuncArgs else delta for i in xrange(len(funcArgs))])
+						elif filledBins <= minBins - 1:
+							delta /= 1.5
+							funcArgs = tuple([funcArgs[i] if i != deltaPosInfuncArgs else delta for i in xrange(len(funcArgs))])
+						else:
+							good_binning = True
+						delta = TruncateFloat(delta, truncateResol) if truncateResol != 0 else delta
 					if delta == 0 and truncateResol != 0:
 						return truncateResol
-				else:
-					# only take into account the necessary filled Parameters for the fit
-					delta = funcArgs[deltaPosInfuncArgs]
-					good_binning = False
-					if filledBins > minBins:
-						delta *= 1.25
-						funcArgs = tuple([funcArgs[i] if i != deltaPosInfuncArgs else delta for i in xrange(len(funcArgs))])
-					elif filledBins <= minBins - 1:
-						delta /= 1.5
-						funcArgs = tuple([funcArgs[i] if i != deltaPosInfuncArgs else delta for i in xrange(len(funcArgs))])
-					else:
-						good_binning = True
-					delta = TruncateFloat(delta, truncateResol) if truncateResol != 0 else delta
-				if delta == 0 and truncateResol != 0:
-					return truncateResol
 
 	return funcArgs[deltaPosInfuncArgs]
 
