@@ -167,7 +167,8 @@ class AnalysisCaenCCD:
 		self.loaded_entries = 0
 		self.suffix = None
 
-		self.delta_v_signal = self.signal_ch.adc_to_volts_cal['p1'] * 100 * 1000  # in mV
+		# self.delta_v_signal = self.signal_ch.adc_to_volts_cal['p1'] * 100 * 1000  # in mV
+		self.delta_v_signal = 5
 
 		self.Load_Config_File()
 
@@ -1055,7 +1056,7 @@ class AnalysisCaenCCD:
 		self.voltageDiaMean = self.histo[name].GetMean()
 		self.voltageDiaSpread = self.histo[name].GetRMS()
 
-	def PlotSignal(self, name='signal', bins=0, cuts='', option='e', minx=-10, maxx=990, branch='signal'):
+	def PlotSignal(self, name='signal', bins=0, cuts='', option='e', minx=-10, maxx=990, branch='signal', optimizeBinning=True):
 		if not self.hasBranch['signal']:
 			return
 		if 'vcal' in branch.lower():
@@ -1087,15 +1088,16 @@ class AnalysisCaenCCD:
 				plotvar = '1000*' + branch if not self.is_cal_run or self.cal_run_type == 'out' else '-1000*' + branch
 				# vmin, vmax, deltav = self.analysisTree.GetMinimum('signal'), self.analysisTree.GetMaximum('signal'), self.signal_ch.adc_to_volts_cal['p1'] * 100
 				plotVarName = branch + ' [mV]' if not self.is_cal_run or self.cal_run_type == 'out' else '-' + branch + ' [mV]'
+		(vmin, vmax) = (minx, maxx) if 'charge' not in branch.lower() else (TruncateFloat(self.vcal_to_q.Q_in_e_from_mV(minx).nominal_value, 2000.), TruncateFloat(self.vcal_to_q.Q_in_e_from_mV(maxx).nominal_value, 2000.))
 		deltav = self.delta_v_signal
-		(vmin, vmax) = (minx, maxx) if 'charge' not in branch.lower() else (TruncateFloat(self.vcal_to_q.Q_in_e_from_mV(minx).nominal_value, 100.), TruncateFloat(self.vcal_to_q.Q_in_e_from_mV(maxx).nominal_value, 100.))
 		deltav = deltav if bins == 0 else (vmax - vmin) / float(bins)
-		deltav = deltav if 'charge' not in branch.lower() else TruncateFloat(self.vcal_to_q.Q_in_e_from_mV(deltav).nominal_value, 10.)
+		deltav = deltav if 'charge' not in branch.lower() else TruncateFloat(deltav if bins!=0 else deltav / self.vcal_to_q.vgain.nominal_value, 100.)
 		self.DrawHisto(name, vmin - deltav/2.0, vmax + deltav/2.0, deltav, plotvar, plotVarName, cuts, option)
-		funcArgs = (name, vmin - deltav/2.0, vmax + deltav/2.0, deltav, plotvar, plotVarName, cuts, option)
-		truncateResol = 0.1 if 'charge' not in branch.lower() else 10.
-		temp = CheckBinningForFit(self, name, self.DrawHisto, funcArgs, 3, 7, truncateResol)
-		self.delta_v_signal = deltav if temp == 0 else temp
+		if optimizeBinning:
+			funcArgs = (name, vmin - deltav/2.0, vmax + deltav/2.0, deltav, plotvar, plotVarName, cuts, option)
+			truncateResol = 0.1 if 'charge' not in branch.lower() else 10.
+			temp = CheckBinningForFit(self, name, self.DrawHisto, funcArgs, 3, 7, truncateResol)
+			# self.delta_v_signal = deltav if temp == 0 else temp
 
 	def PlotPedestal(self, name='pedestal', bins=0, cuts='', option='e', minx=0, maxx=0, branch='pedestal'):
 		if not self.hasBranch['pedestal']:
@@ -1374,13 +1376,13 @@ class AnalysisCaenCCD:
 
 	def FitConvolutedGaussians(self, name, conv_steps=100, color=ro.kRed):
 		if not name in self.canvas.keys() or not name in self.histo.keys():
-			print 'Can\'t do Langaus fit as there is aproblem with the histogram'
+			print 'Can\'t do convoluted gaussians fit as there is aproblem with the histogram'
 			return
 		if not self.canvas[name] or not self.histo[name]:
-			print 'Can\'t do Langaus fit as there is a problem with the histogram'
+			print 'Can\'t do convoluted gaussians fit as there is a problem with the histogram'
 			return
 		if self.histo[name].GetEntries() == 0 or self.histo[name].GetMean()== 0 and self.histo[name].GetRMS() == 0:
-			print 'Can\'t do Langaus fit as there is a problem with the histogram'
+			print 'Can\'t do convoluted gaussians fit as there is a problem with the histogram'
 			return
 		self.canvas[name].cd()
 		# self.langaus[name] = LanGaus(self.histo[name])
@@ -1553,6 +1555,62 @@ class AnalysisCaenCCD:
 		self.utils.bar.finish()
 		print 'Finished creating chargeTree in {d}/{f}.charge.root'.format(d=self.outDir, f=self.analysisTreeName)
 
+	def RemovePedestalFromSignal(self, namePlot0, namePlotZoom, pedSigma, xmin=10000, xmax=-10000, namePlotNewSuffix='NoPedestal'):
+		namec = namePlot0+namePlotNewSuffix
+		if self.histo.has_key(namePlot0) and self.histo.has_key(namePlotZoom):
+			if self.histo.has_key(namec):
+				if self.histo[namec]:
+					self.histo[namec].Delete()
+				del self.histo[namec]
+			self.histo[namec] = self.histo[namePlot0].Clone('h_' + namec)
+			histo0 = self.histo[namePlot0]
+			histoz = self.histo[namePlotZoom]
+			histoc = self.histo[namec]
+			xlow = histoz.GetBinLowEdge(1) if xmin == 10000 else xmin
+			xhigh = histoz.GetBinLowEdge(histoz.GetNbinsX()) if xmax == -10000 else xmax
+			funcg = ro.TF1('fit_' + namePlotZoom, 'gaus', xlow, xhigh)
+			funcg.SetNpx(1000)
+			funcg.SetParameter(2, pedSigma)
+			funcg.SetParLimits(2, 0.9 * pedSigma, 1.1 * pedSigma)
+			fit = histoz.Fit('fit_' + namePlotZoom, 'QEMS', '', xlow, xhigh)
+			params = np.array([fit.Parameter(0), fit.Parameter(1), fit.Parameter(2)], 'f8')
+			fit = histoz.Fit('fit_' + namePlotZoom, 'QEMS', '', xlow, params[1] + 2 * params[2])
+			params = np.array([fit.Parameter(0), fit.Parameter(1), fit.Parameter(2)], 'f8')
+			histozBinW = histoz.GetBinWidth(1)
+			n0, mu, sigma = params[0], params[1], params[2]
+			xEndCompensation = params[1] + 3 * params[2]
+			bini = 1
+			xlow, xhigh = histo0.GetBinLowEdge(bini), histo0.GetBinLowEdge(bini + 1)
+			doBin = xhigh < xEndCompensation
+			while doBin:
+				compBin = RoundInt(n0 * np.sqrt(np.pi / 2.) * sigma * (np.math.erf((xhigh - mu)/ (sigma * np.sqrt(2))) - np.math.erf((xlow - mu)/ (sigma * np.sqrt(2)))) / histozBinW)
+				compBin = -1 * min(compBin, histo0.GetBinContent(bini))
+				histoc.Fill(histo0.GetBinCenter(bini), compBin)
+				bini += 1
+				xlow, xhigh = histo0.GetBinLowEdge(bini), histo0.GetBinLowEdge(bini + 1)
+				doBin = xhigh < xEndCompensation
+			xhigh = min(xhigh, xEndCompensation)
+			compBin = RoundInt(n0 * np.sqrt(np.pi / 2.) * sigma * (np.math.erf((xhigh - mu) / (sigma * np.sqrt(2))) - np.math.erf((xlow - mu) / (sigma * np.sqrt(2)))) / histozBinW)
+			compBin = -1 * min(compBin, histo0.GetBinContent(bini))
+			histoc.Fill(histo0.GetBinCenter(bini), compBin)
+			if self.canvas.has_key(namec):
+				if self.canvas[namec]:
+					self.canvas[namec].Close()
+				del self.canvas[namec]
+			self.canvas[namec] = ro.TCanvas('c_' + namec, 'c_' + namec, 1)
+			self.canvas[namec].cd()
+			histoc.Draw('e')
+			if histoc.FindObject('mystats'):
+				histoc.FindObject('mystats').Delete()
+			histoc.SetStats(False)
+			histoc.SetStats(True)
+			self.canvas[namec].SetGridx()
+			self.canvas[namec].SetGridy()
+			self.canvas[namec].SetTicky()
+			ro.gPad.Update()
+			SetDefault1DStats(self.histo[namec])
+			ro.gPad.Update()
+			return namec
 
 # def main():
 # 	parser = OptionParser()
@@ -1670,6 +1728,18 @@ if __name__ == '__main__':
 				ana.PlotSignal('PHcharge', cuts=ana.cut0.GetTitle(), branch='signalCharge')
 				if doDebug: ipdb.set_trace()
 				ana.FitLanGaus('PHcharge')
+				if ana.histo['PH'].GetBinLowEdge(ana.histo['PH'].GetMaximumBin()) > 10:
+					ana.PlotSignal('PHPedestal', 25, cuts=ana.cut0.GetTitle(), branch='signal', minx=-10, maxx=40, optimizeBinning=False)
+					histocName = ana.RemovePedestalFromSignal('PH', 'PHPedestal', ana.pedestal_vcal_sigma, xmax=10)
+					ana.FitLanGaus(histocName)
+				if ana.histo['PHvcal'].GetBinLowEdge(ana.histo['PHvcal'].GetMaximumBin()) > 10:
+					ana.PlotSignal('PHvcalPedestal', 25, cuts=ana.cut0.GetTitle(), branch='signalVcal', minx=-10, maxx=40, optimizeBinning=False)
+					histocName = ana.RemovePedestalFromSignal('PHvcal', 'PHvcalPedestal', ana.pedestal_vcal_sigma, xmax=10)
+					ana.FitLanGaus(histocName)
+				if ana.histo['PHcharge'].GetBinLowEdge(ana.histo['PHcharge'].GetMaximumBin()) > 2000:
+					ana.PlotSignal('PHchargePedestal', 25, cuts=ana.cut0.GetTitle(), branch='signalCharge', minx=-10, maxx=40, optimizeBinning=False)
+					histocName = ana.RemovePedestalFromSignal('PHcharge', 'PHchargePedestal', ana.pedestal_charge_sigma, xmax=2000)
+					ana.FitLanGaus(histocName)
 				ana.PlotHVCurrents('HVCurrents', '', 5)
 				if doDebug: ipdb.set_trace()
 				ana.PlotDiaVoltage('DUTVoltage', '', 5)
