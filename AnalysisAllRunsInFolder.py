@@ -44,13 +44,17 @@ class AnalysisAllRunsInFolder:
 		self.signalOutChargeSigma = {}
 		self.signalIn = {}
 		self.signalInSigma = {}
+		self.signalPeakTime = {}
+		self.signalPeakTimeSigma = {}
 		self.caen_ch = 3
 		self.graph = ro.TGraphErrors()
 		self.graphVcal = ro.TGraphErrors()
 		self.graphCharge = ro.TGraphErrors()
+		self.graphPeakTime = ro.TGraphErrors()
 		self.canvas = None
 		self.canvasVcal = None
 		self.canvasCharge = None
+		self.canvasPeakTime = None
 		self.fit = None
 		self.cal_pickle = None
 		self.LoadPickle()
@@ -67,6 +71,7 @@ class AnalysisAllRunsInFolder:
 			self.caen_ch = self.cal_pickle['caen_ch']
 			nameVcal = ''
 			nameCharge = ''
+			namePeakTime = ''
 			if 'signal_out_vcal' in self.cal_pickle.keys():
 				self.signalOutVcal = self.cal_pickle['signal_out_vcal']
 				self.signalOutVcalSigma = self.cal_pickle['signal_out_vcal_sigma']
@@ -75,6 +80,10 @@ class AnalysisAllRunsInFolder:
 				self.signalOutCharge = self.cal_pickle['signal_out_charge']
 				self.signalOutChargeSigma = self.cal_pickle['signal_out_charge_sigma']
 				nameCharge = '' if self.are_cal_runs else 'SignalCharge_vs_HV'
+			if 'signal_peak_time' in self.cal_pickle.keys():
+				self.signalPeakTime = self.cal_pickle['signal_peak_time']
+				self.signalPeakTimeSigma = self.cal_pickle['signal_peak_time_sigma']
+				namePeakTime = 'SignalPeakTime_vs_Signal_ch_' + str(self.caen_ch) if self.are_cal_runs else ''
 			name = 'Signal_vs_CalStep_ch_' + str(self.caen_ch) if self.are_cal_runs else 'Signal_vs_HV'
 			xpoints = np.array([self.signalIn[volt] for volt in self.voltages], 'f8') if len(self.signalIn.keys()) >= 1 else np.array(self.voltages, 'f8')
 			xpointserrs = np.array([self.signalInSigma[volt] for volt in self.voltages], 'f8') if len(self.signalInSigma.keys()) >= 1 else np.zeros(len(self.voltages), 'f8')
@@ -93,6 +102,14 @@ class AnalysisAllRunsInFolder:
 				self.fit.SetParErrors(np.array([self.cal_pickle['fit_p0_error'], self.cal_pickle['fit_p1_error']], 'f8'))
 				self.fit.SetNDF(self.cal_pickle['fit_ndf'])
 				self.fit.SetChisquare(self.cal_pickle['fit_chi2'])
+				if namePeakTime != '':
+					self.graphPeakTime = ro.TGraphErrors(len(self.signalPeakTime.values()), np.array([self.signalOut[volt] for volt in self.voltages], 'f8'), np.array([self.signalPeakTime[volt] for volt in self.voltages], 'f8'), np.array([self.signalOutSigma[volt] for volt in self.voltages], 'f8'), np.array([self.signalPeakTimeSigma[volt] for volt in self.voltages], 'f8'))
+					self.graphPeakTime.SetNameTitle(namePeakTime, namePeakTime)
+					self.graphPeakTime.GetXaxis().SetTitle('signal [mV]')
+					self.graphPeakTime.GetYaxis().SetTitle('Peak Time [us]')
+					self.graphPeakTime.SetMarkerStyle(7)
+					self.graphPeakTime.SetMarkerColor(ro.kBlack)
+					self.graphPeakTime.SetLineColor(ro.kBlack)
 			else:
 				if nameVcal != '':
 					self.graphVcal = ro.TGraphErrors(len(self.voltages), xpoints, np.array([self.signalOutVcal[volt] for volt in self.voltages], 'f8'), xpointserrs, np.array([self.signalOutVcalSigma[volt] for volt in self.voltages], 'f8'))
@@ -138,6 +155,7 @@ class AnalysisAllRunsInFolder:
 			self.FitLine()
 			self.FillPickle()
 			self.SavePickle()
+			self.PlotPeakTimes()
 		self.SaveCanvas()
 		print 'Finished in', time.time() - self.time0, 'seconds'
 
@@ -183,8 +201,16 @@ class AnalysisAllRunsInFolder:
 					signalRun = 0
 					signalSigmaRun = 0
 					if 'PH' in anaRun.histo.keys():
-						signalRun = np.double(anaRun.histo['PH'].GetMean())
-						signalSigmaRun = np.sqrt(np.power(anaRun.histo['PH'].GetRMS(), 2, dtype='f8') - np.power(anaRun.pedestal_sigma, 2, dtype='f8'), dtype='f8') if anaRun.histo['PH'].GetRMS() > anaRun.pedestal_sigma else anaRun.histo['PH'].GetRMS()
+						signalRun = np.double(anaRun.langaus['PH'].GetParameter(1)) if self.are_cal_runs else np.double(anaRun.histo['PH'].GetMean())
+						signalSigmaRun = np.double(anaRun.langaus['PH'] .GetParameter(2)) if self.are_cal_runs else np.sqrt(np.power(anaRun.histo['PH'].GetRMS(), 2, dtype='f8') - np.power(anaRun.pedestal_sigma, 2, dtype='f8'), dtype='f8') if anaRun.histo['PH'].GetRMS() > anaRun.pedestal_sigma else anaRun.histo['PH'].GetRMS()
+
+					peakTime = 0
+					peakTimeSigma = 0
+					if self.are_cal_runs and '_out_' in run:
+						if 'peakPosDist' in anaRun.histo.keys():
+							peakTime = np.double(anaRun.peakTime * 1e6)
+							peakTimeSigma = np.double(anaRun.histo['peakPosDist'].GetRMS())
+
 					self.diaVoltages[anaRun.bias] = anaRun.voltageDiaMean
 					self.diaVoltagesSigma[anaRun.bias] = anaRun.voltageDiaSpread
 					if not anaRun.is_cal_run:
@@ -206,6 +232,9 @@ class AnalysisAllRunsInFolder:
 							self.signalOutVcalSigma[anaRun.bias] = signalSigmaRunVcal
 							self.signalOutCharge[anaRun.bias] = -signalRunCharge if anaRun.bias < 0 else signalRunCharge
 							self.signalOutChargeSigma[anaRun.bias] = signalSigmaRunCharge
+						if '_out_' in run:
+							self.signalPeakTime[anaRun.bias] = peakTime
+							self.signalPeakTimeSigma[anaRun.bias] = peakTimeSigma
 					else:
 						self.signalIn[anaRun.bias] = -signalRun if anaRun.bias < 0 else signalRun
 						self.signalInSigma[anaRun.bias] = signalSigmaRun
@@ -281,6 +310,46 @@ class AnalysisAllRunsInFolder:
 				self.canvasCharge.SetGridx()
 				self.canvasCharge.SetGridy()
 
+	def PlotPeakTimes(self):
+		if len(self.voltages) > 0:
+			if self.are_cal_runs:
+				if len(self.signalPeakTime.values()) < 1:
+					for run in self.runs:
+						print 'Analysing run:', run
+						if os.path.isdir(run):
+							root_files = glob.glob('{d}/*.root'.format(d=run))
+							if len(root_files) > 0:
+								if '_out_' in run:
+									configfile = self.config
+									print 'Using config file:', configfile
+									print 'Loading analysis tree if it exists'
+									anaRun = AnalysisCaenCCD(run, configfile, overw=False)
+									anaRun.AnalysisWaves()
+									peakTime = 0
+									peakTimeSigma = 0
+									if 'peakPosDist' in anaRun.histo.keys():
+										peakTime = np.double(anaRun.peakTime * 1e6)
+										peakTimeSigma = np.double(anaRun.histo['peakPosDist'].GetRMS())
+									self.signalPeakTime[anaRun.bias] = peakTime
+									self.signalPeakTimeSigma[anaRun.bias] = peakTimeSigma
+
+				signalO = np.array([self.signalOut[volt] for volt in self.voltages], dtype='f8')
+				signalOutErrs = np.array([self.signalOutSigma[volt] for volt in self.voltages], dtype='f8')
+				signalPeaks = np.array([self.signalPeakTime[volt] for volt in self.voltages], 'f8')
+				signalPeaksSigma = np.array([self.signalPeakTimeSigma[volt] for volt in self.voltages], 'f8')
+				self.graphPeakTime = ro.TGraphErrors(len(self.voltages), signalO, signalPeaks, signalOutErrs, signalPeaksSigma)
+				self.graphPeakTime.SetNameTitle('SignalPeakTime_vs_Signal_ch_' + str(self.caen_ch), 'SignalPeakTime_vs_Signal_ch_' + str(self.caen_ch))
+				self.graphPeakTime.GetXaxis().SetTitle('signal [mV]')
+				self.graphPeakTime.GetYaxis().SetTitle('Peak Time [us]')
+				self.graphPeakTime.SetMarkerStyle(7)
+				self.graphPeakTime.SetMarkerColor(ro.kBlack)
+				self.graphPeakTime.SetLineColor(ro.kBlack)
+
+				self.canvasPeakTime = ro.TCanvas('c_' + self.graphPeakTime.GetName(), 'c_' + self.graphPeakTime.GetName(), 1)
+				self.graphPeakTime.Draw('AP')
+				self.canvasPeakTime.SetGridx()
+				self.canvasPeakTime.SetGridy()
+
 	def FitLine(self):
 		ro.Math.MinimizerOptions.SetDefaultMinimizer(*fit_method)
 		ro.Math.MinimizerOptions.SetDefaultMaxFunctionCalls(1000000)
@@ -289,13 +358,20 @@ class AnalysisAllRunsInFolder:
 		func = ro.TF1('fit_' + self.graph.GetName(), 'pol1', -1000, 1000)
 		func.SetLineColor(ro.kRed)
 		func.SetNpx(10000)
-		self.graph.Fit('fit_' + self.graph.GetName(), 'QM0', '', -1000, 1000)
-		if func.GetProb() < 0.9:
-			self.graph.Fit('fit_' + self.graph.GetName(), 'QM0', '', -1000, 1000)
-		if func.GetProb() < 0.9:
-			self.graph.Fit('fit_' + self.graph.GetName(), 'QM0', '', -1000, 1000)
-		self.fit = func
+		tfit = self.graph.Fit('fit_' + self.graph.GetName(), 'QM0S', '', -1000, 1000)
+		if tfit.Prob() < 0.9:
+			tfit = self.graph.Fit('fit_' + self.graph.GetName(), 'QM0S', '', -1000, 1000)
+		if tfit.Prob() < 0.9:
+			tfit = self.graph.Fit('fit_' + self.graph.GetName(), 'QM0S', '', -1000, 1000)
+		# func.SetParameters(np.array([tfit.Parameter(0), tfit.Parameter(1)], 'f8'))
+		# func.SetChisquare(tfit.Chi2())
+		# func.SetNDF(tfit.Ndf())
+		func = tfit.FittedFunction().GetFunction()
+		self.fit = func.Clone()
+		self.canvas.cd()
 		self.fit.Draw('same')
+		self.canvas.Modified()
+		ro.gPad.Update()
 
 	def FillPickle(self):
 		self.cal_pickle = {'voltages': self.voltages,
@@ -307,6 +383,8 @@ class AnalysisAllRunsInFolder:
 						   'signal_out_vcal_sigma': self.signalOutVcalSigma,
 						   'signal_out_charge': self.signalOutCharge,
 						   'signal_out_charge_sigma': self.signalOutChargeSigma,
+		                   'signal_peak_time': self.signalPeakTime,
+		                   'signal_peak_time_sigma': self.signalPeakTimeSigma,
 						   'caen_ch': self.caen_ch,
 						   'fit_p0': self.fit.GetParameter(0) if self.fit else 0,
 						   'fit_p0_error': self.fit.GetParError(0) if self.fit else 0,
@@ -317,13 +395,13 @@ class AnalysisAllRunsInFolder:
 						   'fit_ndf': self.fit.GetNDF() if self.fit else 0
 						   }
 
-	def SavePickle(self):
+	def SavePickle(self, overWritePickle=False):
 		pickleName = 'signal_cal_{c}.cal'.format(c=self.caen_ch) if self.are_cal_runs else 'signal_{c}.cal'.format(c=self.caen_ch)
 		if not self.cal_pickle:
 			self.FillPickle()
 		if os.path.isfile('{d}/{f}'.format(d=self.runsdir, f=pickleName)):
-			if not self.overwrite:
-				print 'The file', pickleName, 'already exists in', self.runsdir
+			if not self.overwrite and not overWritePickle:
+				print 'The file', pickleName, 'already exists in', self.runsdir, '. Not saving!'
 				return
 		with open('{d}/{f}'.format(d=self.runsdir, f=pickleName), 'wb') as fpickle:
 			pickle.dump(self.cal_pickle, fpickle, pickle.HIGHEST_PROTOCOL)
@@ -338,6 +416,9 @@ class AnalysisAllRunsInFolder:
 		if self.canvasCharge:
 			self.canvasCharge.SaveAs('{d}/{n}.png'.format(d=self.runsdir, n=self.graphCharge.GetName()))
 			self.canvasCharge.SaveAs('{d}/{n}.root'.format(d=self.runsdir, n=self.graphCharge.GetName()))
+		if self.canvasPeakTime:
+			self.canvasPeakTime.SaveAs('{d}/{n}.png'.format(d=self.runsdir, n=self.graphPeakTime.GetName()))
+			self.canvasPeakTime.SaveAs('{d}/{n}.root'.format(d=self.runsdir, n=self.graphPeakTime.GetName()))
 
 
 def main():

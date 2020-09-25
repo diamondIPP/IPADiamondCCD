@@ -77,6 +77,7 @@ class AnalysisCaenCCD:
 		self.fit_min = -10000000
 		self.fit_max = -10000000
 		self.pedestal_sigma = 0
+		self.pedestal_sigma_err = 0
 		self.pedestal_vcal_sigma = 0
 		self.pedestal_charge_sigma = 0
 
@@ -1016,21 +1017,21 @@ class AnalysisCaenCCD:
 			params = np.array((const_p[0], mean_p[0], rms_p[0], const_p[1], mean_p[1], rms_p[1]), 'float64')
 			func.SetParameters(params)
 			func.SetParLimits(0, 0, self.histo[name].GetMaximum() * 2)
-			func.SetParLimits(2, 0.01, self.histo[name].GetRMS() * 2)
+			func.SetParLimits(2, max(0.002, 0.5 * self.histo[name].GetRMS()) if self.is_cal_run else 0, self.histo[name].GetRMS())
 			func.SetParLimits(3, 0, self.histo[name].GetMaximum() * 2)
-			func.SetParLimits(5, 0.01, self.histo[name].GetRMS() * 2)
+			func.SetParLimits(5, max(0.002, self.histo[name].GetRMS()), self.histo[name].GetRMS() * 10)
 			if skew >= 0:
-				func.SetParLimits(1, self.histo[name].GetMean() - 4 * self.histo[name].GetRMS(), self.histo[name].GetMean())
-				func.SetParLimits(4, self.histo[name].GetMean(), self.histo[name].GetMean() + 4 * self.histo[name].GetRMS())
+				func.SetParLimits(1, self.histo[name].GetMean() - 5 * self.histo[name].GetRMS(), self.histo[name].GetMean() + self.histo[name].GetRMS())
+				func.SetParLimits(4, self.histo[name].GetMean() - self.histo[name].GetRMS(), self.histo[name].GetMean() + 5 * self.histo[name].GetRMS())
 			else:
-				func.SetParLimits(1, self.histo[name].GetMean(), self.histo[name].GetMean() + 4 * self.histo[name].GetRMS())
-				func.SetParLimits(4, self.histo[name].GetMean() - 4 * self.histo[name].GetRMS(), self.histo[name].GetMean())
-
+				func.SetParLimits(1, self.histo[name].GetMean() - self.histo[name].GetRMS(), self.histo[name].GetMean() + 5 * self.histo[name].GetRMS())
+				func.SetParLimits(4, self.histo[name].GetMean() - 5 * self.histo[name].GetRMS(), self.histo[name].GetMean() + self.histo[name].GetRMS())
 			fit = self.histo[name].Fit('fit_' + name, 'QEMSB', '', max(low_t, self.histo[name].GetMean() - 4 * self.histo[name].GetRMS()), min(up_t, self.histo[name].GetMean() + 4 * self.histo[name].GetRMS()))
-			params = np.array([fit.Parameter(i) for i in xrange(6)], 'float64')
+			params = np.array([fit.Parameter(i) for i in xrange(6)], 'f8')
 			xpeak = func.GetMaximumX(max(low_t, self.histo[name].GetMean() - 4 * self.histo[name].GetRMS()), min(up_t, self.histo[name].GetMean() + 4 * self.histo[name].GetRMS()))
-			func.SetParameters(params)
-			fit = self.histo[name].Fit('fit_' + name, 'QEMSB', '', xpeak - 3.5 * self.histo[name].GetRMS(), xpeak + 3.5 * self.histo[name].GetRMS())
+			print max(low_t, self.histo[name].GetMean() - 4 * self.histo[name].GetRMS()), xpeak, min(up_t, self.histo[name].GetMean() + 4 * self.histo[name].GetRMS())
+			fit2 = self.histo[name].Fit('fit_' + name, 'QEMSB', '', xpeak - 3 * self.histo[name].GetRMS(), xpeak + 3* self.histo[name].GetRMS())
+			params = np.array([fit2.Parameter(i) for i in xrange(6)], 'f8')
 			# fit = self.histo[name].Fit('fit_' + name, 'QEMSB', '', params[1] - 2 * params[2], params[1] + 2 * params[2])
 			SetDefaultFitStats(self.histo[name], func)
 			#TODO check if fit is good enough to update peakTime
@@ -1141,6 +1142,7 @@ class AnalysisCaenCCD:
 			self.pedestal_vcal_sigma = self.histo[name].GetRMS()
 		else:
 			self.pedestal_sigma = self.histo[name].GetRMS()
+			self.pedestal_sigma_err = self.histo[name].GetRMSError()
 
 	def PlotWaveforms(self, name='SignalWaveform', sigtype='signal', vbins=0, cuts='', option='colz', start_ev=0, num_evs=0, do_logz=False):
 		if ('signal' in sigtype.lower() and not self.hasBranch['voltageSignal']) or ('trig' in sigtype.lower() and not self.hasBranch['voltageTrigger']) or ('veto' in sigtype.lower() and not self.hasBranch['voltageVeto']):
@@ -1393,12 +1395,15 @@ class AnalysisCaenCCD:
 		funccg.SetParameter(0, self.histo[name].GetMaximum())
 		funccg.SetParLimits(0, 0, 100 * self.histo[name].GetMaximum())
 		funccg.SetParameter(1, self.histo[name].GetBinCenter(self.histo[name].GetMaximumBin()))
-		funccg.SetParLimits(1, xlow, xhigh)
-		funccg.SetParameter(2, (abs(self.histo[name].GetRMS() ** 2 - self.pedestal_sigma ** 2) ** 0.5))
+		funccg.SetParLimits(1, self.histo[name].GetMean() - self.histo[name].GetMeanError(), self.histo[name].GetMean() + self.histo[name].GetMeanError())
+		funccg.SetParameter(2, (abs(self.histo[name].GetRMS() ** 2 - self.pedestal_sigma ** 2) ** 0.5) if self.histo[name].GetRMS() > self.pedestal_sigma else self.histo[name].GetRMS())
 		funccg.SetParLimits(2, 0, 10 * self.histo[name].GetRMS())
 		funccg.SetParameter(3, self.pedestal_sigma)
-		funccg.FixParameter(3, self.pedestal_sigma)
-		self.histo[name].Fit('fit_' + name, 'IQBM')
+		funccg.SetParLimits(3, self.pedestal_sigma - self.pedestal_sigma_err if self.histo[name].GetRMS() > self.pedestal_sigma else 0., self.pedestal_sigma + self.pedestal_sigma_err if self.histo[name].GetRMS() > self.pedestal_sigma else self.pedestal_sigma / 1000.)
+		self.histo[name].Fit('fit_' + name, 'IQMR')
+		mean = funccg.GetParameter(1)
+		sigm = np.sqrt(funccg.GetParameter(2) ** 2 + funccg.GetParameter(3) ** 2, dtype='f8')
+		self.histo[name].Fit('fit_' + name, 'IQM', '', mean - 3 * sigm, mean + 3 * sigm)
 		self.langaus[name] = funccg
 		self.line[name] = ro.TLine(xlow, 0, xhigh, 0)
 		self.line[name].SetLineColor(ro.kViolet + 1)
@@ -1413,13 +1418,14 @@ class AnalysisCaenCCD:
 		print u'Histo {n}: <PH> = {f} \u00B1 {f2}'.format(n=name, f=self.histo[name].GetMean(), f2=self.histo[name].GetMeanError())
 		print 'Fit {n}: <PH> = {f}'.format(n=name, f=fitmean)
 		print 'Fit {n}: signal_sigma = {f}'.format(n=name, f=self.langaus[name].GetParameter(2))
+		print 'Fit {n}: pedestal_sigma = {f}'.format(n=name, f=self.langaus[name].GetParameter(3))
 		xlow, xhigh = self.langaus[name].GetMaximumX(xlow, xhigh) - 5 * self.histo[name].GetRMS(), self.langaus[name].GetMaximumX(xlow, xhigh) + 5 * self.histo[name].GetRMS()
 		self.histo[name].GetXaxis().SetRangeUser(xlow, xhigh)
 		self.histo[name].FindObject('stats').SetX1NDC(0.55)
 		self.histo[name].FindObject('stats').SetX2NDC(0.9)
 		self.histo[name].FindObject('stats').SetY1NDC(0.5)
 		self.histo[name].FindObject('stats').SetY2NDC(0.9)
-		AddLineToStats(self.canvas[name], ['Mean_{Fit}', 'signal_sigma_{Fit}'], [fitmean, self.langaus[name].GetParameter(2)])
+		AddLineToStats(self.canvas[name], ['Mean_{Fit}', 'signal_sigma_{Fit}', 'pedestal_sigma_{Fit}'], [fitmean, self.langaus[name].GetParameter(2), self.langaus[name].GetParameter(3)])
 		self.histo[name].SetStats(0)
 		self.canvas[name].Modified()
 		ro.gPad.Update()
