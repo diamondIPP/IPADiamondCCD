@@ -1029,7 +1029,6 @@ class AnalysisCaenCCD:
 			fit = self.histo[name].Fit('fit_' + name, 'QEMSB', '', max(low_t, self.histo[name].GetMean() - 4 * self.histo[name].GetRMS()), min(up_t, self.histo[name].GetMean() + 4 * self.histo[name].GetRMS()))
 			params = np.array([fit.Parameter(i) for i in xrange(6)], 'f8')
 			xpeak = func.GetMaximumX(max(low_t, self.histo[name].GetMean() - 4 * self.histo[name].GetRMS()), min(up_t, self.histo[name].GetMean() + 4 * self.histo[name].GetRMS()))
-			print max(low_t, self.histo[name].GetMean() - 4 * self.histo[name].GetRMS()), xpeak, min(up_t, self.histo[name].GetMean() + 4 * self.histo[name].GetRMS())
 			fit2 = self.histo[name].Fit('fit_' + name, 'QEMSB', '', xpeak - 3 * self.histo[name].GetRMS(), xpeak + 3* self.histo[name].GetRMS())
 			params = np.array([fit2.Parameter(i) for i in xrange(6)], 'f8')
 			# fit = self.histo[name].Fit('fit_' + name, 'QEMSB', '', params[1] - 2 * params[2], params[1] + 2 * params[2])
@@ -1617,6 +1616,64 @@ class AnalysisCaenCCD:
 			SetDefault1DStats(self.histo[namec])
 			ro.gPad.Update()
 			return namec
+
+	def PlotConstantFractionSignal(self, event=0, delay=1.8e-6, att=0.75):
+		ndelay = np.floor(delay / self.settings.time_res + 0.5).astype('int32')
+		leng = self.analysisTree.Draw('voltageSignal:time', 'event==' + str(event), 'goff')
+		sig = self.analysisTree.GetVal(0)
+		sig = np.array([sig[i] * 1e3 for i in xrange(leng)], 'f8')
+		tim = self.analysisTree.GetVal(1)
+		tim = np.array([tim[i] * 1e6 for i in xrange(leng)], 'f8')
+		sig0 = np.multiply(-att, np.roll(sig, -ndelay), dtype='f8')
+		sig1 = np.add(sig, sig0, dtype='f8')
+		graf = ro.TGraph(len(tim), tim, sig1)
+		name = 'CFSignal' + str(event)
+		graf.SetName('g_' + name)
+		graf.SetTitle('g_' + name)
+		graf.GetXaxis().SetTitle('time [us]')
+		graf.GetYaxis().SetTitle('CF signal [mV]')
+		graf.GetXaxis().SetRangeUser(0, 5)
+		self.canvas[name] = ro.TCanvas('c_' + name, 'c_' + name, 1)
+		self.canvas[name].SetGridx()
+		self.canvas[name].SetGridy()
+		self.graph[name] = graf
+		self.graph[name].Draw('AP')
+		func = ro.TF1('fit_' + name,'[0]*cos([1]*x+[2])+[3]', 0.5, 2)
+		p0 = 100 if self.bias > 0 else -100
+		p0l = [0, 1000] if self.bias > 0 else [-1000, 0]
+		p1 = 1.7
+		p1l = [1, 3]
+		p2 = -0.5
+		p2l = [-1, 0]
+		p3 = 0
+		p3l = [-1000, 1000]
+		func.SetNpx(10000)
+		func.SetLineColor(ro.kRed)
+		func.SetParameters(np.array([p0, p1, p2, p3], 'f8'))
+		func.SetParLimits(0, p0l[0], p0l[1])
+		func.SetParLimits(1, p1l[0], p1l[1])
+		func.SetParLimits(2, p2l[0], p2l[1])
+		func.SetParLimits(3, p3l[0], p3l[1])
+		tfit = self.graph[name].Fit('fit_' + name, 'QM0RS', '')
+		if tfit.Prob() < 0.9:
+			tfit = self.graph[name].Fit('fit_' + name, 'QM0RS', '')
+		if tfit.Prob() < 0.9:
+			tfit = self.graph[name].Fit('fit_' + name, 'QM0RS', '')
+		print 'fit prob', tfit.Prob() * 100, '%'
+		print 'Parameters', tfit.Parameter(0), tfit.Parameter(1), tfit.Parameter(2), tfit.Parameter(3)
+		self.langaus[name] = func.Clone()
+		self.canvas[name].cd()
+		self.langaus[name].Draw('same')
+		self.canvas[name].Modified()
+		ro.gPad.Update()
+		peakbla = -100000
+		if tfit.Prob() >= 0.01:
+			peakbla2 = self.langaus[name].GetX(0, 0.5, 2)
+			if (self.langaus[name].Derivative(peakbla2) < 0 < self.bias) or (self.langaus[name].Derivative(peakbla2) > 0 > self.bias):
+				peakbla = peakbla2
+				peakbla += 0.90584
+				# for a peak position of ~2.10159
+		print 'Peak position set to', peakbla
 
 # def main():
 # 	parser = OptionParser()
