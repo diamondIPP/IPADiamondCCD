@@ -1633,18 +1633,18 @@ class AnalysisCaenCCD:
 		graf.GetXaxis().SetTitle('time [us]')
 		graf.GetYaxis().SetTitle('CF signal [mV]')
 		graf.GetXaxis().SetRangeUser(0, 5)
-		self.canvas[name] = ro.TCanvas('c_' + name, 'c_' + name, 1)
-		self.canvas[name].SetGridx()
-		self.canvas[name].SetGridy()
+		# self.canvas[name] = ro.TCanvas('c_' + name, 'c_' + name, 1)
+		# self.canvas[name].SetGridx()
+		# self.canvas[name].SetGridy()
 		self.graph[name] = graf
-		self.graph[name].Draw('AP')
-		func = ro.TF1('fit_' + name,'[0]*cos([1]*x+[2])+[3]', 0.5, 2)
+		# self.graph[name].Draw('AP')
+		func = ro.TF1('fit_' + name,'[0]*cos([1]*x+pi/(2*[1])-1+[2])+[3]', 0.5, 2)
 		p0 = 100 if self.bias > 0 else -100
 		p0l = [0, 1000] if self.bias > 0 else [-1000, 0]
 		p1 = 1.7
 		p1l = [1, 3]
-		p2 = -0.5
-		p2l = [-1, 0]
+		p2 = -0.25
+		p2l = [-1.5, 1]
 		p3 = 0
 		p3l = [-1000, 1000]
 		func.SetNpx(10000)
@@ -1654,26 +1654,77 @@ class AnalysisCaenCCD:
 		func.SetParLimits(1, p1l[0], p1l[1])
 		func.SetParLimits(2, p2l[0], p2l[1])
 		func.SetParLimits(3, p3l[0], p3l[1])
+		# func = ro.TF1('fit_' + name,'[0]*cos([1]*x+[2])+[3]', 0.5, 2)
+		# p0 = 100 if self.bias > 0 else -100
+		# p0l = [0, 1000] if self.bias > 0 else [-1000, 0]
+		# p1 = 1.7
+		# p1l = [1, 3]
+		# p2 = -0.5
+		# p2l = [-1, 0.5]
+		# p3 = 0
+		# p3l = [-1000, 1000]
+		# func.SetNpx(10000)
+		# func.SetLineColor(ro.kRed)
+		# func.SetParameters(np.array([p0, p1, p2, p3], 'f8'))
+		# func.SetParLimits(0, p0l[0], p0l[1])
+		# func.SetParLimits(1, p1l[0], p1l[1])
+		# func.SetParLimits(2, p2l[0], p2l[1])
+		# func.SetParLimits(3, p3l[0], p3l[1])
 		tfit = self.graph[name].Fit('fit_' + name, 'QM0RS', '')
 		if tfit.Prob() < 0.9:
 			tfit = self.graph[name].Fit('fit_' + name, 'QM0RS', '')
 		if tfit.Prob() < 0.9:
 			tfit = self.graph[name].Fit('fit_' + name, 'QM0RS', '')
-		print 'fit prob', tfit.Prob() * 100, '%'
-		print 'Parameters', tfit.Parameter(0), tfit.Parameter(1), tfit.Parameter(2), tfit.Parameter(3)
+		# print 'fit prob', tfit.Prob() * 100, '%'
+		# print 'Parameters', tfit.Parameter(0), tfit.Parameter(1), tfit.Parameter(2), tfit.Parameter(3)
 		self.langaus[name] = func.Clone()
-		self.canvas[name].cd()
-		self.langaus[name].Draw('same')
-		self.canvas[name].Modified()
-		ro.gPad.Update()
+		# self.canvas[name].cd()
+		# self.langaus[name].Draw('same')
+		# self.canvas[name].Modified()
+		# ro.gPad.Update()
 		peakbla = -100000
+		peakbla2 = -100000
+		peakposition2 = -100000
 		if tfit.Prob() >= 0.01:
 			peakbla2 = self.langaus[name].GetX(0, 0.5, 2)
 			if (self.langaus[name].Derivative(peakbla2) < 0 < self.bias) or (self.langaus[name].Derivative(peakbla2) > 0 > self.bias):
+				# peak offset 0.023 behind for calibration run for +250V in 20200916 V2
+				# crossPosition0 = 1.19654 + 0.023 = 1.21954
+				crossPosition0 = 1.2195 # using the pol0 fit for 20200316 cal 0 which gives a peak position at 2.124 us. This is the offset needed tested with some measurements.
+				deltaCrossPosition = crossPosition0 - peakbla2
 				peakbla = peakbla2
-				peakbla += 0.90584
-				# for a peak position of ~2.10159
-		print 'Peak position set to', peakbla
+				# peakbla += 0.90584 # for a peak position of ~2.10159 us
+				peakbla += 0.928 # for a peak position of ~2.124 us
+				peakposition2 = 1 + 9.16383e-01 * peakbla2
+		# print 'Peak position set to', peakbla
+		return peakbla2
+
+	def HistoBla(self):
+		blah0 = ro.TH1F('blah0', 'blah0', 500, 1, 3)
+		blah1 = ro.TH1F('blah1', 'blah1', 500, -1, 1)
+		blah2 = ro.TH1F('blah2', 'blah2', 1000, -1, 3)
+		blah3 = ro.TH2F('blah3', 'blah3', 1000, -1, 3, 500, 1, 3)
+		for i in xrange(int(self.analysisTree.GetEntries())):
+			if i % 1000 == 0: print i
+			self.analysisTree.GetEntry(i)
+			pi = self.analysisTree.peakPosition * 1e6
+			if 1 < pi < 3:
+				blah0.Fill(pi)
+				blah1.Fill(2.124 - pi)
+			pi2 = self.PlotConstantFractionSignal(i)
+			if -1 < pi2 < 3:
+				blah2.Fill(pi2)
+			if 1 < pi < 3 and -1 < pi2 < 3:
+				blah3.Fill(pi2, pi)
+		blac0 = ro.TCanvas('blac0', 'blac0', 1)
+		blah0.Draw('e')
+		blac1 = ro.TCanvas('blac1', 'blac1', 1)
+		blah1.Draw('e')
+		blac2 = ro.TCanvas('blac2', 'blac2', 1)
+		blah2.Draw('e')
+		blac3 = ro.TCanvas('blac3', 'blac3', 1)
+		blah3.Draw('colz')
+		ipdb.set_trace()
 
 # def main():
 # 	parser = OptionParser()
