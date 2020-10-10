@@ -523,11 +523,11 @@ class Converter_Caen:
 
 	def FillBranches(self, ev):
 		self.eventBra.fill(ev)
-		np.putmask(self.timeBra, np.bitwise_not(np.zeros(self.points, '?')), self.timeVect)
-		np.putmask(self.voltBra, np.bitwise_not(np.zeros(self.points, '?')), self.sigVolts)
-		np.putmask(self.trigBra, np.bitwise_not(np.zeros(self.points, '?')), self.trigVolts)
+		np.putmask(self.timeBra, np.ones(self.points, '?'), self.timeVect)
+		np.putmask(self.voltBra, np.ones(self.points, '?'), self.sigVolts)
+		np.putmask(self.trigBra, np.ones(self.points, '?'), self.trigVolts)
 		if self.doVeto:
-			np.putmask(self.vetoBra, np.bitwise_not(np.zeros(self.points, '?')), self.vetoVolts)
+			np.putmask(self.vetoBra, np.ones(self.points, '?'), self.vetoVolts)
 			self.vetoedBra.fill(self.vetoed_event)
 		self.badShapeBra.fill(self.bad_shape_event)
 		self.badPedBra.fill(self.bad_pedstal_event)
