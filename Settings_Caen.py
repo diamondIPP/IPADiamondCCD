@@ -159,11 +159,11 @@ class Settings_Caen:
 							self.current_limit = abs(parser.getfloat('HV', 'current_limit'))
 						if parser.has_option('HV', 'ramp'):
 							self.hv_ramp = abs(parser.getfloat('HV', 'ramp'))
-	                                        if parser.has_option('HV', 'address'):
-	                                                self.hv_address = parser.get('HV', 'address')
-	                                        else:
-	                                                self.hv_address = '/dev/'
-	                                                self.hv_address += 'iseg2' if self.hv_supply.lower() == 'iseg-nhs-6220n' else 'keithley4' if self.hv_supply.loser() == 'keithley2410' else 'keithley6' if self.hv_supply.lower() == 'keithley6517b' else 'iseg'
+						if parser.has_option('HV', 'address'):
+								self.hv_address = parser.get('HV', 'address')
+						else:
+								self.hv_address = '/dev/'
+								self.hv_address += 'iseg2' if self.hv_supply.lower() == 'iseg-nhs-6220n' else 'keithley4' if self.hv_supply.loser() == 'keithley2410' else 'keithley6' if self.hv_supply.lower() == 'keithley6517b' else 'iseg'
 						# if parser.has_option('HV', 'hot_start'):
 						# 	self.hot_start = bool(parser.getboolean('HV', 'hot_start'))
 
@@ -245,8 +245,7 @@ class Settings_Caen:
 
 
 	def UpdateVcalVsSignal(self):
-		self.fit_vcal_signal_params = np.array([np.divide(-self.fit_signal_vcal_params[0], self.fit_signal_vcal_params[1], dtype='f8'),
-		                                        np.divide(1.0, self.fit_signal_vcal_params[1], dtype='f8')], dtype='f8')
+		self.fit_vcal_signal_params = np.array([np.divide(-self.fit_signal_vcal_params[0], self.fit_signal_vcal_params[1], dtype='f8'), np.divide(1.0, self.fit_signal_vcal_params[1], dtype='f8')], dtype='f8')
 		self.fit_vcal_signal_params_errors = np.array([np.sqrt((self.fit_signal_vcal_params_errors[0] / self.fit_signal_vcal_params[1])**2 + (self.fit_signal_vcal_params[0] * self.fit_signal_vcal_params_errors[1] / (self.fit_signal_vcal_params[1] ** 2))**2)], dtype='f8')
 
 	def SetOutputFiles(self):

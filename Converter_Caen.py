@@ -46,7 +46,9 @@ class Converter_Caen:
 		self.hv_log_files_path = None
 		self.current_hv_log_path = None
 		if self.control_hv:
-			self.hv_log_files_path = data_path + '{f}/{d}_CH{ch}'.format(f=self.filename, d=self.settings.hv_supply, ch=self.settings.hv_ch) if self.settings.simultaneous_conversion else '{d}/Runs/{f}/HV_{f}/{s}_CH{ch}'.format(d=self.settings.outdir, f=self.filename, s=self.settings.hv_supply, ch=self.settings.hv_ch)
+			self.hv_log_files_path = data_path + '/{f}/{d}_CH{ch}'.format(f=self.filename, d=self.settings.hv_supply, ch=self.settings.hv_ch) if self.settings.simultaneous_conversion else '{d}/Runs/{f}/HV_{f}/{s}_CH{ch}'.format(d=self.settings.outdir, f=self.filename, s=self.settings.hv_supply, ch=self.settings.hv_ch)
+
+			print 'HV log files are in:', self.hv_log_files_path
 
 		self.points = self.settings.points
 		self.num_events = self.settings.num_events
@@ -77,8 +79,9 @@ class Converter_Caen:
 
 		self.trigger_search_window = 0.2e-6
 		self.veto_window_around_trigg = 50e-9
-		self.peak_pos_estimate = 2.131e-6
-		self.peak_pos_window = 0.5e-6
+		self.peak_pos_estimate = 2e-6
+		self.peak_pos_window_low = 1.5e-6
+		self.peak_pos_window_high = 3e-6
 
 		self.array_points = np.arange(self.points, dtype=np.dtype('int32'))
 
@@ -91,6 +94,8 @@ class Converter_Caen:
 		# self.hourBra = self.minuteBra = self.secondBra = None
 		self.hourMinSecBra = None
 		# self.timeStampBra = None
+		self.time_struct_fmt = '@II'
+		self.time_struct_len = struct.calcsize(self.time_struct_fmt)
 		try:
 			self.time_struct_fmt = self.settings.time_struct_fmt
 			self.time_struct_len = self.settings.time_struct_len
@@ -101,6 +106,7 @@ class Converter_Caen:
 		self.t0 = time.time()
 
 		self.signal_written_events = self.trigger_written_events = self.anti_co_written_events = None
+		self.timestamp_written_events = None
 		self.fs = self.ft = self.fa = None
 		self.ftime = None
 		self.wait_for_data = None
@@ -171,6 +177,8 @@ class Converter_Caen:
 		if self.simultaneous_conversion:
 			print 'Start creating root file simultaneously with data taking'
 		else:
+			print 'Checking if there is enough data'
+			self.CheckSettingsAndBinaries()
 			print 'Start creating root file'
 		self.raw_file = ro.TFile('{wd}/{r}.root'.format(wd=self.output_dir, r=self.filename), 'RECREATE')
 		self.raw_tree = ro.TTree(self.filename, self.filename)
@@ -214,6 +222,7 @@ class Converter_Caen:
 		self.signal_written_events = int(round(os.path.getsize(self.signal_path) / self.struct_len)) if os.path.isfile(self.signal_path) else 0
 		self.trigger_written_events = int(round(os.path.getsize(self.trigger_path) / self.struct_len)) if os.path.isfile(self.trigger_path) else 0
 		self.anti_co_written_events = int(round(os.path.getsize(self.veto_path) / self.struct_len)) if self.doVeto and os.path.isfile(self.veto_path) else 0
+		self.timestamp_written_events = int(round(os.path.getsize(self.time_path) / self.time_struct_len)) if os.path.isfile(self.time_path) else 0
 
 	def OpenRawBinaries(self):
 		self.fs = open(self.signal_path, 'rb')
@@ -272,6 +281,7 @@ class Converter_Caen:
 		self.wait_for_data = (self.signal_written_events <= ev) or (self.trigger_written_events <= ev)
 		if self.doVeto:
 			self.wait_for_data = self.wait_for_data or (self.anti_co_written_events <= ev)
+		self.wait_for_data = self.wait_for_data or (self.timestamp_written_events <= ev)
 
 	def WaitForData(self, ev):
 		t1 = time.time()
@@ -287,6 +297,8 @@ class Converter_Caen:
 				if self.doVeto:
 					if not self.fa.closed:
 						self.fa.close()
+				if not self.ftime.closed:
+					self.ftime.close()
 				self.GetBinariesNumberWrittenEvents()
 				self.CheckFilesSizes(ev)
 				if not self.wait_for_data:
@@ -391,7 +403,7 @@ class Converter_Caen:
 		# self.tempTime.Set(1970, 1, 1, 0, 0, timesec, timens, True, 0)
 		# self.tempTime.GetDate(False, 0, self.tempYear, self.tempMonth, self.tempDay)
 		# self.tempTime.GetTime(False, 0, self.tempHour, self.tempMinute, self.tempSecond)
-		tempdic = {'voltage': 0, 'current': 0}
+		tempdic = {'voltage': self.hv_data['voltage'], 'current': self.hv_data['current']}
 		if len(lines) > 0:
 			if len(lines) == 1:
 				pos = 0
@@ -401,8 +413,8 @@ class Converter_Caen:
 				# pos = abs(lines2 - self.tempTime.AsDouble()).argmin()
 				# pos = np.argmin(lines2)
 				pos = lines2.index(min(lines2))
-			tempdic['voltage'] = float(lines[pos][1])
-			tempdic['current'] = float(lines[pos][2])
+			tempdic['voltage'] = float(lines[pos][1]) if float(lines[pos][1]) != 0 else tempdic['voltage']
+			tempdic['current'] = float(lines[pos][2]) if abs(float(lines[pos][2])) < 100e-6 else tempdic['current']
 		return tempdic
 
 	def CheckData(self):
@@ -439,24 +451,46 @@ class Converter_Caen:
 
 	def DefineSignalBaseLineAndPeakPosition(self):
 		self.condition_base_line = np.array(self.array_points <= self.trigPos, dtype='?')
-		# values 2.2 and 0.5 us come from shape of signal
-		self.condition_peak_pos = np.array(np.abs(self.array_points - (self.peak_pos_estimate/float(self.time_res) + self.trigPos)) <= self.peak_pos_window/float(self.time_res), dtype='?')
+		# values shaper of the signal indicates it should peak at ~2us. The window is set between 1.5us before and 3us after the peak position designed by the shaper
+		self.condition_peak_pos = np.array(np.abs(self.array_points - ((self.peak_pos_estimate + (self.peak_pos_window_high - self.peak_pos_window_low) / 2.)/float(self.time_res) + self.trigPos)) <= ((self.peak_pos_window_high + self.peak_pos_window_low) / 2.)/float(self.time_res), dtype='?')
+
+	# def IsEventBadShape(self):
+	# 	# mean = np.extract(self.condition_base_line, self.sigADC).mean()
+	# 	sigma = np.extract(self.condition_base_line, self.sigADC).std()
+	# 	lim_inf = self.condition_peak_pos.argmax()
+	# 	lim_sup = self.points - self.condition_peak_pos[::-1].argmax() - 1
+	# 	peak_pos = self.sigADC.argmin() if self.polarity == 1 else self.sigADC.argmax()
+	# 	if lim_inf < peak_pos < lim_sup:
+	# 		# The event has a good shape
+	# 		return 0
+	# 	else:
+	# 		modified_adc = self.sigADC - sigma if self.polarity == 1 else self.sigADC + sigma
+	# 		modified_adc[lim_inf] += 2*sigma if self.polarity == 1 else -2*sigma
+	# 		modified_adc[lim_sup] += 2*sigma if self.polarity == 1 else -2*sigma
+	# 		peak_pos = modified_adc.argmin() if self.polarity == 1 else modified_adc.argmax()
+	# 		if lim_inf < peak_pos < lim_sup:
+	# 			# Can't tell if the event has a bad shape
+	# 			return -1
+	# 		else:
+	# 			# Event has bad shape
+	# 			return 1
 
 	def IsEventBadShape(self):
 		# mean = np.extract(self.condition_base_line, self.sigADC).mean()
 		sigma = np.extract(self.condition_base_line, self.sigADC).std()
 		lim_inf = self.condition_peak_pos.argmax()
 		lim_sup = self.points - self.condition_peak_pos[::-1].argmax() - 1
-		peak_pos = self.sigADC.argmin() if self.polarity == 1 else self.sigADC.argmax()
-		if lim_inf < peak_pos < lim_sup:
+		peak_pos = RoundInt(self.peak_pos_estimate / self.time_res + self.trigPos)
+		sigInf, sigPeak, sigSup = self.sigADC[lim_inf] * (-self.polarity), self.sigADC[peak_pos] * (-self.polarity), self.sigADC[lim_sup] * (-self.polarity)
+		# if lim_inf < peak_pos < lim_sup:
+		if sigPeak > sigInf and sigPeak > sigSup:
 			# The event has a good shape
 			return 0
 		else:
-			modified_adc = self.sigADC - sigma if self.polarity == 1 else self.sigADC + sigma
-			modified_adc[lim_inf] += 2*sigma if self.polarity == 1 else -2*sigma
-			modified_adc[lim_sup] += 2*sigma if self.polarity == 1 else -2*sigma
-			peak_pos = modified_adc.argmin() if self.polarity == 1 else modified_adc.argmax()
-			if lim_inf < peak_pos < lim_sup:
+			sigInf -= 2 * sigma
+			sigSup -= 2 * sigma
+			sigPeak += 2 * sigma
+			if sigPeak > sigInf and sigPeak > sigSup:
 				# Can't tell if the event has a bad shape
 				return -1
 			else:
@@ -489,11 +523,11 @@ class Converter_Caen:
 
 	def FillBranches(self, ev):
 		self.eventBra.fill(ev)
-		np.putmask(self.timeBra, np.bitwise_not(np.zeros(self.points, '?')), self.timeVect)
-		np.putmask(self.voltBra, np.bitwise_not(np.zeros(self.points, '?')), self.sigVolts)
-		np.putmask(self.trigBra, np.bitwise_not(np.zeros(self.points, '?')), self.trigVolts)
+		np.putmask(self.timeBra, np.ones(self.points, '?'), self.timeVect)
+		np.putmask(self.voltBra, np.ones(self.points, '?'), self.sigVolts)
+		np.putmask(self.trigBra, np.ones(self.points, '?'), self.trigVolts)
 		if self.doVeto:
-			np.putmask(self.vetoBra, np.bitwise_not(np.zeros(self.points, '?')), self.vetoVolts)
+			np.putmask(self.vetoBra, np.ones(self.points, '?'), self.vetoVolts)
 			self.vetoedBra.fill(self.vetoed_event)
 		self.badShapeBra.fill(self.bad_shape_event)
 		self.badPedBra.fill(self.bad_pedstal_event)
@@ -566,9 +600,17 @@ class Converter_Caen:
 		result = ChannelAdcToVolts(adcs, channel)
 		return result
 
+	def CheckSettingsAndBinaries(self):
+		self.GetBinariesNumberWrittenEvents()
+		if not self.simultaneous_conversion and (self.num_events > 10 and (self.signal_written_events < 10 or self.trigger_written_events < 10) or self.signal_written_events + self.trigger_written_events == 0):
+			if os.path.isfile('{wd}/{r}.root'.format(wd=self.output_dir, r=self.filename)):
+				os.remove('{wd}/{r}.root'.format(wd=self.output_dir, r=self.filename))
+			ExitMessage('It was a flawed run. There are not enough events for analyisis. Exiting', os.EX_NOINPUT)
+			exit()
+
 if __name__ == '__main__':
 	# first argument is the path to the settings pickle file
-	# sedond argument is the path of the directory that contains the raw data.
+	# second argument is the path of the directory that contains the raw data.
 	# By default, it assumes simultaneous data conversion. If the conversion is done offline (aka. not simultaneous), then the 3rd parameter has to be given and should be '0'
 	if len(sys.argv) < 2:
 		print 'Usage is: Converter_Caen.py <settings_pickle_path> <dir_with_raw_data> 0 for offline conversion)'

@@ -33,6 +33,9 @@ class HV_Control:
 		self.ramp = settings.hv_ramp
 		self.supply_number = 0
 		self.time_update = 2.0
+		self.r_passive = self.settings.r_passive if 'r_passive' in self.settings.__dict__.keys() else 230e6
+		self.abort_percentage_drop = 0.1
+		self.stop_run = False
 		self.out_file = None
 		self.hv_struct = self.settings.hv_struct_fmt
 		self.hv_struct_len = self.settings.hv_struct_len
@@ -236,7 +239,11 @@ class HV_Control:
 			if len(temp_line) >= 3:
 				if IsFloat(temp_line[1]) and IsFloat(temp_line[2]):
 					self.last_line['voltage'] = float(temp_line[1])
-					self.last_line['current'] = float(temp_line[2])
+					self.last_line['current'] = float(temp_line[2]) if abs(self.last_line['current']) < 100e-6 else 0
+					if self.last_line['voltage'] != 0:
+						if abs(self.last_line['current'] * self.r_passive) > abs(self.abort_percentage_drop * self.last_line['voltage']):
+							print 'due to high current, the voltage in the diamond is below 90% of the intended value. Sending termination signal to the run'
+							self.stop_run = True
 		return
 
 	def CorrectBias(self, delta_volts):
@@ -251,10 +258,12 @@ class HV_Control:
 		time.sleep(wait_time)
 
 	def UpdateHVFile(self, nEvent=0):
+		self.stop_run = False
 		if time.time() - self.time0 >= self.time_update:
 			self.ReadLastLine(nEvent)
 			self.time0 = time.time()
 			self.WriteHVFile()
+		return self.stop_run
 
 	def WriteHVFile(self):
 		temp_array = [self.last_line['event'], self.last_line['seconds'], self.last_line['nanoseconds'], self.last_line['voltage'], self.last_line['current']]
@@ -274,7 +283,7 @@ class HV_Control:
 			self.process.stdin.flush()
 			time.sleep(1)
 			self.MoveLogsAndConfig()
-			os.remove(self.out_file_name)
+			# os.remove(self.out_file_name)
 
 	def MoveLogsAndConfig(self):
 		path_dir = '{d}/Runs/{f}/HV_{f}'.format(d=self.settings.outdir, f=self.filename)
@@ -291,6 +300,8 @@ class HV_Control:
 			print 'Moved hv config file to output folder'
 			if self.hv_supply.lower().startswith('iseg'):
 				shutil.move('config/iseg_{f}.cfg'.format(f=self.filename), path_dir)
+			shutil.move(self.out_file_name, path_dir)
+			print 'Moved hv data structure to output folder'
 		del path_dir
 		if os.path.islink('config/keithley.cfg'):
 			os.unlink('config/keithley.cfg')

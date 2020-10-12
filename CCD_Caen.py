@@ -53,6 +53,7 @@ class CCD_Caen:
 		self.fs0, self.ft0, self.fv0 = None, None, None
 		self.file_time_stamp = None
 		self.hv_control = None
+		self.stop_run = False
 		self.utils = Utils()
 		self.RemoveFiles()
 		self.t0, self.t1, self.t2 = None, None, None
@@ -193,6 +194,7 @@ class CCD_Caen:
 			self.fv0 = open('raw_wave{a}.dat'.format(a=self.veto_ch.ch), mode)
 
 	def CloseFiles(self):
+		print 'Closing files'
 		if self.ft0:
 			self.ft0.close()
 			if self.ft0.closed:
@@ -216,7 +218,6 @@ class CCD_Caen:
 
 	def GetWaveforms(self, events=1, stdin=False, stdout=False):
 		self.t1 = time.time()
-		# if self.settings.do_hv_control: self.hv_control.UpdateHVFile()
 		# Negative events is for correcting the baseline of the scintillators and the sigma to set the thresholds
 		if events < 0:
 			# while self.p.poll() is None:
@@ -231,7 +232,7 @@ class CCD_Caen:
 				self.p.stdin.write('P')
 				self.p.stdin.flush()
 			# time.sleep(1)
-			self.p.stdin.write('w')
+			self.p.stdin.write('W')
 			self.p.stdin.flush()
 			# time.sleep(1)
 			for it in xrange(abs(events)):
@@ -245,7 +246,7 @@ class CCD_Caen:
 			self.p.stdin.flush()
 			while self.p.poll() is None:
 				continue
-			if self.settings.do_hv_control: self.hv_control.UpdateHVFile()
+			if self.settings.do_hv_control: self.stop_run = self.stop_run or self.hv_control.UpdateHVFile()
 			self.ConcatenateBinaries()
 			self.CloseSubprocess('wave_dump', stdin=stdin, stdout=stdout)
 			self.settings.RemoveBinaries()
@@ -268,7 +269,6 @@ class CCD_Caen:
 			self.t2 = time.time()
 			while self.p.poll() is None:
 				if time.time() - self.t1 >= self.settings.time_calib:
-					# ipdb.set_trace()
 					self.p.stdin.write('s')
 					self.p.stdin.flush()
 					self.settings.RemoveBinaries()
@@ -277,15 +277,14 @@ class CCD_Caen:
 					self.p.stdin.write('q')
 					self.p.stdin.flush()
 					time.sleep(1)
-					# if self.settings.do_hv_control: self.hv_control.UpdateHVFile()
-				elif self.written_events_sig + self.sig_written >= events:
+				elif (self.written_events_sig + self.sig_written >= events) or self.stop_run:
+					if self.stop_run: print 'run was stopped'
 					self.p.stdin.write('s')
 					self.p.stdin.flush()
 					self.settings.RemoveBinaries()
 					self.p.stdin.write('q')
 					self.p.stdin.flush()
 					time.sleep(1)
-					# if self.settings.do_hv_control: self.hv_control.UpdateHVFile()
 				else:
 					if self.settings.random_test and (time.time() - self.t2 > trig_rand_time):
 						self.p.stdin.write('t')
@@ -293,7 +292,7 @@ class CCD_Caen:
 						self.t2 = time.time()
 					self.ConcatenateBinaries()
 					if self.settings.do_hv_control:
-						self.hv_control.UpdateHVFile(int(min(self.written_events_sig + self.sig_written, self.settings.num_events)))
+						self.stop_run = self.stop_run or self.hv_control.UpdateHVFile(int(min(self.written_events_sig + self.sig_written, self.settings.num_events)))
 					if not self.settings.simultaneous_conversion:
 						self.settings.bar.update(int(min(self.written_events_sig + self.sig_written, self.settings.num_events)))
 			del self.t1
@@ -302,7 +301,7 @@ class CCD_Caen:
 			time.sleep(1)
 			del self.t2
 			self.t2 = None
-			if self.settings.do_hv_control: self.hv_control.UpdateHVFile(int(min(self.written_events_sig + self.sig_written, self.settings.num_events)))
+			if self.settings.do_hv_control: self.stop_run = self.stop_run or self.hv_control.UpdateHVFile(int(min(self.written_events_sig + self.sig_written, self.settings.num_events)))
 		self.total_events_sig = self.CalculateEventsWritten(self.signal_ch.ch)
 		self.total_events_trig = self.CalculateEventsWritten(self.trigger_ch.ch)
 		self.total_events_veto = self.CalculateEventsWritten(self.veto_ch.ch) if not self.is_cal_run else 0
@@ -454,29 +453,41 @@ class CCD_Caen:
 			self.settings.CreateProgressBar(self.settings.num_events)
 			self.settings.bar.start()
 		self.settings.SetupDigitiser(doBaseLines=False, signal=self.signal_ch, trigger=self.trigger_ch, ac=self.veto_ch, events_written=self.total_events)
-		while self.total_events < self.settings.num_events:
+		doBreak = False
+		while (self.total_events < self.settings.num_events) and not doBreak:
+			print 'Calculating written events'
 			self.sig_written = self.CalculateEventsWritten(self.signal_ch.ch)
 			self.trg_written = self.CalculateEventsWritten(self.trigger_ch.ch)
 			self.veto_written = self.CalculateEventsWritten(self.veto_ch.ch) if not self.is_cal_run else 0
 			self.timestamp_written = self.CalculateEventsWritten(-1)
-			self.p = subp.Popen(['{p}/wavedump'.format(p=self.settings.wavedump_path), '{d}/WaveDumpConfig_CCD.txt'.format(d=self.settings.outdir)], bufsize=-1, stdin=subp.PIPE, stdout=subp.PIPE, close_fds=True)
-			time.sleep(2)
-			if self.p.poll() is None:
-				self.GetWaveforms(self.settings.num_events, stdin=True, stdout=True)
-			else:
-				print 'Wavedump did not start'
-				if ntries <= 0:
-					ExitMessage('There is a problem with Wavedump... exiting')
+			if not self.stop_run:
+				print 'Starting wavedump'
+				self.p = subp.Popen(['{p}/wavedump'.format(p=self.settings.wavedump_path), '{d}/WaveDumpConfig_CCD.txt'.format(d=self.settings.outdir)], bufsize=-1, stdin=subp.PIPE, stdout=subp.PIPE, close_fds=True)
+				time.sleep(2)
+				if self.p.poll() is None:
+					self.GetWaveforms(self.settings.num_events, stdin=True, stdout=True)
 				else:
-					ntries = ntries - 1
+					print 'Wavedump did not start'
+					if ntries <= 0:
+						ExitMessage('There is a problem with Wavedump... exiting')
+					else:
+						ntries = ntries - 1
+			else:
+				doBreak = True
+				print 'run was stopped. Wavedump will not start (again)'
 
 		self.CloseFiles()
 		if not self.settings.simultaneous_conversion:
 			print 'Time getting {n} events: {t} seconds'.format(n=self.total_events, t=time.time() - self.t0)
 			self.settings.bar.finish()
 		else:
+			wait_time_if_stopped = 10
+			temp_t = time.time()
 			while self.pconv.poll() is None:
 				time.sleep(2)
+				if self.stop_run and time.time() - temp_t > wait_time_if_stopped:
+					print 'killing converter because run was stopped'
+					self.pconv.kill()
 			self.CloseSubprocess('converter', stdin=False, stdout=False)
 		return self.total_events
 
@@ -532,6 +543,7 @@ def main():
 		ccd.SavePickles()
 		time.sleep(time_wait)
 		written_events = ccd.GetData()
+		if ccd.stop_run: print 'Run stopped because current is too high'
 		ccd.settings.num_events = written_events
 		ccd.SavePickles()  # update pickles with the real amount of written events
 		ccd.settings.MoveBinaryFiles()
