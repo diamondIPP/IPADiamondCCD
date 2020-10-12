@@ -2082,11 +2082,11 @@ if __name__ == '__main__':
 		if ana.in_root_tree:
 			ana.AnalysisWaves()
 			if doDebug: ipdb.set_trace()
-			ana.AddVcalFriend(False, False)
-			ana.AddVcalFriend(False, True)
+			ana.AddVcalFriend(overw, False)
+			ana.AddVcalFriend(overw, True)
 			if doDebug: ipdb.set_trace()
-			ana.AddChargeFriend(False, False)
-			ana.AddChargeFriend(False, True)
+			ana.AddChargeFriend(overw, False)
+			ana.AddChargeFriend(overw, True)
 			if doDebug: ipdb.set_trace()
 			ana.PlotPedestal('Pedestal', cuts=ana.cut0.GetTitle(), branch='pedestal')
 			ana.PlotPedestal('PedestalCF', cuts=ana.cut0CF.GetTitle(), branch='pedestalCF')
@@ -2172,6 +2172,7 @@ if __name__ == '__main__':
 				if doDebug: ipdb.set_trace()
 				ana.PlotDiaVoltage('DUTVoltage', '', 5)
 				if doDebug: ipdb.set_trace()
+
 			else:
 				ana.FitConvolutedGaussians('PH')
 				ana.FitConvolutedGaussians('PH_CF')
