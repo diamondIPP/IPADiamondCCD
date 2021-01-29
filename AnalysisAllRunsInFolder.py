@@ -219,7 +219,7 @@ class AnalysisAllRunsInFolder:
 	def LoopRuns(self):
 		# ro.gROOT.SetBatch(True)
 		for run in self.runs:
-			print 'Analysing run:', run
+			print '\nAnalysing run:', run
 			if os.path.isdir(run):
 				root_files = glob.glob('{d}/*.root'.format(d=run))
 				if len(root_files) > 0:

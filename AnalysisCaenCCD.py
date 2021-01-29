@@ -47,7 +47,6 @@ LOAD_IGNORE_NAMES = ['analysis', 'pedestal', 'waveform', 'voltage', 'signal', 'd
 class AnalysisCaenCCD:
 	def __init__(self, directory='.', config='CAENAnalysisConfig.cfg', infile='', bias=0.0, overw=False, verbose=False, doDebug=False):
 		print 'Starting CCD Analysis ...'
-
 		self.config = config
 		self.verb = verbose
 		self.overw = overw
@@ -221,7 +220,7 @@ class AnalysisCaenCCD:
 		for key in self.canvas.keys():
 			self.canvas[key].Close()
 			del self.canvas[key]
-		print 'Deleted analysis object'
+		print 'Deleted analysis object\n'
 
 	def SetRandomGenerator(self, seed=0):
 		seedi = seed if seed != 0 else int(time.time() % 1000000)
