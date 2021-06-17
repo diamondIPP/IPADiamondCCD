@@ -45,12 +45,12 @@ fit_method = ('Minuit2', 'Migrad', )
 LOAD_IGNORE_NAMES = ['analysis', 'pedestal', 'waveform', 'voltage', 'signal', 'dist', 'currents', 'ph', 'veto', 'trigger', 'peak', 'blag']
 
 class AnalysisCaenCCD:
-	def __init__(self, directory='.', config='CAENAnalysisConfig.cfg', infile='', bias=0.0, overw=False, verbose=False):
+	def __init__(self, directory='.', config='CAENAnalysisConfig.cfg', infile='', bias=0.0, overw=False, verbose=False, doDebug=False):
 		print 'Starting CCD Analysis ...'
-
 		self.config = config
 		self.verb = verbose
 		self.overw = overw
+		self.doDebug = doDebug
 		self.inputFile = ''
 		self.inDir = directory
 		self.in_root_file = None
@@ -65,6 +65,7 @@ class AnalysisCaenCCD:
 		self.ch_caen_signal = 3
 		self.cal_run_type = ''
 		self.bias = bias
+		self.emptyAnalysis = False
 		self.pedestalIntegrationTime = 0.4e-6
 		self.pedestalTEndPos = -20e-9
 		self.peakTime = 2.124e-6
@@ -201,6 +202,26 @@ class AnalysisCaenCCD:
 		# self.timeCFVect = np.empty(self.settings.points, 'f8')
 		#
 
+	def __del__(self):
+		self.cut0.Delete()
+		self.cut0CF.Delete()
+		self.CloseInputROOTFiles()
+		self.CloseAnalysisROOTFile()
+		for key in self.line.keys():
+			del self.line[key]
+		for key in self.graph.keys():
+			del self.graph[key]
+		for key in self.langaus.keys():
+			del self.langaus[key]
+		for key in self.histo.keys():
+			del self.histo[key]
+		for key in self.profile.keys():
+			del self.profile[key]
+		for key in self.canvas.keys():
+			self.canvas[key].Close()
+			del self.canvas[key]
+		print 'Deleted analysis object\n'
+
 	def SetRandomGenerator(self, seed=0):
 		seedi = seed if seed != 0 else int(time.time() % 1000000)
 		print 'Using seed', seedi, 'for random generator TRandom3'
@@ -322,6 +343,13 @@ class AnalysisCaenCCD:
 					with open('{d}/{f}.veto'.format(d=self.inDir, f=self.in_tree_name)) as pklveto:
 						self.veto_ch = pickle.load(pklveto)
 
+	def CheckLoadedVectors(self):
+		if self.eventVect.size == 0:
+			print 'There are no waves that pass the cuts:', self.cut0.GetTitle(), '. Exiting'
+			self.CloseAnalysisROOTFile()
+			self.CloseInputROOTFiles()
+			self.emptyAnalysis = True
+
 	def AnalysisWaves(self, doCuts0=True):
 		optiont = 'RECREATE' if self.overw else 'UPDATE'
 		self.OpenAnalysisROOTFile(optiont)
@@ -333,19 +361,27 @@ class AnalysisCaenCCD:
 					self.CloseAnalysisROOTFile()
 					self.OpenAnalysisROOTFile('RECREATE')
 					self.LoadVectorsFromTree()
+					if self.doDebug: ipdb.set_trace()
 					self.ExplicitVectorsFromDictionary()
-					if True:
-						self.DoConstantFraction()
-					else:
-						self.time_CF_deltas = np.full(self.events, 0, dtype='f8')
+					if self.doDebug: ipdb.set_trace()
+					self.CheckLoadedVectors()
+					if self.emptyAnalysis:
+						break
+					self.DoConstantFraction()
+					if self.doDebug: ipdb.set_trace()
 					if self.doPeakPos:
 						self.FindRealPeakPosition()
+						if self.doDebug: ipdb.set_trace()
 					else:
 						self.peak_positions = np.full(self.events, self.peakTime)
 						self.peak_positionsCF = np.full(self.events, self.peakTimeCF)
+					if self.doDebug: ipdb.set_trace()
 					self.FindPedestalPosition()
+					if self.doDebug: ipdb.set_trace()
 					self.FindSignalPositions(self.peakBackward, self.peakForward)
+					if self.doDebug: ipdb.set_trace()
 					self.CalculatePedestalsAndSignals()
+					if self.doDebug: ipdb.set_trace()
 					self.FillAnalysisBranches()
 					self.CloseAnalysisROOTFile()
 					self.CloseInputROOTFiles()
@@ -397,7 +433,9 @@ class AnalysisCaenCCD:
 							os.remove('{d}/{f}{s}.timeCF.{de}.{att}.root'.format(d=self.outDir, f=self.analysisTreeNameStem, s=si, de=self.timeCFDelay, att=self.attenCF))
 					self.suffix = None
 					self.OpenAnalysisROOTFile('READ')
+		if self.emptyAnalysis: return
 		if not self.is_cal_run or self.cal_run_type == 'out':
+			if self.doDebug: ipdb.set_trace()
 			if self.hasBranch['deltaTimeCF']:
 				self.PlotCFDeltaDistribution()
 				self.AddCFShiftCut()
@@ -408,6 +446,7 @@ class AnalysisCaenCCD:
 				self.PlotPeakPositionDistributions('peakPosDistCF', isCF=True)
 				self.AddPeakPositionCutCF()
 		if self.hasBranch['voltageDia']:
+			if self.doDebug: ipdb.set_trace()
 			self.PlotHVDiaDistribution(cut=self.cut0.GetTitle())
 			self.AddDiamondVoltageCut()
 
@@ -1107,9 +1146,9 @@ class AnalysisCaenCCD:
 		self.graph[name].GetXaxis().SetTitle(xname)
 		self.graph[name].GetYaxis().SetTitle(yname)
 
-	def PlotCFDeltaDistribution(self, name='CFDeltaDist', low_t=-1, up_t=1, nbins=100, cut=''):
+	def PlotCFDeltaDistribution(self, name='CFDeltaDist', low_t0=-1, up_t0=1, nbins=100, cut=''):
 		nbins2 = nbins
-		funcArgs = (name, low_t, up_t, float(up_t - low_t) / nbins2, 'deltaTimeCF*1000000', 'CF Time Shift [us]', cut, 'e')
+		funcArgs = (name, low_t0, up_t0, float(up_t0 - low_t0) / nbins2, 'deltaTimeCF*1000000', 'CF Time Shift [us]', cut, 'e')
 		self.DrawHisto(*funcArgs)
 		if not name in self.histo.keys():
 			print 'There was a problem creating the histogram {n}'.format(n=name)
@@ -1119,21 +1158,25 @@ class AnalysisCaenCCD:
 			return
 		self.histo[name].GetXaxis().SetRangeUser(-0.5, 0.5)
 		peakbin = self.histo[name].GetMaximumBin()
-		self.timeCFDeltasPeak = self.histo[name].GetBinCenter(peakbin) * 1e-6
-		self.histo[name].GetXaxis().SetRangeUser(-1, 1)
+		self.timeCFDeltasPeak = self.histo[name].GetBinCenter(peakbin)
+		self.histo[name].GetXaxis().SetRangeUser(low_t0, up_t0)
 		deltax = CheckBinningForFit(self, name, self.DrawHisto, funcArgs, 3, 12)
-		self.histo[name].GetXaxis().SetRangeUser(max(low_t, self.histo[name].GetMean() - 5 * self.histo[name].GetRMS()), min(up_t, self.histo[name].GetMean() + 5 * self.histo[name].GetRMS()))
-		if self.histo[name].Integral() > 9:
+		self.histo[name].GetXaxis().SetRangeUser(max(low_t0, self.histo[name].GetMean() - 5 * self.histo[name].GetRMS()), min(up_t0, self.histo[name].GetMean() + 5 * self.histo[name].GetRMS()))
+		fb, lb = self.histo[name].FindFirstBinAbove(0), self.histo[name].FindLastBinAbove(0)
+		fb = fb + 1 if self.histo[name].GetBinContent(fb) > 3 * self.histo[name].GetBinContent(fb + 1) else fb
+		lb = lb - 1 if self.histo[name].GetBinContent(lb) > 3 * self.histo[name].GetBinContent(lb - 1) else lb
+		low_t, up_t = max(low_t0, self.histo[name].GetBinLowEdge(fb)), min(up_t0, self.histo[name].GetBinLowEdge(lb + 1))
+		if self.histo[name].Integral(fb, lb) > 9:
 			func = ro.TF1('fit_' + name, 'gaus(0)+gaus(3)', low_t, up_t)
 			func.SetNpx(1000)
-			params = np.array([self.histo[name].GetBinContent(peakbin) * 2., self.timeCFDeltasPeak * 1e6, self.histo[name].GetRMS() / 2, self.histo[name].GetBinContent(peakbin) / 10., self.timeCFDeltasPeak * 1e6, self.histo[name].GetRMS() * 2], 'f8')
+			params = np.array([self.histo[name].GetBinContent(peakbin) * 2., 0, self.histo[name].GetRMS() / 2, self.histo[name].GetBinContent(peakbin) / 10., 0, self.histo[name].GetRMS() * 2], 'f8')
 			func.SetParameters(params)
-			func.SetParLimits(0, 0, 10 * self.histo[name].GetBinContent(peakbin))
+			func.SetParLimits(0, 1, 10 * self.histo[name].GetBinContent(peakbin))
 			func.SetParLimits(1, low_t, up_t)
-			func.SetParLimits(2, 0, self.histo[name].GetRMS())
-			func.SetParLimits(3, 0, 10 * self.histo[name].GetBinContent(peakbin))
-			func.SetParLimits(4, 10 * low_t, 10 * up_t)
-			func.SetParLimits(5, 0, 10 * self.histo[name].GetRMS())
+			func.SetParLimits(2, 0.001, self.histo[name].GetRMS())
+			func.SetParLimits(3, 0, 2 * self.histo[name].GetBinContent(peakbin))
+			func.SetParLimits(4, -10 * abs(low_t), 10 * abs(up_t))
+			func.SetParLimits(5, 0.5 * self.histo[name].GetRMS(), 10 * self.histo[name].GetRMS())
 			fit = self.histo[name].Fit('fit_' + name, 'QEMSB', '', low_t, up_t)
 			xpeak = func.GetMaximumX(low_t, up_t)
 			fit = self.histo[name].Fit('fit_' + name, 'QEMSB', '', max(low_t, xpeak - 2 * self.histo[name].GetRMS()), min(up_t, xpeak + 2 * self.histo[name].GetRMS()))
@@ -1197,8 +1240,8 @@ class AnalysisCaenCCD:
 
 	def PlotHVDiaDistribution(self, name='DUTVoltageHisto', low_v=0, up_v=0, nbins=500, cut=''):
 		resVoltage = 0.025
-		minv = low_v if low_v != 0 and up_v != 0 else self.analysisTree.GetMinimum('voltageDia')
-		maxv = up_v if low_v != 0 and up_v != 0 else self.analysisTree.GetMaximum('voltageDia')
+		minv = low_v if low_v != 0 and up_v != 0 else GetMinimumBranch(self.analysisTree, 'voltageDia', 'voltageDia!=0')
+		maxv = up_v if low_v != 0 and up_v != 0 else GetMaximumBranch(self.analysisTree, 'voltageDia', 'voltageDia!=0')
 		deltav = max(float(maxv - minv) / nbins, resVoltage)
 		funcArgs = (name, minv, maxv + resVoltage, resVoltage, 'voltageDia', 'Voltage on Diamond [V]', cut, 'e')
 		self.DrawHisto(*funcArgs)
@@ -1281,7 +1324,7 @@ class AnalysisCaenCCD:
 		func.SetNpx(1000)
 		mean_p, sigma_p = self.histo[name].GetMean(), self.histo[name].GetRMS()
 		vmin = min(vmin, mean_p - 4 * sigma_p)
-		vmax = max(vmin, mean_p + 4 * sigma_p)
+		vmax = max(vmax, mean_p + 4 * sigma_p)
 		width = max(abs(vmin), abs(vmax))
 		vmin, vmax = -width, width
 		fit = self.histo[name].Fit('fit_' + name, 'QEMS', '', mean_p - 2 * sigma_p, mean_p + 2 * sigma_p)
@@ -1315,7 +1358,10 @@ class AnalysisCaenCCD:
 				return
 		if ('signal' in sigtype.lower() and not self.hasBranch['voltageSignal']) or ('trig' in sigtype.lower() and not self.hasBranch['voltageTrigger']) or ('veto' in sigtype.lower() and not self.hasBranch['voltageVeto']):
 			return
-		var = '1000*(voltageSignal-pedestal)' if 'signal_ped_cor' in sigtype.lower() else '1000*voltageSignal' if 'signal' in sigtype.lower() else '1000*voltageTrigger' if 'trig' in sigtype.lower() else '1000*voltageVeto' if 'veto' in sigtype.lower() else ''
+		if not do_cf:
+			var = '1000*(voltageSignal-pedestal)' if 'signal_ped_cor' in sigtype.lower() else '1000*voltageSignal' if 'signal' in sigtype.lower() else '1000*voltageTrigger' if 'trig' in sigtype.lower() else '1000*voltageVeto' if 'veto' in sigtype.lower() else ''
+		else:
+			var = '1000*(voltageSignal-pedestalCF)' if 'signal_ped_cor' in sigtype.lower() else '1000*voltageSignal' if 'signal' in sigtype.lower() else '1000*voltageTrigger' if 'trig' in sigtype.lower() else '1000*voltageVeto' if 'veto' in sigtype.lower() else ''
 		if var == '':
 			print 'sigtype should be "signal", "signal_ped_corrected", "trigger" or "veto"'
 			return
@@ -1503,6 +1549,9 @@ class AnalysisCaenCCD:
 			return
 		if self.histo[name].GetEntries() == 0 or self.histo[name].GetMean()== 0 and self.histo[name].GetRMS() == 0:
 			print 'Can\'t do Langaus fit as there is a problem with the histogram'
+			return
+		if self.histo[name].Integral(1, self.histo[name].GetNbinsX()) < 2:
+			print 'Can\'t do Langaus fit with only 2 filled bins'
 			return
 		self.canvas[name].cd()
 		self.langaus[name] = LanGaus(self.histo[name])
@@ -1823,6 +1872,10 @@ class AnalysisCaenCCD:
 
 	def RemovePedestalFromSignal(self, namePlot0, namePlotZoom, pedSigma, xmin=10000, xmax=-10000, namePlotNewSuffix='NoPedestal'):
 		namec = namePlot0+namePlotNewSuffix
+		if not self.histo.has_key(namePlotZoom):
+			return namec
+		elif self.histo[namePlotZoom].Integral(0, self.histo[namePlotZoom].GetNbinsX()) < 1:
+			return namec
 		if self.histo.has_key(namePlot0) and self.histo.has_key(namePlotZoom):
 			if self.histo.has_key(namec):
 				if self.histo[namec]:
@@ -1838,18 +1891,20 @@ class AnalysisCaenCCD:
 			funcg.SetNpx(1000)
 			funcg.SetParameter(0, 10)
 			funcg.SetParLimits(0, 0, 1e6)
-			par1l, par1h = max(xlow, histoz.GetBinLowEdge(histoz.FindFirstBinAbove(0))), xhigh
+			par1l, par1h = max(xlow, histoz.GetBinLowEdge(histoz.FindFirstBinAbove(0))), min(xhigh, 1000 if 'charge' in namec.lower() else 10)
 			funcg.SetParameter(1, 0.5 * (par1l + par1h))
-			funcg.SetParLimits(1, xlow, xhigh)
+			funcg.SetParLimits(1, xlow, par1h)
 			funcg.SetParameter(2, pedSigma * 2)
 			funcg.SetParLimits(2, 0.5 * pedSigma, 2.1 * pedSigma)
-			fit = histoz.Fit('fit_' + namePlotZoom, 'QEMBS', '', par1l, xhigh)
+			fit = histoz.Fit('fit_' + namePlotZoom, 'QEMBS', '', par1l, par1h)
 			params = np.array([fit.Parameter(0), fit.Parameter(1), fit.Parameter(2)], 'f8')
-			fit = histoz.Fit('fit_' + namePlotZoom, 'QEMBS', '', par1l, min(params[1] + 5 * params[2], xhigh))
+			fit = histoz.Fit('fit_' + namePlotZoom, 'QEMBS', '', par1l, min(params[1] + 5 * params[2], par1h))
+			SetDefaultFitStats(histoz, funcg)
 			params = np.array([fit.Parameter(0), fit.Parameter(1), fit.Parameter(2)], 'f8')
 			histozBinW = histoz.GetBinWidth(1)
 			n0, mu, sigma = params[0], params[1], params[2]
-			xEndCompensation = params[1] + 3 * params[2]
+			maxc = max(histo0.GetBinLowEdge(histo0.GetMaximumBin()), self.langaus[namePlot0].fit.GetMaximumX()) / 4.0
+			xEndCompensation = min(params[1] + 3 * params[2], maxc)
 			bini = 1
 			xlow, xhigh = histo0.GetBinLowEdge(bini), histo0.GetBinLowEdge(bini + 1)
 			doBin = xhigh < xEndCompensation
@@ -1996,50 +2051,52 @@ class AnalysisCaenCCD:
 		ipdb.set_trace()
 
 	def DoAll(self, doDebug=False, saveCanvases=True):
+		ddbg = doDebug or self.doDebug
 		overw = self.overw
 		if self.in_root_tree:
 			self.AnalysisWaves()
-			if doDebug: ipdb.set_trace()
+			if self.emptyAnalysis: return
+			if ddbg: ipdb.set_trace()
 			self.AddVcalFriend(overw, False)
 			self.AddVcalFriend(overw, True)
-			if doDebug: ipdb.set_trace()
+			if ddbg: ipdb.set_trace()
 			self.AddChargeFriend(overw, False)
 			self.AddChargeFriend(overw, True)
-			if doDebug: ipdb.set_trace()
+			if ddbg: ipdb.set_trace()
 			self.PlotPedestal('Pedestal', cuts=self.cut0.GetTitle(), branch='pedestal')
 			self.PlotPedestal('PedestalCF', cuts=self.cut0CF.GetTitle(), branch='pedestalCF')
-			if doDebug: ipdb.set_trace()
+			if ddbg: ipdb.set_trace()
 			if not self.is_cal_run:
 				self.PlotPedestal('PedestalVcal', cuts=self.cut0.GetTitle(), branch='pedestalVcal')
 				self.PlotPedestal('PedestalVcalCF', cuts=self.cut0CF.GetTitle(), branch='pedestalVcalCF')
-				if doDebug: ipdb.set_trace()
+				if ddbg: ipdb.set_trace()
 				self.PlotPedestal('PedestalCharge', cuts=self.cut0.GetTitle(), branch='pedestalCharge')
 				self.PlotPedestal('PedestalChargeCF', cuts=self.cut0CF.GetTitle(), branch='pedestalChargeCF')
-				if doDebug: ipdb.set_trace()
+				if ddbg: ipdb.set_trace()
 			self.PlotWaveforms('SelectedWaveforms', 'signal', cuts=self.cut0.GetTitle(), do_logz=True, do_cf=False)
 			self.PlotWaveforms('SelectedWaveformsCF', 'signal', cuts=self.cut0CF.GetTitle(), do_logz=True, do_cf=True)
-			if doDebug: ipdb.set_trace()
+			if ddbg: ipdb.set_trace()
 			# if 'SelectedWaveforms' in self.canvas.keys():
 			# 	self.canvas['SelectedWaveforms'].SetLogz()
 			self.PlotWaveforms('SelectedWaveformsPedCor', 'signal_ped_corrected', cuts=self.cut0.GetTitle(), do_logz=True, do_cf=False)
 			self.PlotWaveforms('SelectedWaveformsPedCorCF', 'signal_ped_corrected', cuts=self.cut0CF.GetTitle(), do_logz=True, do_cf=True)
-			if doDebug: ipdb.set_trace()
+			if ddbg: ipdb.set_trace()
 			# if 'SelectedWaveformsPedCor' in self.canvas.keys():
 			# 	self.canvas['SelectedWaveformsPedCor'].SetLogz()
 			self.PlotSignal('PH', cuts=self.cut0.GetTitle(), branch='signal')
 			self.PlotSignal('PH_CF', cuts=self.cut0CF.GetTitle(), branch='signalCF')
-			if doDebug: ipdb.set_trace()
+			if ddbg: ipdb.set_trace()
 			if not self.is_cal_run:
 				self.FitLanGaus('PH')
 				self.FitLanGaus('PH_CF')
 				self.PlotSignal('PHvcal', cuts=self.cut0.GetTitle(), branch='signalVcal')
 				self.PlotSignal('PHvcal_CF', cuts=self.cut0CF.GetTitle(), branch='signalVcalCF')
-				if doDebug: ipdb.set_trace()
+				if ddbg: ipdb.set_trace()
 				self.FitLanGaus('PHvcal')
 				self.FitLanGaus('PHvcal_CF')
 				self.PlotSignal('PHcharge', cuts=self.cut0.GetTitle(), branch='signalCharge')
 				self.PlotSignal('PHcharge_CF', cuts=self.cut0CF.GetTitle(), branch='signalChargeCF')
-				if doDebug: ipdb.set_trace()
+				if ddbg: ipdb.set_trace()
 				self.FitLanGaus('PHcharge')
 				self.FitLanGaus('PHcharge_CF')
 
@@ -2087,14 +2144,14 @@ class AnalysisCaenCCD:
 					histocName = self.RemovePedestalFromSignal('PHcharge_CF', 'PHchargePedestal_CF', self.pedestal_charge_sigmaCF, xmax=max(TruncateFloat(phchPpos / 4., 1000), TruncateFloat(phchPpos - 3.5 * phchGsigma, 1000)))
 					self.FitLanGaus(histocName)
 				self.PlotHVCurrents('HVCurrents', '', 5)
-				if doDebug: ipdb.set_trace()
+				if ddbg: ipdb.set_trace()
 				self.PlotDiaVoltage('DUTVoltage', '', 5)
-				if doDebug: ipdb.set_trace()
+				if ddbg: ipdb.set_trace()
 
 			else:
 				self.FitConvolutedGaussians('PH')
 				self.FitConvolutedGaussians('PH_CF')
-			if doDebug: ipdb.set_trace()
+			if ddbg: ipdb.set_trace()
 			if saveCanvases:
 				self.SaveAllCanvas()
 
@@ -2174,7 +2231,7 @@ if __name__ == '__main__':
 	doBatch = bool(options.dobatch)
 	doDebug = bool(options.dodebug)
 
-	ana = AnalysisCaenCCD(directory, config, infile, bias, overw, verb)
+	ana = AnalysisCaenCCD(directory, config, infile, bias, overw, verb, doDebug)
 
 	if doBatch:
 		print 'Running in Batch mode!'

@@ -15,12 +15,13 @@ import ROOT as ro
 fit_method = ('Minuit2', 'Migrad', )
 
 class AnalysisAllRunsInFolder:
-	def __init__(self, runsdir='', config='', configinput='', overwrite=False):
+	def __init__(self, runsdir='', config='', configinput='', overwrite=False, doDebug=False):
 		self.time0 = time.time()
 		self.runsdir = Correct_Path(runsdir)
 		self.config = Correct_Path(config)
 		self.configInput = Correct_Path(configinput) if configinput != '' else ''
 		self.overwrite = overwrite
+		self.doDebug = doDebug
 		self.are_cal_runs = False if self.configInput == '' else True # this is only true for signal calibration runs
 		runstemp = glob.glob('{d}/*'.format(d=self.runsdir))
 		if len(runstemp) < 1:
@@ -218,14 +219,14 @@ class AnalysisAllRunsInFolder:
 	def LoopRuns(self):
 		# ro.gROOT.SetBatch(True)
 		for run in self.runs:
-			print 'Analysing run:', run
+			print '\nAnalysing run:', run
 			if os.path.isdir(run):
 				root_files = glob.glob('{d}/*.root'.format(d=run))
 				if len(root_files) > 0:
 					configfile = self.config if not self.are_cal_runs or '_out_' in run else self.configInput
 					print 'Using config file:', configfile
 					print 'Overwriting analysis tree if it exists' if self.overwrite else 'Not overwriting analysis tree if it exists'
-					anaRun = AnalysisCaenCCD(run, configfile, overw=self.overwrite)
+					anaRun = AnalysisCaenCCD(run, configfile, overw=self.overwrite, doDebug=self.doDebug)
 					anaRun.DoAll()
 					self.voltages.append(anaRun.bias)
 					self.caen_ch = anaRun.ch_caen_signal if self.caen_ch != anaRun.ch_caen_signal else self.caen_ch
@@ -355,6 +356,7 @@ class AnalysisAllRunsInFolder:
 					else:
 						self.signalIn[anaRun.bias] = -signalRun if anaRun.bias < 0 else signalRun
 						self.signalInSigma[anaRun.bias] = signalSigmaRun
+
 					del anaRun
 		self.voltages = sorted(set(self.voltages))
 		# ro.gROOT.SetBatch(False)
@@ -730,12 +732,14 @@ def main():
 	parser.add_option('-c', '--config', dest='config', type='str', default='', help='path to analysis config file used for all runs inside the folder')
 	parser.add_option('-o', '--overwrite', dest='overwrite', default=False, action='store_true', help='Sets overwrite of analysis tree for the run if it exists')
 	parser.add_option('--configinput', dest='configinput', type='str', default='', help='path to analysis config file used for all runs inside the folder that are of calibration type "in". Only necessary when doing signal calibration')
+	parser.add_option('--debug', dest='dodebug', default=False, help='Toggles debug mode', action='store_true')
 	(options, args) = parser.parse_args()
 	runsdir = str(options.runsdir)
 	config = str(options.config)
 	configinput = str(options.configinput)
 	overwrite = bool(options.overwrite)
-	arif = AnalysisAllRunsInFolder(runsdir, config, configinput, overwrite)
+	dodebug = bool(options.dodebug)
+	arif = AnalysisAllRunsInFolder(runsdir, config, configinput, overwrite, dodebug)
 	return arif
 
 if __name__ == '__main__':
