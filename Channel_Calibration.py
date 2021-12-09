@@ -5,7 +5,7 @@ from struct import unpack
 import time, os, sys
 import progressbar
 import ipdb
-from pykeyboard import PyKeyboard
+# from pykeyboard import PyKeyboard
 from ConfigParser import ConfigParser
 import subprocess as subp
 from optparse import OptionParser

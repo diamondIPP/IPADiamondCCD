@@ -7,7 +7,7 @@ import time, os, sys
 from optparse import OptionParser
 import progressbar
 import ipdb
-from pykeyboard import PyKeyboard
+# from pykeyboard import PyKeyboard
 from ConfigParser import ConfigParser
 import subprocess as subp
 import struct
@@ -209,6 +209,7 @@ def CheckFilledBinsHisto(histo):
 	return nbinsTot - emptyBins
 
 def CheckBinningForFit(anaObject, histoKey, drawFunc, funcArgs, deltaPosInfuncArgs, fitParamsMin=6, truncateResol=0, forceMinParLimit=False):
+	count = 20
 	good_binning = False
 	while not good_binning:
 		drawFunc(*funcArgs)
@@ -222,9 +223,11 @@ def CheckBinningForFit(anaObject, histoKey, drawFunc, funcArgs, deltaPosInfuncAr
 					minBins = RoundInt(max(fitParamsMin, entries ** (2/5.))) if not forceMinParLimit else fitParamsMin
 					minBins = max(minBins, 2)
 					maxBins = RoundInt(entries ** (10/17.))
-					if minBins <= maxBins:
+					if minBins <= maxBins or count == 0:
 						delta = funcArgs[deltaPosInfuncArgs]
 						good_binning = False
+						if count == 0:
+							good_binning = True
 						if filledBins < minBins:
 							delta /= 2.
 							funcArgs = tuple([funcArgs[i] if i != deltaPosInfuncArgs else delta for i in xrange(len(funcArgs))])
@@ -251,6 +254,7 @@ def CheckBinningForFit(anaObject, histoKey, drawFunc, funcArgs, deltaPosInfuncAr
 						delta = TruncateFloat(delta, truncateResol) if truncateResol != 0 else delta
 					if delta == 0 and truncateResol != 0:
 						return truncateResol
+		count -= 1
 
 	return funcArgs[deltaPosInfuncArgs]
 

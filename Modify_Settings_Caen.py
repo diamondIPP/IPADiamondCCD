@@ -43,6 +43,10 @@ class Modify_Pickles_Caen:
 		self.settings.ac_thr_counts = val
 		self.veto_ch.thr_counts = val
 
+	def ModifyTriggerThreshold(self, val):
+		self.settings.trig_thr_counts = val
+		self.trigger_ch.thr_counts = val
+
 	def CorrectAdcVoltageCal(self, vcaldir=''):
 		def CheckForDir():
 			while self.voltage_cal_dir == '' or not os.path.isdir(self.voltage_cal_dir):

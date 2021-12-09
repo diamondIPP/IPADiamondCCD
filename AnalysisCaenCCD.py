@@ -44,6 +44,10 @@ ANALYSISSCALARBRANCHES = ['pedestal', 'pedestalCF', 'pedestalSigma', 'pedestalSi
 fit_method = ('Minuit2', 'Migrad', )
 LOAD_IGNORE_NAMES = ['analysis', 'pedestal', 'waveform', 'voltage', 'signal', 'dist', 'currents', 'ph', 'veto', 'trigger', 'peak', 'blag']
 
+ro.Math.MinimizerOptions.SetDefaultMaxFunctionCalls(100000)
+ro.Math.MinimizerOptions.SetDefaultTolerance(0.000001)
+ro.Math.MinimizerOptions.SetDefaultMinimizer('Minuit2', 'Migrad')
+
 class AnalysisCaenCCD:
 	def __init__(self, directory='.', config='CAENAnalysisConfig.cfg', infile='', bias=0.0, overw=False, verbose=False, doDebug=False):
 		print 'Starting CCD Analysis ...'
@@ -68,8 +72,8 @@ class AnalysisCaenCCD:
 		self.emptyAnalysis = False
 		self.pedestalIntegrationTime = 0.4e-6
 		self.pedestalTEndPos = -20e-9
-		self.peakTime = 2.124e-6
-		self.peakTimeCF = 2.124e-6
+		self.peakTime = 2.14e-6
+		self.peakTimeCF = 2.14e-6
 		self.doPeakPos = True
 		self.peakForward = self.pedestalIntegrationTime / 2.0
 		self.peakBackward = self.pedestalIntegrationTime / 2.0
@@ -701,6 +705,9 @@ class AnalysisCaenCCD:
 		self.AddTimeCFFriend(self.timeCFDelay, self.attenCF, self.overw)
 
 	def FindRealPeakPosition(self):
+		def GetConcavity(x, fit_pol4):
+			return 12. * fit_pol4.GetParameter(4) * x ** 2 + 6 * fit_pol4.GetParameter(3) * x + 2 * fit_pol4.GetParameter(2)
+
 		print 'Getting real peak positions...'
 		# mpos = self.signalWaveVect.argmin(axis=1) if self.bias >= 0 else self.signalWaveVect.argmax(axis=1)
 		# time_mpos = self.timeVect[:, mpos].diagonal()
@@ -718,25 +725,34 @@ class AnalysisCaenCCD:
 		print 'Calculating peak positions...'
 		self.utils.CreateProgressBar(len(self.timeVect))
 		self.utils.bar.start()
-		fit_fcn = ro.TF1('fit_peak', '[0]*exp(-((x-[1])/[2])^2)+pol1(3)', self.peakTime - 2e-6, self.peakTime + 2e-6)
+		# fit_fcn = ro.TF1('fit_peak', '[0]*exp(-((x-[1])/[2])^2)+pol1(3)', self.peakTime - 2e-6 if not self.settings.is_cal_run else self.peakTime - 1e-6, self.peakTime + 2e-6 if not self.settings.is_cal_run else self.peakTime + 1e-6)
+		fit_fcn = ro.TF1('fit_peak', 'pol4', self.peakTime - 1.5e-6, self.peakTime + 1.5e-6)
 		fit_fcn.SetNpx(1000)
 		for it, timei in enumerate(self.timeVect):
-			par0 = 1 if self.bias < 0 else -1
+			# 	par0 = 1 if self.bias < 0 else -1
 			par1 = self.peakTime
-			par2 = 1e-6
-			par3 = -1 if self.bias < 0 else 1
-			par4 = 0.1e-6 if self.bias < 0 else -0.1e-6
-			fit_fcn.SetParameter(0, par0)
-			fit_fcn.SetParLimits(0, 0 if self.bias < 0 else -100, 100 if self.bias < 0 else 0)
-			par1Min, par1Max = par1 - 1.e-6, par1 + 1.e-6
-			fit_fcn.SetParameter(1, par1)
-			fit_fcn.SetParLimits(1, par1Min, par1Max)
-			fit_fcn.SetParameter(2, par2)
-			fit_fcn.SetParLimits(2, 0, 10e-6)
-			fit_fcn.SetParameter(3, par3)
-			fit_fcn.SetParLimits(3, -100, 100)
-			fit_fcn.SetParameter(4, par4)
-			fit_fcn.SetParLimits(4, 0 if self.bias < 0 else -1e6, 1e6 if self.bias < 0 else 0)
+			# 	par2 = 1e-6
+			# 	par3 = -1 if self.bias < 0 else 1
+			# 	par4 = 0.1e-6 if self.bias < 0 else -0.1e-6
+			# 	fit_fcn.SetParameter(0, -1)
+			# 	fit_fcn.SetParLimits(0, -100, 100)
+			# 	if not self.is_cal_run:
+			# 		fit_fcn.SetParameter(0, par0)
+			# 		fit_fcn.SetParLimits(0, 0 if self.bias < 0 else -100, 100 if self.bias < 0 else 0)
+			par1Min, par1Max = par1 - 1.5e-6, par1 + 1.5e-6
+			# 	fit_fcn.SetParameter(1, par1)
+			# 	fit_fcn.SetParLimits(1, par1Min, par1Max)
+			# 	fit_fcn.SetParameter(2, par2)
+			# 	fit_fcn.SetParLimits(2, 0, 50e-6)
+			# 	fit_fcn.SetParameter(3, 1)
+			# 	if not self.is_cal_run:
+			# 		fit_fcn.SetParameter(3, par3)
+			# 	fit_fcn.SetParLimits(3, -100, 100)
+			# 	fit_fcn.SetParameter(4, -0.1e-6)
+			# 	fit_fcn.SetParLimits(4, -1e6, 1e6)
+			# 	if not self.is_cal_run:
+			# 		fit_fcn.SetParameter(4, par4)
+			# 		fit_fcn.SetParLimits(4, 0 if self.bias < 0 else -1e6, 1e6 if self.bias < 0 else 0)
 			xmin, xmax = par1Min, par1Max
 			# fit_fcn = ro.TF1('fit_{it}'.format(it=it), '[0]*(x-[1])^2+[2]', xmin[it], xmax[it])
 			# par2limFact = {'low': -10.0, 'up': -0.1} if self.bias >= 0 else {'low': 0.1, 'up': 10.0}
@@ -746,10 +762,24 @@ class AnalysisCaenCCD:
 			fit_res = None
 			grafit = ro.TGraph(len(timei), np.add(timei, self.time_CF_deltas[it], dtype='f8'), self.signalWaveVect[it])
 			grafit.GetXaxis().SetRangeUser(xmin, xmax)
-			for it2 in xrange(3):
-				fit_res = grafit.Fit('fit_peak', 'QBN0S', '', xmin, xmax)
-				xpeak = fit_fcn.GetMaximumX(xmin, xmax) if self.bias < 0 else fit_fcn.GetMinimumX(xmin, xmax)
-				xwindow = 600e-9 if it2 == 0 else 400e-9
+			ro.Math.MinimizerOptions.SetDefaultMaxFunctionCalls(100000)
+			ro.Math.MinimizerOptions.SetDefaultTolerance(0.000001)
+			ro.Math.MinimizerOptions.SetDefaultMinimizer('Minuit2', 'Migrad')
+			xmin, xmax = par1 - 1e-6, par1 + 1e-6
+			fit_res = grafit.Fit('fit_peak', 'QBNM0S', '', xmin, xmax)
+			fit_res = grafit.Fit('fit_peak', 'QBNM0S', '', xmin, xmax)
+			for it2 in xrange(5):
+				fit_res = grafit.Fit('fit_peak', 'QBNM0S', '', xmin, xmax)
+				fit_res = grafit.Fit('fit_peak', 'QBNM0S', '', xmin, xmax)
+				# y1, y2, y3 = fit_fcn.Eval(xmin), fit_fcn.Eval(xpeak), fit_fcn.Eval(xmax)
+				# concavity = 1 if y2 < y1 and y2 < y3 else -1 if y2 > y1 and y2 > y3 else 0
+				concavity = GetConcavity(xpeak, fit_fcn)
+				ymax, ymin = fit_fcn.GetMaximumX(xmin, xmax), fit_fcn.GetMinimumX(xmin, xmax)
+				# xpeak = fit_fcn.GetMaximumX(xmin, xmax) if self.bias < 0 else fit_fcn.GetMinimumX(xmin, xmax)
+				# concavity1 = GetConcavity(max(xmin, xpeak - 0.5e-6), fit_fcn)
+				# concavity3 = GetConcavity(max(xmin, xpeak + 0.5e-6), fit_fcn)
+				xpeak = ymax if concavity < 0 else ymin if concavity > 0 else ymax if concavity == 0 and abs(xpeak - ymax) < abs(xpeak - ymin) else ymin
+				xwindow = 900e-9 if it2 == 0 else 800e-9 if it2 == 1 else 700e-9 if it2 == 2 else 600e-9 if it2 == 3 else 500e-9
 				if xpeak + xwindow > par1Max:
 					xmin, xmax = par1Max - 2 * xwindow, par1Max
 				elif xpeak - xwindow < par1Min:
@@ -1158,9 +1188,9 @@ class AnalysisCaenCCD:
 			return
 		self.histo[name].GetXaxis().SetRangeUser(-0.5, 0.5)
 		peakbin = self.histo[name].GetMaximumBin()
-		self.timeCFDeltasPeak = self.histo[name].GetBinCenter(peakbin)
+		self.timeCFDeltasPeak = self.histo[name].GetBinCenter(peakbin) * 1e-6
 		self.histo[name].GetXaxis().SetRangeUser(low_t0, up_t0)
-		deltax = CheckBinningForFit(self, name, self.DrawHisto, funcArgs, 3, 12)
+		deltax = CheckBinningForFit(self, name, self.DrawHisto, funcArgs, 3, 12) if not self.settings.is_cal_run else (up_t0 - low_t0)/100.
 		self.histo[name].GetXaxis().SetRangeUser(max(low_t0, self.histo[name].GetMean() - 5 * self.histo[name].GetRMS()), min(up_t0, self.histo[name].GetMean() + 5 * self.histo[name].GetRMS()))
 		fb, lb = self.histo[name].FindFirstBinAbove(0), self.histo[name].FindLastBinAbove(0)
 		fb = fb + 1 if self.histo[name].GetBinContent(fb) > 3 * self.histo[name].GetBinContent(fb + 1) else fb
@@ -1169,11 +1199,11 @@ class AnalysisCaenCCD:
 		if self.histo[name].Integral(fb, lb) > 9:
 			func = ro.TF1('fit_' + name, 'gaus(0)+gaus(3)', low_t, up_t)
 			func.SetNpx(1000)
-			params = np.array([self.histo[name].GetBinContent(peakbin) * 2., 0, self.histo[name].GetRMS() / 2, self.histo[name].GetBinContent(peakbin) / 10., 0, self.histo[name].GetRMS() * 2], 'f8')
+			params = np.array([self.histo[name].GetBinContent(peakbin), self.timeCFDeltasPeak, self.histo[name].GetRMS() / 2., self.histo[name].GetBinContent(peakbin) / 10., self.histo[name].GetMean(), self.histo[name].GetRMS() * 2], 'f8')
 			func.SetParameters(params)
 			func.SetParLimits(0, 1, 10 * self.histo[name].GetBinContent(peakbin))
-			func.SetParLimits(1, low_t, up_t)
-			func.SetParLimits(2, 0.001, self.histo[name].GetRMS())
+			func.SetParLimits(1, self.timeCFDeltasPeak, up_t)
+			func.SetParLimits(2, self.histo[name].GetRMS() / 10., 2 * self.histo[name].GetRMS())
 			func.SetParLimits(3, 0, 2 * self.histo[name].GetBinContent(peakbin))
 			func.SetParLimits(4, -10 * abs(low_t), 10 * abs(up_t))
 			func.SetParLimits(5, 0.5 * self.histo[name].GetRMS(), 10 * self.histo[name].GetRMS())
@@ -1201,6 +1231,8 @@ class AnalysisCaenCCD:
 		deltax = CheckBinningForFit(self, name, self.DrawHisto, funcArgs, 3, 12)
 		self.histo[name].GetXaxis().SetRangeUser(max(low_t, self.histo[name].GetMean() - 5 * self.histo[name].GetRMS()), min(up_t, self.histo[name].GetMean() + 5 * self.histo[name].GetRMS()))
 		self.peakTime = self.histo[name].GetBinCenter(self.histo[name].GetMaximumBin())
+		# peakTimeMP = self.histo[name].GetBinCenter(self.histo[name].GetMaximumBin())
+		# self.peakTime = self.histo[name].GetMean()
 		if self.histo[name].Integral() > 9:
 			func = ro.TF1('fit_' + name, 'gaus(0)+gaus(3)', low_t, up_t)
 			func.SetNpx(1000)
@@ -1230,7 +1262,10 @@ class AnalysisCaenCCD:
 			# fit = self.histo[name].Fit('fit_' + name, 'QEMSB', '', params[1] - 2 * params[2], params[1] + 2 * params[2])
 			SetDefaultFitStats(self.histo[name], func)
 			#TODO check if fit is good enough to update peakTime
-			xpeak = func.GetMaximumX(max(low_t, xpeak - 3 * self.histo[name].GetRMS()), min(up_t, xpeak + 3 * self.histo[name].GetRMS()))
+			if not self.settings.is_cal_run:
+				xpeak = func.GetMaximumX(max(low_t, xpeak - 3 * self.histo[name].GetRMS()), min(up_t, xpeak + 3 * self.histo[name].GetRMS()))
+			else:
+				xpeak = self.histo[name].GetMean()
 			if not isCF:
 				self.peakTime = np.divide(xpeak, 1e6, dtype='f8')
 			else:
@@ -1255,7 +1290,7 @@ class AnalysisCaenCCD:
 		self.voltageDiaMean = self.histo[name].GetMean()
 		self.voltageDiaSpread = self.histo[name].GetRMS()
 
-	def PlotSignal(self, name='signal', bins=0, cuts='', option='e', minx=-10, maxx=990, branch='signal', optimizeBinning=True):
+	def PlotSignal(self, name='signal', bins=0, cuts='', option='e', minx=-50, maxx=950, branch='signal', optimizeBinning=True):
 		if not self.hasBranch['signal']:
 			return
 		if 'vcal' in branch.lower():
@@ -1290,7 +1325,8 @@ class AnalysisCaenCCD:
 		(vmin, vmax) = (minx, maxx) if 'charge' not in branch.lower() else (TruncateFloat(self.vcal_to_q.Q_in_e_from_mV(minx).nominal_value, 2000.), TruncateFloat(self.vcal_to_q.Q_in_e_from_mV(maxx).nominal_value, 2000.))
 		deltav = self.delta_v_signal
 		deltav = deltav if bins == 0 else (vmax - vmin) / float(bins)
-		deltav = deltav if 'charge' not in branch.lower() else TruncateFloat(deltav if bins!=0 else deltav / self.vcal_to_q.vgain.nominal_value, 100.)
+		deltav = deltav if 'charge' not in branch.lower() else TruncateFloat(deltav if bins!=0 else deltav / self.vcal_to_q.vgain.nominal_value, 10.)
+		deltav = deltav if deltav != 0 else 10.
 		self.DrawHisto(name, vmin - deltav/2.0, vmax + deltav/2.0, deltav, plotvar, plotVarName, cuts, option)
 		if optimizeBinning:
 			funcArgs = (name, vmin - deltav/2.0, vmax + deltav/2.0, deltav, plotvar, plotVarName, cuts, option)
@@ -1386,9 +1422,9 @@ class AnalysisCaenCCD:
 			self.DrawHisto2D(name, varxname, tmin - deltat/2.0, tmax + deltat/2.0, deltat, varxAxisName, var, vmin, vmax, deltav, vname, cuts, option, num_events, start_ev)
 		else:
 			self.DrawHisto2D(name, varxname, tmin - deltat/2.0, tmax + deltat/2.0, deltat, varxAxisName, var, vmin, vmax, (vmax-vmin)/vbins, vname, cuts, option, num_events, start_ev)
-		if do_logz and 'goff' not in option:
+		if do_logz and 'goff' not in option and name in self.histo.keys():
 			self.canvas[name].SetLogz()
-		self.histo[name].GetYaxis().SetRangeUser(miny, maxy)
+		if name in self.histo.keys(): self.histo[name].GetYaxis().SetRangeUser(miny, maxy)
 
 	def PeakPositionStudy(self, xmin, xmax, deltax, pos_or_cut='pos', do_fit=True):
 		if not (pos_or_cut.lower().startswith('pos') or pos_or_cut.lower().startswith('cut')):
@@ -1455,7 +1491,7 @@ class AnalysisCaenCCD:
 
 	def PrintPlotLimits(self, ti=-5.12e-7, tf=4.606e-6, vmin=-0.7, vmax=0.05):
 		print np.double([(tf-ti)/float(self.settings.time_res) +1, ti-self.settings.time_res/2.0,
-		                 tf+self.settings.time_res/2.0, (vmax-vmin)/self.settings.sigRes, vmin, vmax])
+						 tf+self.settings.time_res/2.0, (vmax-vmin)/self.settings.sigRes, vmin, vmax])
 
 	def PlotHVCurrents(self, name='HVCurrents', cuts='', deltat=30., options='e hist'):
 		if not self.in_root_tree:
@@ -1804,7 +1840,10 @@ class AnalysisCaenCCD:
 					self.AddTimeCFFriend(delay, attPercent, False)
 
 	def CreateTimeCFFriend(self, delay=1800, attPercent=75):
+		entries = self.in_root_tree.GetEntries()
 		print 'Creating shifted constant fraction time tree:'
+		if self.settings.is_cal_run:
+			print 'Constant Fraction shifts will be 0 because it is a calibration run'
 		crossPosition0 = 1.2195e-6
 		ndelay = np.floor(np.multiply(delay, 1e-9, dtype='f8') / self.settings.time_res + 0.5).astype('int32')
 		func = ro.TF1('fit_CF', '[0]*cos([1]*x+pi/(2e-6*[1])-1+[2])+[3]', 0.5e-6, 2e-6)
@@ -1816,7 +1855,6 @@ class AnalysisCaenCCD:
 		deltaTimeCF = np.zeros(1, 'f8')
 		# timeCFtree.Branch('timeCF', timeCF, 'timeCF[{p}]/D'.format(p=self.settings.points))
 		timeCFtree.Branch('deltaTimeCF', deltaTimeCF, 'deltaTimeCF/D')
-		entries = self.in_root_tree.GetEntries()
 		self.utils.CreateProgressBar(entries)
 		self.utils.bar.start()
 		# self.timeCFVect = []
@@ -1825,41 +1863,44 @@ class AnalysisCaenCCD:
 		for ev in xrange(entries):
 			deltaTimeCF.fill(-100e-6)
 			if ev in self.eventVect:
-				it = np.argwhere(ev == self.eventVect).flatten()[0]
-				timei = self.timeVect[it]
-				sigi = self.signalWaveVect[it]
-				sig0 = np.multiply(-0.01 * attPercent, np.roll(sigi, -ndelay), dtype='f8')
-				sig1 = np.add(sigi, sig0, dtype='f8')
-				grafi = ro.TGraph(timei.size, timei, sig1)
-				# name = 'CFSignal' + str(it)
-				# grafi.SetName('g_' + name)
-				grafi.GetXaxis().SetRangeUser(0, 5e-6)
-				p0 = 0.100 if self.bias > 0 else -0.100
-				p0l = [0, 1] if self.bias > 0 else [-1, 0]
-				p1 = 1.7e6
-				p1l = [1e6, 3e6]
-				p2 = -0.25
-				p2l = [-1.5, 1]
-				p3 = 0
-				p3l = [-1, 1]
-				func.SetParameters(np.array([p0, p1, p2, p3], 'f8'))
-				func.SetParLimits(0, p0l[0], p0l[1])
-				func.SetParLimits(1, p1l[0], p1l[1])
-				func.SetParLimits(2, p2l[0], p2l[1])
-				func.SetParLimits(3, p3l[0], p3l[1])
-				tfit = grafi.Fit('fit_CF', 'QM0RSB', '')
-				if tfit.Prob() < 0.9:
+				if not self.settings.is_cal_run:
+					it = np.argwhere(ev == self.eventVect).flatten()[0]
+					timei = self.timeVect[it]
+					sigi = self.signalWaveVect[it]
+					sig0 = np.multiply(-0.01 * attPercent, np.roll(sigi, -ndelay), dtype='f8')
+					sig1 = np.add(sigi, sig0, dtype='f8')
+					grafi = ro.TGraph(timei.size, timei, sig1)
+					# name = 'CFSignal' + str(it)
+					# grafi.SetName('g_' + name)
+					grafi.GetXaxis().SetRangeUser(0, 5e-6)
+					p0 = 0.100 if self.bias > 0 else -0.100
+					p0l = [0, 1] if self.bias > 0 else [-1, 0]
+					p1 = 1.7e6
+					p1l = [1e6, 3e6]
+					p2 = -0.25
+					p2l = [-1.5, 1]
+					p3 = 0
+					p3l = [-1, 1]
+					func.SetParameters(np.array([p0, p1, p2, p3], 'f8'))
+					func.SetParLimits(0, p0l[0], p0l[1])
+					func.SetParLimits(1, p1l[0], p1l[1])
+					func.SetParLimits(2, p2l[0], p2l[1])
+					func.SetParLimits(3, p3l[0], p3l[1])
 					tfit = grafi.Fit('fit_CF', 'QM0RSB', '')
-				if tfit.Prob() < 0.9:
-					tfit = grafi.Fit('fit_CF', 'QM0RSB', '')
-				# shiftTime.fill(0)
-				if tfit.Prob() >= 0.01:
-					cfCrossing = func.GetX(0, 0.5e-6, 2e-6)
-					if (func.Derivative(cfCrossing) < 0 < self.bias) or (func.Derivative(cfCrossing) > 0 > self.bias):
-						# shiftTime.fill(np.subtract(crossPosition0, cfCrossing, dtype='f8'))
-						deltaTimeCF.fill(np.subtract(crossPosition0, cfCrossing, dtype='f8'))
-				# np.putmask(timeCF, np.ones(self.settings.points, '?'), np.add(timei, shiftTime, dtype='f8'))
-				# self.timeCFVect.append(timeCF)
+					if tfit.Prob() < 0.9:
+						tfit = grafi.Fit('fit_CF', 'QM0RSB', '')
+					if tfit.Prob() < 0.9:
+						tfit = grafi.Fit('fit_CF', 'QM0RSB', '')
+					# shiftTime.fill(0)
+					if tfit.Prob() >= 0.01:
+						cfCrossing = func.GetX(0, 0.5e-6, 2e-6)
+						if (func.Derivative(cfCrossing) < 0 < self.bias) or (func.Derivative(cfCrossing) > 0 > self.bias):
+							# shiftTime.fill(np.subtract(crossPosition0, cfCrossing, dtype='f8'))
+							deltaTimeCF.fill(np.subtract(crossPosition0, cfCrossing, dtype='f8'))
+					# np.putmask(timeCF, np.ones(self.settings.points, '?'), np.add(timei, shiftTime, dtype='f8'))
+					# self.timeCFVect.append(timeCF)
+				else:
+					deltaTimeCF.fill(0)
 				self.time_CF_deltas.append(deltaTimeCF[0])
 			timeCFtree.Fill()
 			self.utils.bar.update(ev + 1)
@@ -2233,6 +2274,7 @@ if __name__ == '__main__':
 
 	ana = AnalysisCaenCCD(directory, config, infile, bias, overw, verb, doDebug)
 
+	ro.gROOT.SetBatch(0)
 	if doBatch:
 		print 'Running in Batch mode!'
 		ro.gROOT.SetBatch(1)

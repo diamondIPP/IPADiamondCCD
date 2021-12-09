@@ -12,6 +12,7 @@ from optparse import OptionParser
 import ROOT as ro
 import numpy as np
 import cPickle as pickle
+import ipdb
 
 from Channel_Caen import Channel_Caen
 from Settings_Caen import Settings_Caen
@@ -289,6 +290,6 @@ if __name__ == '__main__':
 	if autom:
 		if not ana.cal_pickle:
 			ana.LoopRuns()
-			ana.CreateResultsGraph()
+			ana.DrawGraph()
 	# return ana
 	# ana = main()

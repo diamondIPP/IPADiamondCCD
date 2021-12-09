@@ -19,7 +19,7 @@ from HV_Control import HV_Control
 from Utils import *
 # from memory_profiler import profile
 
-trig_rand_time = 0.001  # for voltage calibration
+trig_rand_time = 10  # for voltage calibration
 # trig_rand_time = 0.2  # for system test
 wait_time_hv = 7
 
@@ -76,6 +76,7 @@ class CCD_Caen:
 		self.fins, self.fint, self.finv = None, None, None
 		self.datas, self.datat, self.datav = None, None, None
 		self.time_restart = int(np.ceil(self.settings.time_calib + 35))
+		self.is_hv_test = False
 
 	def RemoveFiles(self):
 		# used, for example, to remove old files that may have stayed due to crashes
@@ -247,7 +248,7 @@ class CCD_Caen:
 			while self.p.poll() is None:
 				continue
 			if self.settings.do_hv_control: self.stop_run = self.stop_run or self.hv_control.UpdateHVFile()
-			self.ConcatenateBinaries()
+			self.ConcatenateBinaries();
 			self.CloseSubprocess('wave_dump', stdin=stdin, stdout=stdout)
 			self.settings.RemoveBinaries()
 		else:
@@ -522,11 +523,12 @@ class CCD_Caen:
 def main():
 	parser = OptionParser()
 	parser.add_option('-i', '--infile', dest='infile', default='None', type='string',
-	                  help='Input configuration file. e.g. CAENCalibration.cfg')
+	                  help='Input configuration file. e.g. CAENCalibration.ini')
 	parser.add_option('-v', '--verbose', dest='verb', default=False, help='Toggles verbose', action='store_true')
 	parser.add_option('-a', '--automatic', dest='auto', default=False, help='Toggles automatic conversion and analysis afterwards', action='store_true')
 	parser.add_option('-c', '--calibration_run', dest='calrun', default=False, action='store_true', help='Used for calibration runs with pulser')
 	parser.add_option('-t', '--time', dest='stabilizationtime', type='int', default=180, help='Time in seconds to wait before taking data due to HV stabilization. Default: 180. For calibration runs, only 10 seconds is used')
+	parser.add_option('--hvtest', dest='hvtest', default=False, action='store_true', help='option for HV test')
 
 	(options, args) = parser.parse_args()
 	infile = str(options.infile)
@@ -534,12 +536,14 @@ def main():
 	verb = bool(options.verb)
 	iscal = bool(options.calrun)
 	time_wait = int(options.stabilizationtime) if not iscal else 10
+	ishvtest = bool(options.hvtest)
 	ccd = CCD_Caen(infile, verb, iscal=iscal)
 
 	if auto or iscal:
 		if not iscal:
 			ccd.StartHVControl()
-			ccd.AdjustBaseLines()
+			if not ishvtest:
+				ccd.AdjustBaseLines()
 		ccd.SavePickles()
 		time.sleep(time_wait)
 		written_events = ccd.GetData()

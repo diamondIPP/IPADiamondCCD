@@ -40,16 +40,20 @@ class AnalysisAllRunsInFolder:
 		self.voltages = []
 
 		self.diaVoltages = {}
+		self.diaVoltagesN = {}
 		self.diaVoltagesSigma = {}
 
 		self.signalOut = {}
+		self.signalOutN = {}
 		self.signalOutSigma = {}
 		self.signalOutVcal = {}
 		self.signalOutVcalSigma = {}
 		self.signalOutCharge = {}
 		self.signalOutChargeSigma = {}
+		self.signalOutEntries = {}
 
 		self.signalOutCF = {}
+		self.signalOutNCF = {}
 		self.signalOutSigmaCF = {}
 		self.signalOutVcalCF = {}
 		self.signalOutVcalSigmaCF = {}
@@ -57,6 +61,7 @@ class AnalysisAllRunsInFolder:
 		self.signalOutChargeSigmaCF = {}
 
 		self.signalOutNP = {}
+		self.signalOutNNP = {}
 		self.signalOutSigmaNP = {}
 		self.signalOutVcalNP = {}
 		self.signalOutVcalSigmaNP = {}
@@ -64,6 +69,7 @@ class AnalysisAllRunsInFolder:
 		self.signalOutChargeSigmaNP = {}
 
 		self.signalOutCFNP = {}
+		self.signalOutNCFNP = {}
 		self.signalOutSigmaCFNP = {}
 		self.signalOutVcalCFNP = {}
 		self.signalOutVcalSigmaCFNP = {}
@@ -71,11 +77,14 @@ class AnalysisAllRunsInFolder:
 		self.signalOutChargeSigmaCFNP = {}
 
 		self.signalIn = {}
+		self.signalInN = {}
 		self.signalInSigma = {}
 
 		self.signalPeakTime = {}
+		self.signalPeakTimeN = {}
 		self.signalPeakTimeSigma = {}
 		self.signalPeakTimeCF = {}
+		self.signalPeakTimeNCF = {}
 		self.signalPeakTimeSigmaCF = {}
 
 		self.graphPeakTime = ro.TGraphErrors()
@@ -233,56 +242,76 @@ class AnalysisAllRunsInFolder:
 
 					peakTime = 0
 					peakTimeSigma = 0
-					peakTimeCF = 0
-					peakTimeSigmaCF = 0
+					peakTimeN = 0
+					if not self.are_cal_runs:
+						peakTimeCF = 0
+						peakTimeSigmaCF = 0
+						peakTimeNCF = 0
 					if self.are_cal_runs and '_out_' in run:
 						if 'peakPosDist' in anaRun.histo.keys():
 							peakTime = np.double(anaRun.peakTime * 1e6)
 							peakTimeSigma = np.double(anaRun.histo['peakPosDist'].GetRMS())
-						if 'peakPosDistCF' in anaRun.histo.keys():
-							peakTimeCF = np.double(anaRun.peakTimeCF * 1e6)
-							peakTimeSigmaCF = np.double(anaRun.histo['peakPosDistCF'].GetRMS())
+							peakTimeN = np.double(anaRun.histo['peakPosDist'].GetEntries())
+						if not self.are_cal_runs:
+							if 'peakPosDistCF' in anaRun.histo.keys():
+								peakTimeCF = np.double(anaRun.peakTimeCF * 1e6)
+								peakTimeSigmaCF = np.double(anaRun.histo['peakPosDistCF'].GetRMS())
+								peakTimeNCF = np.double(anaRun.histo['peakPosDistCF'].GetEntries())
 
 					self.diaVoltages[anaRun.bias] = anaRun.voltageDiaMean
 					self.diaVoltagesSigma[anaRun.bias] = anaRun.voltageDiaSpread
 
 					signalRun = 0
+					signalNRun = 0
 					signalSigmaRun = 0
-					signalRunCF = 0
-					signalSigmaRunCF = 0
+					if not self.are_cal_runs:
+						signalRunCF = 0
+						signalNRunCF = 0
+						signalSigmaRunCF = 0
 
 					signalRunNP = 0
+					signalNRunNP = 0
 					signalSigmaRunNP = 0
-					signalRunCFNP = 0
-					signalSigmaRunCFNP = 0
+					if not self.are_cal_runs:
+						signalRunCFNP = 0
+						signalSigmaRunCFNP = 0
+						signalNRunCFNP = 0
 
 					if 'PH' in anaRun.histo.keys():
 						signalRun = np.double(anaRun.langaus['PH'].GetParameter(1)) if self.are_cal_runs else np.double(anaRun.histo['PH'].GetMean())
-						signalSigmaRun = np.double(anaRun.langaus['PH'] .GetParameter(2)) if self.are_cal_runs else np.sqrt(np.power(anaRun.histo['PH'].GetRMS(), 2, dtype='f8') - np.power(anaRun.pedestal_sigma, 2, dtype='f8'), dtype='f8') if anaRun.histo['PH'].GetRMS() > anaRun.pedestal_sigma else anaRun.histo['PH'].GetRMS()
-						signalRunCF = np.double(anaRun.langaus['PH_CF'].GetParameter(1)) if self.are_cal_runs else np.double(anaRun.histo['PH_CF'].GetMean())
-						signalSigmaRunCF = np.double(anaRun.langaus['PH_CF'] .GetParameter(2)) if self.are_cal_runs else np.sqrt(np.power(anaRun.histo['PH_CF'].GetRMS(), 2, dtype='f8') - np.power(anaRun.pedestal_sigma, 2, dtype='f8'), dtype='f8') if anaRun.histo['PH_CF'].GetRMS() > anaRun.pedestal_sigma else anaRun.histo['PH_CF'].GetRMS()
+						signalSigmaRun = np.double(anaRun.langaus['PH'].GetParameter(2)) if self.are_cal_runs else np.double(anaRun.histo['PH'].GetRMS())
+						signalNRun = np.double(anaRun.histo['PH'].GetEntries())
+						if not self.are_cal_runs:
+							signalRunCF = np.double(anaRun.langaus['PH_CF'].GetParameter(1)) if self.are_cal_runs else np.double(anaRun.histo['PH_CF'].GetMean())
+							signalSigmaRunCF = np.double(anaRun.langaus['PH_CF'] .GetParameter(2)) if self.are_cal_runs else np.double(anaRun.histo['PH_CF'].GetRMS())
+							signalNRunCF = np.double(anaRun.histo['PH_CF'].GetEntries())
 
 						signalRunNP = signalRun
 						signalSigmaRunNP = signalSigmaRun
-						signalRunCFNP = signalRunCF
-						signalSigmaRunCFNP = signalSigmaRunCF
+						if not self.are_cal_runs:
+							signalRunCFNP = signalRunCF
+							signalSigmaRunCFNP = signalSigmaRunCF
 
 						if anaRun.langaus.has_key('PHNoPedestal') or anaRun.histo.has_key('PHNoPedestal'):
 							signalRunNP = np.double(anaRun.langaus['PHNoPedestal'].GetParameter(1)) if self.are_cal_runs else np.double(anaRun.histo['PHNoPedestal'].GetMean())
-							signalSigmaRunNP = np.double(anaRun.langaus['PHNoPedestal'] .GetParameter(2)) if self.are_cal_runs else np.sqrt(np.power(anaRun.histo['PHNoPedestal'].GetRMS(), 2, dtype='f8') - np.power(anaRun.pedestal_sigma, 2, dtype='f8'), dtype='f8') if anaRun.histo['PHNoPedestal'].GetRMS() > anaRun.pedestal_sigma else anaRun.histo['PHNoPedestal'].GetRMS()
-						if anaRun.langaus.has_key('PH_CFNoPedestal') or anaRun.histo.has_key('PH_CFNoPedestal'):
-							signalRunCFNP = np.double(anaRun.langaus['PH_CFNoPedestal'].GetParameter(1)) if self.are_cal_runs else np.double(anaRun.histo['PH_CFNoPedestal'].GetMean())
-							signalSigmaRunCFNP = np.double(anaRun.langaus['PH_CFNoPedestal'] .GetParameter(2)) if self.are_cal_runs else np.sqrt(np.power(anaRun.histo['PH_CFNoPedestal'].GetRMS(), 2, dtype='f8') - np.power(anaRun.pedestal_sigma, 2, dtype='f8'), dtype='f8') if anaRun.histo['PH_CFNoPedestal'].GetRMS() > anaRun.pedestal_sigma else anaRun.histo['PH_CFNoPedestal'].GetRMS()
+							signalSigmaRunNP = np.double(anaRun.langaus['PHNoPedestal'] .GetParameter(2)) if self.are_cal_runs else np.double(anaRun.histo['PHNoPedestal'].GetRMS())
+							signalNRunNP = np.double(anaRun.histo['PHNoPedestal'].GetEntries())
+						if not self.are_cal_runs:
+							if anaRun.langaus.has_key('PH_CFNoPedestal') or anaRun.histo.has_key('PH_CFNoPedestal'):
+								signalRunCFNP = np.double(anaRun.langaus['PH_CFNoPedestal'].GetParameter(1)) if self.are_cal_runs else np.double(anaRun.histo['PH_CFNoPedestal'].GetMean())
+								signalSigmaRunCFNP = np.double(anaRun.langaus['PH_CFNoPedestal'] .GetParameter(2)) if self.are_cal_runs else np.double(anaRun.histo['PH_CFNoPedestal'].GetRMS())
+								signalNRunCFNP = np.double(anaRun.histo['PH_CFNoPedestal'].GetEntries())
 
 					if not anaRun.is_cal_run:
 						signalRunVcal = 0
 						signalSigmaRunVcal = 0
 						signalRunCharge = 0
 						signalSigmaRunCharge = 0
-						signalRunVcalCF = 0
-						signalSigmaRunVcalCF = 0
-						signalRunChargeCF = 0
-						signalSigmaRunChargeCF = 0
+						if not self.are_cal_runs:
+							signalRunVcalCF = 0
+							signalSigmaRunVcalCF = 0
+							signalRunChargeCF = 0
+							signalSigmaRunChargeCF = 0
 
 						if 'PHvcal' in anaRun.histo.keys():
 							signalRunVcal = np.double(anaRun.histo['PHvcal'].GetMean())
@@ -291,20 +320,23 @@ class AnalysisAllRunsInFolder:
 							signalRunCharge = np.double(anaRun.histo['PHcharge'].GetMean())
 							signalSigmaRunCharge = np.sqrt(np.power(anaRun.histo['PHcharge'].GetRMS(), 2, dtype='f8') - np.power(anaRun.pedestal_charge_sigma, 2, dtype='f8'), dtype='f8')  if anaRun.histo['PHcharge'].GetRMS() > anaRun.pedestal_charge_sigma else anaRun.histo['PHcharge'].GetRMS()
 						if 'PHvcal_CF' in anaRun.histo.keys():
-							signalRunVcalCF = np.double(anaRun.histo['PHvcal_CF'].GetMean())
-							signalSigmaRunVcalCF = np.sqrt(np.power(anaRun.histo['PHvcal_CF'].GetRMS(), 2, dtype='f8') - np.power(anaRun.pedestal_vcal_sigma, 2, dtype='f8'), dtype='f8') if anaRun.histo['PHvcal_CF'].GetRMS() > anaRun.pedestal_vcal_sigma else anaRun.histo['PHvcal_CF'].GetRMS()
+							if not self.are_cal_runs:
+								signalRunVcalCF = np.double(anaRun.histo['PHvcal_CF'].GetMean())
+								signalSigmaRunVcalCF = np.sqrt(np.power(anaRun.histo['PHvcal_CF'].GetRMS(), 2, dtype='f8') - np.power(anaRun.pedestal_vcal_sigma, 2, dtype='f8'), dtype='f8') if anaRun.histo['PHvcal_CF'].GetRMS() > anaRun.pedestal_vcal_sigma else anaRun.histo['PHvcal_CF'].GetRMS()
 						if 'PHcharge_CF' in anaRun.histo.keys():
-							signalRunChargeCF = np.double(anaRun.histo['PHcharge_CF'].GetMean())
-							signalSigmaRunChargeCF = np.sqrt(np.power(anaRun.histo['PHcharge_CF'].GetRMS(), 2, dtype='f8') - np.power(anaRun.pedestal_charge_sigma, 2, dtype='f8'), dtype='f8')  if anaRun.histo['PHcharge_CF'].GetRMS() > anaRun.pedestal_charge_sigma else anaRun.histo['PHcharge_CF'].GetRMS()
+							if not self.are_cal_runs:
+								signalRunChargeCF = np.double(anaRun.histo['PHcharge_CF'].GetMean())
+								signalSigmaRunChargeCF = np.sqrt(np.power(anaRun.histo['PHcharge_CF'].GetRMS(), 2, dtype='f8') - np.power(anaRun.pedestal_charge_sigma, 2, dtype='f8'), dtype='f8')  if anaRun.histo['PHcharge_CF'].GetRMS() > anaRun.pedestal_charge_sigma else anaRun.histo['PHcharge_CF'].GetRMS()
 
 						signalRunVcalNP = signalRunVcal
 						signalSigmaRunVcalNP = signalSigmaRunVcal
 						signalRunChargeNP = signalRunCharge
 						signalSigmaRunChargeNP = signalSigmaRunCharge
-						signalRunVcalCFNP = signalRunVcalCF
-						signalSigmaRunVcalCFNP = signalSigmaRunVcalCF
-						signalRunChargeCFNP = signalRunChargeCF
-						signalSigmaRunChargeCFNP = signalSigmaRunChargeCF
+						if not self.are_cal_runs:
+							signalRunVcalCFNP = signalRunVcalCF
+							signalSigmaRunVcalCFNP = signalSigmaRunVcalCF
+							signalRunChargeCFNP = signalRunChargeCF
+							signalSigmaRunChargeCFNP = signalSigmaRunChargeCF
 
 						if 'PHvcalNoPedestal' in anaRun.histo.keys():
 							signalRunVcalNP = np.double(anaRun.histo['PHvcalNoPedestal'].GetMean())
@@ -313,22 +345,30 @@ class AnalysisAllRunsInFolder:
 							signalRunChargeNP = np.double(anaRun.histo['PHchargeNoPedestal'].GetMean())
 							signalSigmaRunChargeNP = np.sqrt(np.power(anaRun.histo['PHchargeNoPedestal'].GetRMS(), 2, dtype='f8') - np.power(anaRun.pedestal_charge_sigma, 2, dtype='f8'), dtype='f8')  if anaRun.histo['PHchargeNoPedestal'].GetRMS() > anaRun.pedestal_charge_sigma else anaRun.histo['PHchargeNoPedestal'].GetRMS()
 						if 'PHvcal_CFNoPedestal' in anaRun.histo.keys():
-							signalRunVcalCFNP = np.double(anaRun.histo['PHvcal_CFNoPedestal'].GetMean())
-							signalSigmaRunVcalCFNP = np.sqrt(np.power(anaRun.histo['PHvcal_CFNoPedestal'].GetRMS(), 2, dtype='f8') - np.power(anaRun.pedestal_vcal_sigma, 2, dtype='f8'), dtype='f8') if anaRun.histo['PHvcal_CFNoPedestal'].GetRMS() > anaRun.pedestal_vcal_sigma else anaRun.histo['PHvcal_CFNoPedestal'].GetRMS()
+							if not self.are_cal_runs:
+								signalRunVcalCFNP = np.double(anaRun.histo['PHvcal_CFNoPedestal'].GetMean())
+								signalSigmaRunVcalCFNP = np.sqrt(np.power(anaRun.histo['PHvcal_CFNoPedestal'].GetRMS(), 2, dtype='f8') - np.power(anaRun.pedestal_vcal_sigma, 2, dtype='f8'), dtype='f8') if anaRun.histo['PHvcal_CFNoPedestal'].GetRMS() > anaRun.pedestal_vcal_sigma else anaRun.histo['PHvcal_CFNoPedestal'].GetRMS()
 						if 'PHcharge_CFNoPedestal' in anaRun.histo.keys():
-							signalRunChargeCFNP = np.double(anaRun.histo['PHcharge_CFNoPedestal'].GetMean())
-							signalSigmaRunChargeCFNP = np.sqrt(np.power(anaRun.histo['PHcharge_CFNoPedestal'].GetRMS(), 2, dtype='f8') - np.power(anaRun.pedestal_charge_sigma, 2, dtype='f8'), dtype='f8')  if anaRun.histo['PHcharge_CFNoPedestal'].GetRMS() > anaRun.pedestal_charge_sigma else anaRun.histo['PHcharge_CFNoPedestal'].GetRMS()
+							if not self.are_cal_runs:
+								signalRunChargeCFNP = np.double(anaRun.histo['PHcharge_CFNoPedestal'].GetMean())
+								signalSigmaRunChargeCFNP = np.sqrt(np.power(anaRun.histo['PHcharge_CFNoPedestal'].GetRMS(), 2, dtype='f8') - np.power(anaRun.pedestal_charge_sigma, 2, dtype='f8'), dtype='f8')  if anaRun.histo['PHcharge_CFNoPedestal'].GetRMS() > anaRun.pedestal_charge_sigma else anaRun.histo['PHcharge_CFNoPedestal'].GetRMS()
 
 					if not self.are_cal_runs or '_out_' in run:
 						self.signalOut[anaRun.bias] = signalRun if anaRun.bias < 0 else -signalRun
 						self.signalOutSigma[anaRun.bias] = signalSigmaRun
-						self.signalOutCF[anaRun.bias] = signalRunCF if anaRun.bias < 0 else -signalRunCF
-						self.signalOutSigmaCF[anaRun.bias] = signalSigmaRunCF
+						self.signalOutN[anaRun.bias] = signalNRun
+						if not self.are_cal_runs:
+							self.signalOutCF[anaRun.bias] = signalRunCF if anaRun.bias < 0 else -signalRunCF
+							self.signalOutSigmaCF[anaRun.bias] = signalSigmaRunCF
+							self.signalOutNCF[anaRun.bias] = signalNRunCF
 
 						self.signalOutNP[anaRun.bias] = signalRunNP if anaRun.bias < 0 else -signalRunNP
 						self.signalOutSigmaNP[anaRun.bias] = signalSigmaRunNP
-						self.signalOutCFNP[anaRun.bias] = signalRunCFNP if anaRun.bias < 0 else -signalRunCFNP
-						self.signalOutSigmaCFNP[anaRun.bias] = signalSigmaRunCFNP
+						self.signalOutNNP[anaRun.bias] = signalNRunNP
+						if not self.are_cal_runs:
+							self.signalOutCFNP[anaRun.bias] = signalRunCFNP if anaRun.bias < 0 else -signalRunCFNP
+							self.signalOutSigmaCFNP[anaRun.bias] = signalSigmaRunCFNP
+							self.signalOutNCFNP[anaRun.bias] = signalNRunCFNP
 
 						if not self.are_cal_runs:
 							self.signalOutVcal[anaRun.bias] = -signalRunVcal if anaRun.bias < 0 else signalRunVcal
@@ -351,11 +391,15 @@ class AnalysisAllRunsInFolder:
 						if '_out_' in run:
 							self.signalPeakTime[anaRun.bias] = peakTime
 							self.signalPeakTimeSigma[anaRun.bias] = peakTimeSigma
-							self.signalPeakTimeCF[anaRun.bias] = peakTimeCF
-							self.signalPeakTimeSigmaCF[anaRun.bias] = peakTimeSigmaCF
+							self.signalPeakTimeN[anaRun.bias] = peakTimeN
+							if not self.are_cal_runs:
+								self.signalPeakTimeCF[anaRun.bias] = peakTimeCF
+								self.signalPeakTimeSigmaCF[anaRun.bias] = peakTimeSigmaCF
+								self.signalPeakTimeNCF[anaRun.bias] = peakTimeNCF
 					else:
 						self.signalIn[anaRun.bias] = -signalRun if anaRun.bias < 0 else signalRun
 						self.signalInSigma[anaRun.bias] = signalSigmaRun
+						self.signalInN[anaRun.bias] = signalNRun
 
 					del anaRun
 		self.voltages = sorted(set(self.voltages))
@@ -370,213 +414,237 @@ class AnalysisAllRunsInFolder:
 						voltages2.append(volt)
 				self.voltages = voltages2
 				stepsIn = np.array([self.signalIn[volt] for volt in self.voltages], dtype='f8')
-				stepsInErrs = np.array([self.signalInSigma[volt] for volt in self.voltages], dtype='f8')
+				stepsInErrs = np.array([self.signalInSigma[volt] / np.sqrt(self.signalInN[volt]) for volt in self.voltages], dtype='f8')
 				signalO = np.array([self.signalOut[volt] for volt in self.voltages], dtype='f8')
-				signalOutErrs = np.array([self.signalOutSigma[volt] for volt in self.voltages], dtype='f8')
-				signalOCF = np.array([self.signalOutCF[volt] for volt in self.voltages], dtype='f8')
-				signalOutErrsCF = np.array([self.signalOutSigmaCF[volt] for volt in self.voltages], dtype='f8')
+				signalOutErrs = np.array([self.signalOutSigma[volt] / np.sqrt(self.signalOutN[volt]) for volt in self.voltages], dtype='f8')
+				if not self.are_cal_runs:
+					signalOCF = np.array([self.signalOutCF[volt] for volt in self.voltages], dtype='f8')
+					signalOutErrsCF = np.array([self.signalOutSigmaCF[volt] / np.sqrt(self.signalOutNCF[volt]) for volt in self.voltages], dtype='f8')
 				self.graphPH = ro.TGraphErrors(len(self.voltages), stepsIn, signalO, stepsInErrs, signalOutErrs)
 				self.graphPH.SetNameTitle('Signal_vs_CalStep_ch_' + str(self.caen_ch), 'Signal_vs_CalStep_ch_' + str(self.caen_ch))
 				self.graphPH.GetXaxis().SetTitle('vcal step [mV]')
 				self.graphPH.GetYaxis().SetTitle('signal [mV]')
-				self.graphPHCF = ro.TGraphErrors(len(self.voltages), stepsIn, signalOCF, stepsInErrs, signalOutErrsCF)
-				self.graphPHCF.SetNameTitle('Signal_CF_vs_CalStep_ch_' + str(self.caen_ch), 'Signal_CF_vs_CalStep_ch_' + str(self.caen_ch))
-				self.graphPHCF.GetXaxis().SetTitle('vcal step [mV]')
-				self.graphPHCF.GetYaxis().SetTitle('signal_CF [mV]')
+				if not self.are_cal_runs:
+					self.graphPHCF = ro.TGraphErrors(len(self.voltages), stepsIn, signalOCF, stepsInErrs, signalOutErrsCF)
+					self.graphPHCF.SetNameTitle('Signal_CF_vs_CalStep_ch_' + str(self.caen_ch), 'Signal_CF_vs_CalStep_ch_' + str(self.caen_ch))
+					self.graphPHCF.GetXaxis().SetTitle('vcal step [mV]')
+					self.graphPHCF.GetYaxis().SetTitle('signal_CF [mV]')
 
 				signalONP = np.array([self.signalOutNP[volt] for volt in self.voltages], dtype='f8')
-				signalOutErrsNP = np.array([self.signalOutSigmaNP[volt] for volt in self.voltages], dtype='f8')
-				signalOCFNP = np.array([self.signalOutCFNP[volt] for volt in self.voltages], dtype='f8')
-				signalOutErrsCFNP = np.array([self.signalOutSigmaCFNP[volt] for volt in self.voltages], dtype='f8')
+				signalOutErrsNP = np.array([self.signalOutSigmaNP[volt] / np.sqrt(self.signalOutNNP[volt]) for volt in self.voltages], dtype='f8')
+				if not self.are_cal_runs:
+					signalOCFNP = np.array([self.signalOutCFNP[volt] for volt in self.voltages], dtype='f8')
+					signalOutErrsCFNP = np.array([self.signalOutSigmaCFNP[volt] / np.sqrt(self.signalOutNCFNP[volt]) for volt in self.voltages], dtype='f8')
 				self.graphPHNP = ro.TGraphErrors(len(self.voltages), stepsIn, signalONP, stepsInErrs, signalOutErrsNP)
 				self.graphPHNP.SetNameTitle('Signal_NoPedestal_vs_CalStep_ch_' + str(self.caen_ch), 'Signal_NoPedestal_vs_CalStep_ch_' + str(self.caen_ch))
 				self.graphPHNP.GetXaxis().SetTitle('vcal step [mV]')
 				self.graphPHNP.GetYaxis().SetTitle('signal [mV]')
-				self.graphPHCFNP = ro.TGraphErrors(len(self.voltages), stepsIn, signalOCFNP, stepsInErrs, signalOutErrsCFNP)
-				self.graphPHCFNP.SetNameTitle('Signal_NoPedestal_CF_vs_CalStep_ch_' + str(self.caen_ch), 'Signal_NoPedestal_CF_vs_CalStep_ch_' + str(self.caen_ch))
-				self.graphPHCFNP.GetXaxis().SetTitle('vcal step [mV]')
-				self.graphPHCFNP.GetYaxis().SetTitle('signal_CF [mV]')
+				if not self.are_cal_runs:
+					self.graphPHCFNP = ro.TGraphErrors(len(self.voltages), stepsIn, signalOCFNP, stepsInErrs, signalOutErrsCFNP)
+					self.graphPHCFNP.SetNameTitle('Signal_NoPedestal_CF_vs_CalStep_ch_' + str(self.caen_ch), 'Signal_NoPedestal_CF_vs_CalStep_ch_' + str(self.caen_ch))
+					self.graphPHCFNP.GetXaxis().SetTitle('vcal step [mV]')
+					self.graphPHCFNP.GetYaxis().SetTitle('signal_CF [mV]')
 
 			else:
 				diaVoltages = np.array([self.diaVoltages[volt] for volt in self.voltages], dtype='f8')
 				diaVoltagesSigma = np.array([self.diaVoltagesSigma[volt] for volt in self.voltages], dtype='f8')
 
 				signalO = np.array([self.signalOut[volt] for volt in self.voltages], dtype='f8')
-				signalOutErrs = np.array([self.signalOutSigma[volt] for volt in self.voltages], dtype='f8')
+				signalOutErrs = np.array([self.signalOutSigma[volt] / np.sqrt(self.signalOutN[volt]) for volt in self.voltages], dtype='f8')
 				signalOVcal = np.array([self.signalOutVcal[volt] for volt in self.voltages], dtype='f8')
-				signalOutVcalErrs = np.array([self.signalOutVcalSigma[volt] for volt in self.voltages], dtype='f8')
+				signalOutVcalErrs = np.array([self.signalOutVcalSigma[volt] / np.sqrt(self.signalOutN[volt]) for volt in self.voltages], dtype='f8')
 				signalOCharge = np.array([self.signalOutCharge[volt] for volt in self.voltages], dtype='f8')
-				signalOutChargeErrs = np.array([self.signalOutChargeSigma[volt] for volt in self.voltages], dtype='f8')
-				signalOCF = np.array([self.signalOutCF[volt] for volt in self.voltages], dtype='f8')
-				signalOutErrsCF = np.array([self.signalOutSigmaCF[volt] for volt in self.voltages], dtype='f8')
-				signalOVcalCF = np.array([self.signalOutVcalCF[volt] for volt in self.voltages], dtype='f8')
-				signalOutVcalErrsCF = np.array([self.signalOutVcalSigmaCF[volt] for volt in self.voltages], dtype='f8')
-				signalOChargeCF = np.array([self.signalOutChargeCF[volt] for volt in self.voltages], dtype='f8')
-				signalOutChargeErrsCF = np.array([self.signalOutChargeSigmaCF[volt] for volt in self.voltages], dtype='f8')
+				signalOutChargeErrs = np.array([self.signalOutChargeSigma[volt] / np.sqrt(self.signalOutN[volt]) for volt in self.voltages], dtype='f8')
+				if not self.are_cal_runs:
+					signalOCF = np.array([self.signalOutCF[volt] for volt in self.voltages], dtype='f8')
+					signalOutErrsCF = np.array([self.signalOutSigmaCF[volt] / np.sqrt(self.signalOutNCF[volt]) for volt in self.voltages], dtype='f8')
+					signalOVcalCF = np.array([self.signalOutVcalCF[volt] for volt in self.voltages], dtype='f8')
+					signalOutVcalErrsCF = np.array([self.signalOutVcalSigmaCF[volt] / np.sqrt(self.signalOutNCF[volt]) for volt in self.voltages], dtype='f8')
+					signalOChargeCF = np.array([self.signalOutChargeCF[volt] for volt in self.voltages], dtype='f8')
+					signalOutChargeErrsCF = np.array([self.signalOutChargeSigmaCF[volt] / np.sqrt(self.signalOutNCF[volt]) for volt in self.voltages], dtype='f8')
 
 				signalONP = np.array([self.signalOutNP[volt] for volt in self.voltages], dtype='f8')
-				signalOutErrsNP = np.array([self.signalOutSigmaNP[volt] for volt in self.voltages], dtype='f8')
+				signalOutErrsNP = np.array([self.signalOutSigmaNP[volt] / np.sqrt(self.signalOutNNP[volt]) for volt in self.voltages], dtype='f8')
 				signalOVcalNP = np.array([self.signalOutVcalNP[volt] for volt in self.voltages], dtype='f8')
-				signalOutVcalErrsNP = np.array([self.signalOutVcalSigmaNP[volt] for volt in self.voltages], dtype='f8')
+				signalOutVcalErrsNP = np.array([self.signalOutVcalSigmaNP[volt] / np.sqrt(self.signalOutNNP[volt]) for volt in self.voltages], dtype='f8')
 				signalOChargeNP = np.array([self.signalOutChargeNP[volt] for volt in self.voltages], dtype='f8')
-				signalOutChargeErrsNP = np.array([self.signalOutChargeSigmaNP[volt] for volt in self.voltages], dtype='f8')
-				signalOCFNP = np.array([self.signalOutCFNP[volt] for volt in self.voltages], dtype='f8')
-				signalOutErrsCFNP = np.array([self.signalOutSigmaCFNP[volt] for volt in self.voltages], dtype='f8')
-				signalOVcalCFNP = np.array([self.signalOutVcalCFNP[volt] for volt in self.voltages], dtype='f8')
-				signalOutVcalErrsCFNP = np.array([self.signalOutVcalSigmaCFNP[volt] for volt in self.voltages], dtype='f8')
-				signalOChargeCFNP = np.array([self.signalOutChargeCFNP[volt] for volt in self.voltages], dtype='f8')
-				signalOutChargeErrsCFNP = np.array([self.signalOutChargeSigmaCFNP[volt] for volt in self.voltages], dtype='f8')
+				signalOutChargeErrsNP = np.array([self.signalOutChargeSigmaNP[volt] / np.sqrt(self.signalOutNNP[volt]) for volt in self.voltages], dtype='f8')
+				if not self.are_cal_runs:
+					signalOCFNP = np.array([self.signalOutCFNP[volt] for volt in self.voltages], dtype='f8')
+					signalOutErrsCFNP = np.array([self.signalOutSigmaCFNP[volt] / np.sqrt(self.signalOutNCFNP[volt]) for volt in self.voltages], dtype='f8')
+					signalOVcalCFNP = np.array([self.signalOutVcalCFNP[volt] for volt in self.voltages], dtype='f8')
+					signalOutVcalErrsCFNP = np.array([self.signalOutVcalSigmaCFNP[volt] / np.sqrt(self.signalOutNCFNP[volt]) for volt in self.voltages], dtype='f8')
+					signalOChargeCFNP = np.array([self.signalOutChargeCFNP[volt] for volt in self.voltages], dtype='f8')
+					signalOutChargeErrsCFNP = np.array([self.signalOutChargeSigmaCFNP[volt] / np.sqrt(self.signalOutNCFNP[volt]) for volt in self.voltages], dtype='f8')
 
 				self.graphPH = ro.TGraphErrors(len(self.voltages), diaVoltages, signalO, diaVoltagesSigma, signalOutErrs)
 				self.graphPH.SetNameTitle('Signal_vs_HV', 'Signal_vs_HV')
 				self.graphPH.GetXaxis().SetTitle('HV [V]')
 				self.graphPH.GetYaxis().SetTitle('signal [mV]')
-				self.graphPHCF = ro.TGraphErrors(len(self.voltages), diaVoltages, signalOCF, diaVoltagesSigma, signalOutErrsCF)
-				self.graphPHCF.SetNameTitle('Signal_CF_vs_HV', 'Signal_CF_vs_HV')
-				self.graphPHCF.GetXaxis().SetTitle('HV [V]')
-				self.graphPHCF.GetYaxis().SetTitle('signal_CF [mV]')
+				if not self.are_cal_runs:
+					self.graphPHCF = ro.TGraphErrors(len(self.voltages), diaVoltages, signalOCF, diaVoltagesSigma, signalOutErrsCF)
+					self.graphPHCF.SetNameTitle('Signal_CF_vs_HV', 'Signal_CF_vs_HV')
+					self.graphPHCF.GetXaxis().SetTitle('HV [V]')
+					self.graphPHCF.GetYaxis().SetTitle('signal_CF [mV]')
 
 				self.graphVcal = ro.TGraphErrors(len(self.voltages), diaVoltages, signalOVcal, diaVoltagesSigma, signalOutVcalErrs)
 				self.graphVcal.SetNameTitle('SignalVcal_vs_HV', 'SignalVcal_vs_HV')
 				self.graphVcal.GetXaxis().SetTitle('HV [V]')
 				self.graphVcal.GetYaxis().SetTitle('signalVcal [mV]')
-				self.graphVcalCF = ro.TGraphErrors(len(self.voltages), diaVoltages, signalOVcalCF, diaVoltagesSigma, signalOutVcalErrsCF)
-				self.graphVcalCF.SetNameTitle('SignalVcal_CF_vs_HV', 'SignalVcal_CF_vs_HV')
-				self.graphVcalCF.GetXaxis().SetTitle('HV [V]')
-				self.graphVcalCF.GetYaxis().SetTitle('signalVcal_CF [mV]')
+				if not self.are_cal_runs:
+					self.graphVcalCF = ro.TGraphErrors(len(self.voltages), diaVoltages, signalOVcalCF, diaVoltagesSigma, signalOutVcalErrsCF)
+					self.graphVcalCF.SetNameTitle('SignalVcal_CF_vs_HV', 'SignalVcal_CF_vs_HV')
+					self.graphVcalCF.GetXaxis().SetTitle('HV [V]')
+					self.graphVcalCF.GetYaxis().SetTitle('signalVcal_CF [mV]')
 
 				self.graphCharge = ro.TGraphErrors(len(self.voltages), diaVoltages, signalOCharge, diaVoltagesSigma, signalOutChargeErrs)
 				self.graphCharge.SetNameTitle('SignalCharge_vs_HV', 'SignalCharge_vs_HV')
 				self.graphCharge.GetXaxis().SetTitle('HV [V]')
 				self.graphCharge.GetYaxis().SetTitle('signalCharge [e]')
-				self.graphChargeCF = ro.TGraphErrors(len(self.voltages), diaVoltages, signalOChargeCF, diaVoltagesSigma, signalOutChargeErrsCF)
-				self.graphChargeCF.SetNameTitle('SignalCharge_CF_vs_HV', 'SignalCharge_CF_vs_HV')
-				self.graphChargeCF.GetXaxis().SetTitle('HV [V]')
-				self.graphChargeCF.GetYaxis().SetTitle('signalCharge_CF [e]')
+				if not self.are_cal_runs:
+					self.graphChargeCF = ro.TGraphErrors(len(self.voltages), diaVoltages, signalOChargeCF, diaVoltagesSigma, signalOutChargeErrsCF)
+					self.graphChargeCF.SetNameTitle('SignalCharge_CF_vs_HV', 'SignalCharge_CF_vs_HV')
+					self.graphChargeCF.GetXaxis().SetTitle('HV [V]')
+					self.graphChargeCF.GetYaxis().SetTitle('signalCharge_CF [e]')
 
 				self.graphPHNP = ro.TGraphErrors(len(self.voltages), diaVoltages, signalONP, diaVoltagesSigma, signalOutErrsNP)
 				self.graphPHNP.SetNameTitle('Signal_NoPedestal_vs_HV', 'Signal_NoPedestal_vs_HV')
 				self.graphPHNP.GetXaxis().SetTitle('HV [V]')
 				self.graphPHNP.GetYaxis().SetTitle('signal [mV]')
-				self.graphPHCFNP = ro.TGraphErrors(len(self.voltages), diaVoltages, signalOCFNP, diaVoltagesSigma, signalOutErrsCFNP)
-				self.graphPHCFNP.SetNameTitle('Signal_NoPedestal_CF_vs_HV', 'Signal_NoPedestal_CF_vs_HV')
-				self.graphPHCFNP.GetXaxis().SetTitle('HV [V]')
-				self.graphPHCFNP.GetYaxis().SetTitle('signal_CF [mV]')
+				if not self.are_cal_runs:
+					self.graphPHCFNP = ro.TGraphErrors(len(self.voltages), diaVoltages, signalOCFNP, diaVoltagesSigma, signalOutErrsCFNP)
+					self.graphPHCFNP.SetNameTitle('Signal_NoPedestal_CF_vs_HV', 'Signal_NoPedestal_CF_vs_HV')
+					self.graphPHCFNP.GetXaxis().SetTitle('HV [V]')
+					self.graphPHCFNP.GetYaxis().SetTitle('signal_CF [mV]')
 
 				self.graphVcalNP = ro.TGraphErrors(len(self.voltages), diaVoltages, signalOVcalNP, diaVoltagesSigma, signalOutVcalErrsNP)
 				self.graphVcalNP.SetNameTitle('SignalVcal_NoPedestal_vs_HV', 'SignalVcal_NoPedestal_vs_HV')
 				self.graphVcalNP.GetXaxis().SetTitle('HV [V]')
 				self.graphVcalNP.GetYaxis().SetTitle('signalVcal [mV]')
-				self.graphVcalCFNP = ro.TGraphErrors(len(self.voltages), diaVoltages, signalOVcalCFNP, diaVoltagesSigma, signalOutVcalErrsCFNP)
-				self.graphVcalCFNP.SetNameTitle('SignalVcal_NoPedestal_CF_vs_HV', 'SignalVcal_NoPedestal_CF_vs_HV')
-				self.graphVcalCFNP.GetXaxis().SetTitle('HV [V]')
-				self.graphVcalCFNP.GetYaxis().SetTitle('signalVcal_CF [mV]')
+				if not self.are_cal_runs:
+					self.graphVcalCFNP = ro.TGraphErrors(len(self.voltages), diaVoltages, signalOVcalCFNP, diaVoltagesSigma, signalOutVcalErrsCFNP)
+					self.graphVcalCFNP.SetNameTitle('SignalVcal_NoPedestal_CF_vs_HV', 'SignalVcal_NoPedestal_CF_vs_HV')
+					self.graphVcalCFNP.GetXaxis().SetTitle('HV [V]')
+					self.graphVcalCFNP.GetYaxis().SetTitle('signalVcal_CF [mV]')
 
 				self.graphChargeNP = ro.TGraphErrors(len(self.voltages), diaVoltages, signalOChargeNP, diaVoltagesSigma, signalOutChargeErrsNP)
 				self.graphChargeNP.SetNameTitle('SignalCharge_NoPedestal_vs_HV', 'SignalCharge_NoPedestal_vs_HV')
 				self.graphChargeNP.GetXaxis().SetTitle('HV [V]')
 				self.graphChargeNP.GetYaxis().SetTitle('signalCharge [e]')
-				self.graphChargeCFNP = ro.TGraphErrors(len(self.voltages), diaVoltages, signalOChargeCFNP, diaVoltagesSigma, signalOutChargeErrsCFNP)
-				self.graphChargeCFNP.SetNameTitle('SignalCharge_NoPedestal_CF_vs_HV', 'SignalCharge_NoPedestal_CF_vs_HV')
-				self.graphChargeCFNP.GetXaxis().SetTitle('HV [V]')
-				self.graphChargeCFNP.GetYaxis().SetTitle('signalCharge_CF [e]')
+				if not self.are_cal_runs:
+					self.graphChargeCFNP = ro.TGraphErrors(len(self.voltages), diaVoltages, signalOChargeCFNP, diaVoltagesSigma, signalOutChargeErrsCFNP)
+					self.graphChargeCFNP.SetNameTitle('SignalCharge_NoPedestal_CF_vs_HV', 'SignalCharge_NoPedestal_CF_vs_HV')
+					self.graphChargeCFNP.GetXaxis().SetTitle('HV [V]')
+					self.graphChargeCFNP.GetYaxis().SetTitle('signalCharge_CF [e]')
 
 			self.graphPH.SetMarkerStyle(7)
 			self.graphPH.SetMarkerColor(ro.kBlack)
 			self.graphPH.SetLineColor(ro.kBlack)
-			self.graphPHCF.SetMarkerStyle(7)
-			self.graphPHCF.SetMarkerColor(ro.kBlack)
-			self.graphPHCF.SetLineColor(ro.kBlack)
+			if not self.are_cal_runs:
+				self.graphPHCF.SetMarkerStyle(7)
+				self.graphPHCF.SetMarkerColor(ro.kBlack)
+				self.graphPHCF.SetLineColor(ro.kBlack)
 
 			self.canvasPH = ro.TCanvas('c_' + self.graphPH.GetName(), 'c_' + self.graphPH.GetName(), 1)
 			self.graphPH.Draw('AP')
 			self.canvasPH.SetGridx()
 			self.canvasPH.SetGridy()
-			self.canvasPHCF = ro.TCanvas('c_' + self.graphPHCF.GetName(), 'c_' + self.graphPHCF.GetName(), 1)
-			self.graphPHCF.Draw('AP')
-			self.canvasPHCF.SetGridx()
-			self.canvasPHCF.SetGridy()
+			if not self.are_cal_runs:
+				self.canvasPHCF = ro.TCanvas('c_' + self.graphPHCF.GetName(), 'c_' + self.graphPHCF.GetName(), 1)
+				self.graphPHCF.Draw('AP')
+				self.canvasPHCF.SetGridx()
+				self.canvasPHCF.SetGridy()
 
 			self.graphPHNP.SetMarkerStyle(7)
 			self.graphPHNP.SetMarkerColor(ro.kBlack)
 			self.graphPHNP.SetLineColor(ro.kBlack)
-			self.graphPHCFNP.SetMarkerStyle(7)
-			self.graphPHCFNP.SetMarkerColor(ro.kBlack)
-			self.graphPHCFNP.SetLineColor(ro.kBlack)
+			if not self.are_cal_runs:
+				self.graphPHCFNP.SetMarkerStyle(7)
+				self.graphPHCFNP.SetMarkerColor(ro.kBlack)
+				self.graphPHCFNP.SetLineColor(ro.kBlack)
 
 			self.canvasPHNP = ro.TCanvas('c_' + self.graphPHNP.GetName(), 'c_' + self.graphPHNP.GetName(), 1)
 			self.graphPHNP.Draw('AP')
 			self.canvasPHNP.SetGridx()
 			self.canvasPHNP.SetGridy()
-			self.canvasPHCFNP = ro.TCanvas('c_' + self.graphPHCFNP.GetName(), 'c_' + self.graphPHCFNP.GetName(), 1)
-			self.graphPHCFNP.Draw('AP')
-			self.canvasPHCFNP.SetGridx()
-			self.canvasPHCFNP.SetGridy()
+			if not self.are_cal_runs:
+				self.canvasPHCFNP = ro.TCanvas('c_' + self.graphPHCFNP.GetName(), 'c_' + self.graphPHCFNP.GetName(), 1)
+				self.graphPHCFNP.Draw('AP')
+				self.canvasPHCFNP.SetGridx()
+				self.canvasPHCFNP.SetGridy()
 
 			if not self.are_cal_runs:
 				self.graphVcal.SetMarkerStyle(7)
 				self.graphVcal.SetMarkerColor(ro.kBlack)
 				self.graphVcal.SetLineColor(ro.kBlack)
-				self.graphVcalCF.SetMarkerStyle(7)
-				self.graphVcalCF.SetMarkerColor(ro.kBlack)
-				self.graphVcalCF.SetLineColor(ro.kBlack)
+				if not self.are_cal_runs:
+					self.graphVcalCF.SetMarkerStyle(7)
+					self.graphVcalCF.SetMarkerColor(ro.kBlack)
+					self.graphVcalCF.SetLineColor(ro.kBlack)
 
 				self.canvasVcal = ro.TCanvas('c_' + self.graphVcal.GetName(), 'c_' + self.graphVcal.GetName(), 1)
 				self.graphVcal.Draw('AP')
 				self.canvasVcal.SetGridx()
 				self.canvasVcal.SetGridy()
-				self.canvasVcalCF = ro.TCanvas('c_' + self.graphVcalCF.GetName(), 'c_' + self.graphVcalCF.GetName(), 1)
-				self.graphVcalCF.Draw('AP')
-				self.canvasVcalCF.SetGridx()
-				self.canvasVcalCF.SetGridy()
+				if not self.are_cal_runs:
+					self.canvasVcalCF = ro.TCanvas('c_' + self.graphVcalCF.GetName(), 'c_' + self.graphVcalCF.GetName(), 1)
+					self.graphVcalCF.Draw('AP')
+					self.canvasVcalCF.SetGridx()
+					self.canvasVcalCF.SetGridy()
 
 				self.graphCharge.SetMarkerStyle(7)
 				self.graphCharge.SetMarkerColor(ro.kBlack)
 				self.graphCharge.SetLineColor(ro.kBlack)
-				self.graphChargeCF.SetMarkerStyle(7)
-				self.graphChargeCF.SetMarkerColor(ro.kBlack)
-				self.graphChargeCF.SetLineColor(ro.kBlack)
+				if not self.are_cal_runs:
+					self.graphChargeCF.SetMarkerStyle(7)
+					self.graphChargeCF.SetMarkerColor(ro.kBlack)
+					self.graphChargeCF.SetLineColor(ro.kBlack)
 
 				self.canvasCharge = ro.TCanvas('c_' + self.graphCharge.GetName(), 'c_' + self.graphCharge.GetName(), 1)
 				self.graphCharge.Draw('AP')
 				self.canvasCharge.SetGridx()
 				self.canvasCharge.SetGridy()
-				self.canvasChargeCF = ro.TCanvas('c_' + self.graphChargeCF.GetName(), 'c_' + self.graphChargeCF.GetName(), 1)
-				self.graphChargeCF.Draw('AP')
-				self.canvasChargeCF.SetGridx()
-				self.canvasChargeCF.SetGridy()
+				if not self.are_cal_runs:
+					self.canvasChargeCF = ro.TCanvas('c_' + self.graphChargeCF.GetName(), 'c_' + self.graphChargeCF.GetName(), 1)
+					self.graphChargeCF.Draw('AP')
+					self.canvasChargeCF.SetGridx()
+					self.canvasChargeCF.SetGridy()
 
 				self.graphVcalNP.SetMarkerStyle(7)
 				self.graphVcalNP.SetMarkerColor(ro.kBlack)
 				self.graphVcalNP.SetLineColor(ro.kBlack)
-				self.graphVcalCFNP.SetMarkerStyle(7)
-				self.graphVcalCFNP.SetMarkerColor(ro.kBlack)
-				self.graphVcalCFNP.SetLineColor(ro.kBlack)
+				if not self.are_cal_runs:
+					self.graphVcalCFNP.SetMarkerStyle(7)
+					self.graphVcalCFNP.SetMarkerColor(ro.kBlack)
+					self.graphVcalCFNP.SetLineColor(ro.kBlack)
 
 				self.canvasVcalNP = ro.TCanvas('c_' + self.graphVcalNP.GetName(), 'c_' + self.graphVcalNP.GetName(), 1)
 				self.graphVcalNP.Draw('AP')
 				self.canvasVcalNP.SetGridx()
 				self.canvasVcalNP.SetGridy()
-				self.canvasVcalCFNP = ro.TCanvas('c_' + self.graphVcalCFNP.GetName(), 'c_' + self.graphVcalCFNP.GetName(), 1)
-				self.graphVcalCFNP.Draw('AP')
-				self.canvasVcalCFNP.SetGridx()
-				self.canvasVcalCFNP.SetGridy()
+				if not self.are_cal_runs:
+					self.canvasVcalCFNP = ro.TCanvas('c_' + self.graphVcalCFNP.GetName(), 'c_' + self.graphVcalCFNP.GetName(), 1)
+					self.graphVcalCFNP.Draw('AP')
+					self.canvasVcalCFNP.SetGridx()
+					self.canvasVcalCFNP.SetGridy()
 
 				self.graphChargeNP.SetMarkerStyle(7)
 				self.graphChargeNP.SetMarkerColor(ro.kBlack)
 				self.graphChargeNP.SetLineColor(ro.kBlack)
-				self.graphChargeCFNP.SetMarkerStyle(7)
-				self.graphChargeCFNP.SetMarkerColor(ro.kBlack)
-				self.graphChargeCFNP.SetLineColor(ro.kBlack)
+				if not self.are_cal_runs:
+					self.graphChargeCFNP.SetMarkerStyle(7)
+					self.graphChargeCFNP.SetMarkerColor(ro.kBlack)
+					self.graphChargeCFNP.SetLineColor(ro.kBlack)
 
 				self.canvasChargeNP = ro.TCanvas('c_' + self.graphChargeNP.GetName(), 'c_' + self.graphChargeNP.GetName(), 1)
 				self.graphChargeNP.Draw('AP')
 				self.canvasChargeNP.SetGridx()
 				self.canvasChargeNP.SetGridy()
-				self.canvasChargeCFNP = ro.TCanvas('c_' + self.graphChargeCFNP.GetName(), 'c_' + self.graphChargeCFNP.GetName(), 1)
-				self.graphChargeCFNP.Draw('AP')
-				self.canvasChargeCFNP.SetGridx()
-				self.canvasChargeCFNP.SetGridy()
+				if not self.are_cal_runs:
+					self.canvasChargeCFNP = ro.TCanvas('c_' + self.graphChargeCFNP.GetName(), 'c_' + self.graphChargeCFNP.GetName(), 1)
+					self.graphChargeCFNP.Draw('AP')
+					self.canvasChargeCFNP.SetGridx()
+					self.canvasChargeCFNP.SetGridy()
 
 	def PlotPeakTimes(self):
 		if len(self.voltages) > 0:
@@ -595,28 +663,37 @@ class AnalysisAllRunsInFolder:
 									anaRun.AnalysisWaves()
 									peakTime = 0
 									peakTimeSigma = 0
+									peakTimeN = 0
 									peakTimeCF = 0
 									peakTimeSigmaCF = 0
+									peakTimeNCF = 0
 									if 'peakPosDist' in anaRun.histo.keys():
 										peakTime = np.double(anaRun.peakTime * 1e6)
 										peakTimeSigma = np.double(anaRun.histo['peakPosDist'].GetRMS())
+										peakTimeN = np.double(anaRun.histo['peakPosDist'].GetEntries())
 									if 'peakPosDistCF' in anaRun.histo.keys():
-										peakTimeCF = np.double(anaRun.peakTime * 1e6)
-										peakTimeSigmaCF = np.double(anaRun.histo['peakPosDistCF'].GetRMS())
+										if not self.are_cal_runs:
+											peakTimeCF = np.double(anaRun.peakTime * 1e6)
+											peakTimeSigmaCF = np.double(anaRun.histo['peakPosDistCF'].GetRMS())
+											peakTimeNCF = np.double(anaRun.histo['peakPosDistCF'].GetEntries())
 									self.signalPeakTime[anaRun.bias] = peakTime
 									self.signalPeakTimeSigma[anaRun.bias] = peakTimeSigma
-									self.signalPeakTimeCF[anaRun.bias] = peakTimeCF
-									self.signalPeakTimeSigmaCF[anaRun.bias] = peakTimeSigmaCF
+									self.signalPeakTimeN[anaRun.bias] = peakTimeN
+									if not self.are_cal_runs:
+										self.signalPeakTimeCF[anaRun.bias] = peakTimeCF
+										self.signalPeakTimeSigmaCF[anaRun.bias] = peakTimeSigmaCF
+										self.signalPeakTimeNCF[anaRun.bias] = peakTimeNCF
 
 				signalO = np.array([self.signalOut[volt] for volt in self.voltages], dtype='f8')
 				signalOutErrs = np.array([self.signalOutSigma[volt] for volt in self.voltages], dtype='f8')
 				signalPeaks = np.array([self.signalPeakTime[volt] for volt in self.voltages], 'f8')
-				signalPeaksSigma = np.array([self.signalPeakTimeSigma[volt] for volt in self.voltages], 'f8')
+				signalPeaksSigma = np.array([self.signalPeakTimeSigma[volt] / np.sqrt(self.signalPeakTimeN[volt]) for volt in self.voltages], 'f8')
 
-				signalOCF = np.array([self.signalOutCF[volt] for volt in self.voltages], dtype='f8')
-				signalOutErrsCF = np.array([self.signalOutSigmaCF[volt] for volt in self.voltages], dtype='f8')
-				signalPeaksCF = np.array([self.signalPeakTimeCF[volt] for volt in self.voltages], 'f8')
-				signalPeaksSigmaCF = np.array([self.signalPeakTimeSigmaCF[volt] for volt in self.voltages], 'f8')
+				if not self.are_cal_runs:
+					signalOCF = np.array([self.signalOutCF[volt] for volt in self.voltages], dtype='f8')
+					signalOutErrsCF = np.array([self.signalOutSigmaCF[volt] for volt in self.voltages], dtype='f8')
+					signalPeaksCF = np.array([self.signalPeakTimeCF[volt] for volt in self.voltages], 'f8')
+					signalPeaksSigmaCF = np.array([self.signalPeakTimeSigmaCF[volt] / np.sqrt(self.signalPeakTimeNCF[volt]) for volt in self.voltages], 'f8')
 
 				self.graphPeakTime = ro.TGraphErrors(len(self.voltages), signalO, signalPeaks, signalOutErrs, signalPeaksSigma)
 				self.graphPeakTime.SetNameTitle('SignalPeakTime_vs_Signal_ch_' + str(self.caen_ch), 'SignalPeakTime_vs_Signal_ch_' + str(self.caen_ch))
@@ -631,18 +708,19 @@ class AnalysisAllRunsInFolder:
 				self.canvasPeakTime.SetGridx()
 				self.canvasPeakTime.SetGridy()
 
-				self.graphPeakTimeCF = ro.TGraphErrors(len(self.voltages), signalOCF, signalPeaksCF, signalOutErrsCF, signalPeaksSigmaCF)
-				self.graphPeakTimeCF.SetNameTitle('SignalPeakTime_CF_vs_Signal_CF_ch_' + str(self.caen_ch), 'SignalPeakTime_CF_vs_Signal_CF_ch_' + str(self.caen_ch))
-				self.graphPeakTimeCF.GetXaxis().SetTitle('signal [mV]')
-				self.graphPeakTimeCF.GetYaxis().SetTitle('Peak Time [us]')
-				self.graphPeakTimeCF.SetMarkerStyle(7)
-				self.graphPeakTimeCF.SetMarkerColor(ro.kBlack)
-				self.graphPeakTimeCF.SetLineColor(ro.kBlack)
+				if not self.are_cal_runs:
+					self.graphPeakTimeCF = ro.TGraphErrors(len(self.voltages), signalOCF, signalPeaksCF, signalOutErrsCF, signalPeaksSigmaCF)
+					self.graphPeakTimeCF.SetNameTitle('SignalPeakTime_CF_vs_Signal_CF_ch_' + str(self.caen_ch), 'SignalPeakTime_CF_vs_Signal_CF_ch_' + str(self.caen_ch))
+					self.graphPeakTimeCF.GetXaxis().SetTitle('signal [mV]')
+					self.graphPeakTimeCF.GetYaxis().SetTitle('Peak Time [us]')
+					self.graphPeakTimeCF.SetMarkerStyle(7)
+					self.graphPeakTimeCF.SetMarkerColor(ro.kBlack)
+					self.graphPeakTimeCF.SetLineColor(ro.kBlack)
 
-				self.canvasPeakTimeCF = ro.TCanvas('c_' + self.graphPeakTimeCF.GetName(), 'c_' + self.graphPeakTimeCF.GetName(), 1)
-				self.graphPeakTimeCF.Draw('AP')
-				self.canvasPeakTimeCF.SetGridx()
-				self.canvasPeakTimeCF.SetGridy()
+					self.canvasPeakTimeCF = ro.TCanvas('c_' + self.graphPeakTimeCF.GetName(), 'c_' + self.graphPeakTimeCF.GetName(), 1)
+					self.graphPeakTimeCF.Draw('AP')
+					self.canvasPeakTimeCF.SetGridx()
+					self.canvasPeakTimeCF.SetGridy()
 
 	def FitLine(self):
 		ro.Math.MinimizerOptions.SetDefaultMinimizer(*fit_method)
@@ -677,8 +755,8 @@ class AnalysisAllRunsInFolder:
 						   'signal_out_vcal_sigma': self.signalOutVcalSigma,
 						   'signal_out_charge': self.signalOutCharge,
 						   'signal_out_charge_sigma': self.signalOutChargeSigma,
-		                   'signal_peak_time': self.signalPeakTime,
-		                   'signal_peak_time_sigma': self.signalPeakTimeSigma,
+						   'signal_peak_time': self.signalPeakTime,
+						   'signal_peak_time_sigma': self.signalPeakTimeSigma,
 						   'caen_ch': self.caen_ch,
 						   'fit_p0': self.fit.GetParameter(0) if self.fit else 0,
 						   'fit_p0_error': self.fit.GetParError(0) if self.fit else 0,
@@ -709,22 +787,29 @@ class AnalysisAllRunsInFolder:
 
 	def SaveAllCanvas(self):
 		self.SaveCanvas(self.canvasPH, self.graphPH)
-		self.SaveCanvas(self.canvasPHCF, self.graphPHCF)
+		if not self.are_cal_runs:
+			self.SaveCanvas(self.canvasPHCF, self.graphPHCF)
 		self.SaveCanvas(self.canvasPHNP, self.graphPHNP)
-		self.SaveCanvas(self.canvasPHCFNP, self.graphPHCFNP)
+		if not self.are_cal_runs:
+			self.SaveCanvas(self.canvasPHCFNP, self.graphPHCFNP)
 
 		self.SaveCanvas(self.canvasVcal, self.graphVcal)
-		self.SaveCanvas(self.canvasVcalCF, self.graphVcalCF)
+		if not self.are_cal_runs:
+			self.SaveCanvas(self.canvasVcalCF, self.graphVcalCF)
 		self.SaveCanvas(self.canvasVcalNP, self.graphVcalNP)
-		self.SaveCanvas(self.canvasVcalCFNP, self.graphVcalCFNP)
+		if not self.are_cal_runs:
+			self.SaveCanvas(self.canvasVcalCFNP, self.graphVcalCFNP)
 
 		self.SaveCanvas(self.canvasCharge, self.graphCharge)
-		self.SaveCanvas(self.canvasChargeCF, self.graphChargeCF)
+		if not self.are_cal_runs:
+			self.SaveCanvas(self.canvasChargeCF, self.graphChargeCF)
 		self.SaveCanvas(self.canvasChargeNP, self.graphChargeNP)
-		self.SaveCanvas(self.canvasChargeCFNP, self.graphChargeCFNP)
+		if not self.are_cal_runs:
+			self.SaveCanvas(self.canvasChargeCFNP, self.graphChargeCFNP)
 
 		self.SaveCanvas(self.canvasPeakTime, self.graphPeakTime)
-		self.SaveCanvas(self.canvasPeakTimeCF, self.graphPeakTimeCF)
+		if not self.are_cal_runs:
+			self.SaveCanvas(self.canvasPeakTimeCF, self.graphPeakTimeCF)
 
 def main():
 	parser = OptionParser()
