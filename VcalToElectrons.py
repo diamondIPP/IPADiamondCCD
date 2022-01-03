@@ -32,8 +32,8 @@ class VcalToElectrons:
         self.vgain = ufloat(0, 0)
         self.UpdateVoltageGain()
         # in pF
-        self.cap_ceramic = ufloat(1.8, 0.18)
-        self.cap_line = ufloat(0.2, 0.087)
+        self.cap_ceramic = ufloat(1.846, 0.002)
+        self.cap_line = ufloat(2.26, 0.05)
         self.cap_in = ufloat(0, 0)
         self.UpdateInputCapacitance()
 

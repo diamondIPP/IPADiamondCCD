@@ -1186,11 +1186,17 @@ class AnalysisCaenCCD:
 		if not self.histo[name] or IsHistogramEmpty(self.histo[name]):
 			print 'There was a problem with the created histogram {n}'.format(n=name)
 			return
+		tempbin0, tempbinf = self.histo[name].FindFirstBinAbove(), self.histo[name].FindLastBinAbove()
+		self.histo[name].SetBinContent(tempbin0, 0)
+		self.histo[name].SetBinContent(tempbinf, 0)
 		self.histo[name].GetXaxis().SetRangeUser(-0.5, 0.5)
 		peakbin = self.histo[name].GetMaximumBin()
 		self.timeCFDeltasPeak = self.histo[name].GetBinCenter(peakbin) * 1e-6
 		self.histo[name].GetXaxis().SetRangeUser(low_t0, up_t0)
 		deltax = CheckBinningForFit(self, name, self.DrawHisto, funcArgs, 3, 12) if not self.settings.is_cal_run else (up_t0 - low_t0)/100.
+		tempbin0, tempbinf = self.histo[name].FindFirstBinAbove(), self.histo[name].FindLastBinAbove()
+		self.histo[name].SetBinContent(tempbin0, 0)
+		self.histo[name].SetBinContent(tempbinf, 0)
 		self.histo[name].GetXaxis().SetRangeUser(max(low_t0, self.histo[name].GetMean() - 5 * self.histo[name].GetRMS()), min(up_t0, self.histo[name].GetMean() + 5 * self.histo[name].GetRMS()))
 		fb, lb = self.histo[name].FindFirstBinAbove(0), self.histo[name].FindLastBinAbove(0)
 		fb = fb + 1 if self.histo[name].GetBinContent(fb) > 3 * self.histo[name].GetBinContent(fb + 1) else fb
