@@ -4,7 +4,7 @@ from struct import unpack
 import time, os, sys
 from optparse import OptionParser
 import ipdb
-import cPickle as pickle
+import pickle as pickle
 from Utils import *
 from Settings_Caen import Settings_Caen
 from Converter_Caen import Converter_Caen
@@ -129,21 +129,21 @@ class AnalysisAllRunsInFolder:
 			nameVcal = ''
 			nameCharge = ''
 			namePeakTime = ''
-			if 'signal_out_vcal' in self.cal_pickle.keys():
+			if 'signal_out_vcal' in list(self.cal_pickle.keys()):
 				self.signalOutVcal = self.cal_pickle['signal_out_vcal']
 				self.signalOutVcalSigma = self.cal_pickle['signal_out_vcal_sigma']
 				nameVcal = '' if self.are_cal_runs else 'SignalVcal_vs_HV'
-			if 'signal_out_charge' in self.cal_pickle.keys():
+			if 'signal_out_charge' in list(self.cal_pickle.keys()):
 				self.signalOutCharge = self.cal_pickle['signal_out_charge']
 				self.signalOutChargeSigma = self.cal_pickle['signal_out_charge_sigma']
 				nameCharge = '' if self.are_cal_runs else 'SignalCharge_vs_HV'
-			if 'signal_peak_time' in self.cal_pickle.keys():
+			if 'signal_peak_time' in list(self.cal_pickle.keys()):
 				self.signalPeakTime = self.cal_pickle['signal_peak_time']
 				self.signalPeakTimeSigma = self.cal_pickle['signal_peak_time_sigma']
 				namePeakTime = 'SignalPeakTime_vs_Signal_ch_' + str(self.caen_ch) if self.are_cal_runs else ''
 			name = 'Signal_vs_CalStep_ch_' + str(self.caen_ch) if self.are_cal_runs else 'Signal_vs_HV'
-			xpoints = np.array([self.signalIn[volt] for volt in self.voltages], 'f8') if len(self.signalIn.keys()) >= 1 else np.array(self.voltages, 'f8')
-			xpointserrs = np.array([self.signalInSigma[volt] for volt in self.voltages], 'f8') if len(self.signalInSigma.keys()) >= 1 else np.zeros(len(self.voltages), 'f8')
+			xpoints = np.array([self.signalIn[volt] for volt in self.voltages], 'f8') if len(list(self.signalIn.keys())) >= 1 else np.array(self.voltages, 'f8')
+			xpointserrs = np.array([self.signalInSigma[volt] for volt in self.voltages], 'f8') if len(list(self.signalInSigma.keys())) >= 1 else np.zeros(len(self.voltages), 'f8')
 			self.graphPH = ro.TGraphErrors(len(self.voltages), xpoints, np.array([self.signalOut[volt] for volt in self.voltages], 'f8'), xpointserrs, np.array([self.signalOutSigma[volt] for volt in self.voltages], 'f8'))
 			self.graphPH.SetNameTitle(name, name)
 			self.graphPH.GetXaxis().SetTitle('vcal step [mV]' if self.are_cal_runs else 'HV [V]')
@@ -160,7 +160,7 @@ class AnalysisAllRunsInFolder:
 				self.fit.SetNDF(self.cal_pickle['fit_ndf'])
 				self.fit.SetChisquare(self.cal_pickle['fit_chi2'])
 				if namePeakTime != '':
-					self.graphPeakTime = ro.TGraphErrors(len(self.signalPeakTime.values()), np.array([self.signalOut[volt] for volt in self.voltages], 'f8'), np.array([self.signalPeakTime[volt] for volt in self.voltages], 'f8'), np.array([self.signalOutSigma[volt] for volt in self.voltages], 'f8'), np.array([self.signalPeakTimeSigma[volt] for volt in self.voltages], 'f8'))
+					self.graphPeakTime = ro.TGraphErrors(len(list(self.signalPeakTime.values())), np.array([self.signalOut[volt] for volt in self.voltages], 'f8'), np.array([self.signalPeakTime[volt] for volt in self.voltages], 'f8'), np.array([self.signalOutSigma[volt] for volt in self.voltages], 'f8'), np.array([self.signalPeakTimeSigma[volt] for volt in self.voltages], 'f8'))
 					self.graphPeakTime.SetNameTitle(namePeakTime, namePeakTime)
 					self.graphPeakTime.GetXaxis().SetTitle('signal [mV]')
 					self.graphPeakTime.GetYaxis().SetTitle('Peak Time [us]')
@@ -185,9 +185,9 @@ class AnalysisAllRunsInFolder:
 					self.graphCharge.SetMarkerColor(ro.kBlack)
 					self.graphCharge.SetLineColor(ro.kBlack)
 				self.fit = None
-			print 'Loaded pickle', cal_files[0]
+			print('Loaded pickle', cal_files[0])
 			return
-		print 'There is no pickle to load yet (or it is not a calibration run)'
+		print('There is no pickle to load yet (or it is not a calibration run)')
 
 	def PlotFromPickle(self):
 		if self.cal_pickle:
@@ -214,18 +214,18 @@ class AnalysisAllRunsInFolder:
 			self.SavePickle()
 			self.PlotPeakTimes()
 		self.SaveAllCanvas()
-		print 'Finished in', time.time() - self.time0, 'seconds'
+		print('Finished in', time.time() - self.time0, 'seconds')
 
 	def LoopRuns(self):
 		# ro.gROOT.SetBatch(True)
 		for run in self.runs:
-			print '\nAnalysing run:', run
+			print('\nAnalysing run:', run)
 			if os.path.isdir(run):
 				root_files = glob.glob('{d}/*.root'.format(d=run))
 				if len(root_files) > 0:
 					configfile = self.config if not self.are_cal_runs or '_out_' in run else self.configInput
-					print 'Using config file:', configfile
-					print 'Overwriting analysis tree if it exists' if self.overwrite else 'Not overwriting analysis tree if it exists'
+					print('Using config file:', configfile)
+					print('Overwriting analysis tree if it exists' if self.overwrite else 'Not overwriting analysis tree if it exists')
 					anaRun = AnalysisCaenCCD(run, configfile, overw=self.overwrite, doDebug=self.doDebug)
 					anaRun.DoAll()
 					self.voltages.append(anaRun.bias)
@@ -236,10 +236,10 @@ class AnalysisAllRunsInFolder:
 					peakTimeCF = 0
 					peakTimeSigmaCF = 0
 					if self.are_cal_runs and '_out_' in run:
-						if 'peakPosDist' in anaRun.histo.keys():
+						if 'peakPosDist' in list(anaRun.histo.keys()):
 							peakTime = np.double(anaRun.peakTime * 1e6)
 							peakTimeSigma = np.double(anaRun.histo['peakPosDist'].GetRMS())
-						if 'peakPosDistCF' in anaRun.histo.keys():
+						if 'peakPosDistCF' in list(anaRun.histo.keys()):
 							peakTimeCF = np.double(anaRun.peakTimeCF * 1e6)
 							peakTimeSigmaCF = np.double(anaRun.histo['peakPosDistCF'].GetRMS())
 
@@ -256,7 +256,7 @@ class AnalysisAllRunsInFolder:
 					signalRunCFNP = 0
 					signalSigmaRunCFNP = 0
 
-					if 'PH' in anaRun.histo.keys():
+					if 'PH' in list(anaRun.histo.keys()):
 						signalRun = np.double(anaRun.langaus['PH'].GetParameter(1)) if self.are_cal_runs else np.double(anaRun.histo['PH'].GetMean())
 						signalSigmaRun = np.double(anaRun.langaus['PH'] .GetParameter(2)) if self.are_cal_runs else np.sqrt(np.power(anaRun.histo['PH'].GetRMS(), 2, dtype='f8') - np.power(anaRun.pedestal_sigma, 2, dtype='f8'), dtype='f8') if anaRun.histo['PH'].GetRMS() > anaRun.pedestal_sigma else anaRun.histo['PH'].GetRMS()
 						signalRunCF = np.double(anaRun.langaus['PH_CF'].GetParameter(1)) if self.are_cal_runs else np.double(anaRun.histo['PH_CF'].GetMean())
@@ -267,10 +267,10 @@ class AnalysisAllRunsInFolder:
 						signalRunCFNP = signalRunCF
 						signalSigmaRunCFNP = signalSigmaRunCF
 
-						if anaRun.langaus.has_key('PHNoPedestal') or anaRun.histo.has_key('PHNoPedestal'):
+						if 'PHNoPedestal' in anaRun.langaus or 'PHNoPedestal' in anaRun.histo:
 							signalRunNP = np.double(anaRun.langaus['PHNoPedestal'].GetParameter(1)) if self.are_cal_runs else np.double(anaRun.histo['PHNoPedestal'].GetMean())
 							signalSigmaRunNP = np.double(anaRun.langaus['PHNoPedestal'] .GetParameter(2)) if self.are_cal_runs else np.sqrt(np.power(anaRun.histo['PHNoPedestal'].GetRMS(), 2, dtype='f8') - np.power(anaRun.pedestal_sigma, 2, dtype='f8'), dtype='f8') if anaRun.histo['PHNoPedestal'].GetRMS() > anaRun.pedestal_sigma else anaRun.histo['PHNoPedestal'].GetRMS()
-						if anaRun.langaus.has_key('PH_CFNoPedestal') or anaRun.histo.has_key('PH_CFNoPedestal'):
+						if 'PH_CFNoPedestal' in anaRun.langaus or 'PH_CFNoPedestal' in anaRun.histo:
 							signalRunCFNP = np.double(anaRun.langaus['PH_CFNoPedestal'].GetParameter(1)) if self.are_cal_runs else np.double(anaRun.histo['PH_CFNoPedestal'].GetMean())
 							signalSigmaRunCFNP = np.double(anaRun.langaus['PH_CFNoPedestal'] .GetParameter(2)) if self.are_cal_runs else np.sqrt(np.power(anaRun.histo['PH_CFNoPedestal'].GetRMS(), 2, dtype='f8') - np.power(anaRun.pedestal_sigma, 2, dtype='f8'), dtype='f8') if anaRun.histo['PH_CFNoPedestal'].GetRMS() > anaRun.pedestal_sigma else anaRun.histo['PH_CFNoPedestal'].GetRMS()
 
@@ -284,16 +284,16 @@ class AnalysisAllRunsInFolder:
 						signalRunChargeCF = 0
 						signalSigmaRunChargeCF = 0
 
-						if 'PHvcal' in anaRun.histo.keys():
+						if 'PHvcal' in list(anaRun.histo.keys()):
 							signalRunVcal = np.double(anaRun.histo['PHvcal'].GetMean())
 							signalSigmaRunVcal = np.sqrt(np.power(anaRun.histo['PHvcal'].GetRMS(), 2, dtype='f8') - np.power(anaRun.pedestal_vcal_sigma, 2, dtype='f8'), dtype='f8') if anaRun.histo['PHvcal'].GetRMS() > anaRun.pedestal_vcal_sigma else anaRun.histo['PHvcal'].GetRMS()
-						if 'PHcharge' in anaRun.histo.keys():
+						if 'PHcharge' in list(anaRun.histo.keys()):
 							signalRunCharge = np.double(anaRun.histo['PHcharge'].GetMean())
 							signalSigmaRunCharge = np.sqrt(np.power(anaRun.histo['PHcharge'].GetRMS(), 2, dtype='f8') - np.power(anaRun.pedestal_charge_sigma, 2, dtype='f8'), dtype='f8')  if anaRun.histo['PHcharge'].GetRMS() > anaRun.pedestal_charge_sigma else anaRun.histo['PHcharge'].GetRMS()
-						if 'PHvcal_CF' in anaRun.histo.keys():
+						if 'PHvcal_CF' in list(anaRun.histo.keys()):
 							signalRunVcalCF = np.double(anaRun.histo['PHvcal_CF'].GetMean())
 							signalSigmaRunVcalCF = np.sqrt(np.power(anaRun.histo['PHvcal_CF'].GetRMS(), 2, dtype='f8') - np.power(anaRun.pedestal_vcal_sigma, 2, dtype='f8'), dtype='f8') if anaRun.histo['PHvcal_CF'].GetRMS() > anaRun.pedestal_vcal_sigma else anaRun.histo['PHvcal_CF'].GetRMS()
-						if 'PHcharge_CF' in anaRun.histo.keys():
+						if 'PHcharge_CF' in list(anaRun.histo.keys()):
 							signalRunChargeCF = np.double(anaRun.histo['PHcharge_CF'].GetMean())
 							signalSigmaRunChargeCF = np.sqrt(np.power(anaRun.histo['PHcharge_CF'].GetRMS(), 2, dtype='f8') - np.power(anaRun.pedestal_charge_sigma, 2, dtype='f8'), dtype='f8')  if anaRun.histo['PHcharge_CF'].GetRMS() > anaRun.pedestal_charge_sigma else anaRun.histo['PHcharge_CF'].GetRMS()
 
@@ -306,16 +306,16 @@ class AnalysisAllRunsInFolder:
 						signalRunChargeCFNP = signalRunChargeCF
 						signalSigmaRunChargeCFNP = signalSigmaRunChargeCF
 
-						if 'PHvcalNoPedestal' in anaRun.histo.keys():
+						if 'PHvcalNoPedestal' in list(anaRun.histo.keys()):
 							signalRunVcalNP = np.double(anaRun.histo['PHvcalNoPedestal'].GetMean())
 							signalSigmaRunVcalNP = np.sqrt(np.power(anaRun.histo['PHvcalNoPedestal'].GetRMS(), 2, dtype='f8') - np.power(anaRun.pedestal_vcal_sigma, 2, dtype='f8'), dtype='f8') if anaRun.histo['PHvcalNoPedestal'].GetRMS() > anaRun.pedestal_vcal_sigma else anaRun.histo['PHvcalNoPedestal'].GetRMS()
-						if 'PHchargeNoPedestal' in anaRun.histo.keys():
+						if 'PHchargeNoPedestal' in list(anaRun.histo.keys()):
 							signalRunChargeNP = np.double(anaRun.histo['PHchargeNoPedestal'].GetMean())
 							signalSigmaRunChargeNP = np.sqrt(np.power(anaRun.histo['PHchargeNoPedestal'].GetRMS(), 2, dtype='f8') - np.power(anaRun.pedestal_charge_sigma, 2, dtype='f8'), dtype='f8')  if anaRun.histo['PHchargeNoPedestal'].GetRMS() > anaRun.pedestal_charge_sigma else anaRun.histo['PHchargeNoPedestal'].GetRMS()
-						if 'PHvcal_CFNoPedestal' in anaRun.histo.keys():
+						if 'PHvcal_CFNoPedestal' in list(anaRun.histo.keys()):
 							signalRunVcalCFNP = np.double(anaRun.histo['PHvcal_CFNoPedestal'].GetMean())
 							signalSigmaRunVcalCFNP = np.sqrt(np.power(anaRun.histo['PHvcal_CFNoPedestal'].GetRMS(), 2, dtype='f8') - np.power(anaRun.pedestal_vcal_sigma, 2, dtype='f8'), dtype='f8') if anaRun.histo['PHvcal_CFNoPedestal'].GetRMS() > anaRun.pedestal_vcal_sigma else anaRun.histo['PHvcal_CFNoPedestal'].GetRMS()
-						if 'PHcharge_CFNoPedestal' in anaRun.histo.keys():
+						if 'PHcharge_CFNoPedestal' in list(anaRun.histo.keys()):
 							signalRunChargeCFNP = np.double(anaRun.histo['PHcharge_CFNoPedestal'].GetMean())
 							signalSigmaRunChargeCFNP = np.sqrt(np.power(anaRun.histo['PHcharge_CFNoPedestal'].GetRMS(), 2, dtype='f8') - np.power(anaRun.pedestal_charge_sigma, 2, dtype='f8'), dtype='f8')  if anaRun.histo['PHcharge_CFNoPedestal'].GetRMS() > anaRun.pedestal_charge_sigma else anaRun.histo['PHcharge_CFNoPedestal'].GetRMS()
 
@@ -366,7 +366,7 @@ class AnalysisAllRunsInFolder:
 			if self.are_cal_runs:
 				voltages2 = []
 				for volt in self.voltages:
-					if volt in self.signalOut.keys() and volt in self.signalIn.keys():
+					if volt in list(self.signalOut.keys()) and volt in list(self.signalIn.keys()):
 						voltages2.append(volt)
 				self.voltages = voltages2
 				stepsIn = np.array([self.signalIn[volt] for volt in self.voltages], dtype='f8')
@@ -581,26 +581,26 @@ class AnalysisAllRunsInFolder:
 	def PlotPeakTimes(self):
 		if len(self.voltages) > 0:
 			if self.are_cal_runs:
-				if len(self.signalPeakTime.values()) < 1:
+				if len(list(self.signalPeakTime.values())) < 1:
 					for run in self.runs:
-						print 'Analysing run:', run
+						print('Analysing run:', run)
 						if os.path.isdir(run):
 							root_files = glob.glob('{d}/*.root'.format(d=run))
 							if len(root_files) > 0:
 								if '_out_' in run:
 									configfile = self.config
-									print 'Using config file:', configfile
-									print 'Loading analysis tree if it exists'
+									print('Using config file:', configfile)
+									print('Loading analysis tree if it exists')
 									anaRun = AnalysisCaenCCD(run, configfile, overw=False)
 									anaRun.AnalysisWaves()
 									peakTime = 0
 									peakTimeSigma = 0
 									peakTimeCF = 0
 									peakTimeSigmaCF = 0
-									if 'peakPosDist' in anaRun.histo.keys():
+									if 'peakPosDist' in list(anaRun.histo.keys()):
 										peakTime = np.double(anaRun.peakTime * 1e6)
 										peakTimeSigma = np.double(anaRun.histo['peakPosDist'].GetRMS())
-									if 'peakPosDistCF' in anaRun.histo.keys():
+									if 'peakPosDistCF' in list(anaRun.histo.keys()):
 										peakTimeCF = np.double(anaRun.peakTime * 1e6)
 										peakTimeSigmaCF = np.double(anaRun.histo['peakPosDistCF'].GetRMS())
 									self.signalPeakTime[anaRun.bias] = peakTime
@@ -695,11 +695,11 @@ class AnalysisAllRunsInFolder:
 			self.FillPickle()
 		if os.path.isfile('{d}/{f}'.format(d=self.runsdir, f=pickleName)):
 			if not self.overwrite and not overWritePickle:
-				print 'The file', pickleName, 'already exists in', self.runsdir, '. Not saving!'
+				print('The file', pickleName, 'already exists in', self.runsdir, '. Not saving!')
 				return
 		with open('{d}/{f}'.format(d=self.runsdir, f=pickleName), 'wb') as fpickle:
 			pickle.dump(self.cal_pickle, fpickle, pickle.HIGHEST_PROTOCOL)
-		print 'Saved pickle', pickleName, 'in', self.runsdir
+		print('Saved pickle', pickleName, 'in', self.runsdir)
 
 	def SaveCanvas(self, canvas, graph):
 		if canvas and graph:

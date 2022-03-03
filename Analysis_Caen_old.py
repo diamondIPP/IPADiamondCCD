@@ -8,7 +8,7 @@ from optparse import OptionParser
 import progressbar
 import ipdb
 from pykeyboard import PyKeyboard
-from ConfigParser import ConfigParser
+from configparser import ConfigParser
 import subprocess as subp
 import struct
 import ROOT as ro
@@ -77,7 +77,7 @@ class CCD_Analysis:
 	def Load_Config_File(self):
 		parser = ConfigParser()
 		if os.path.isfile(self.config):
-			print 'Reading configuration file:', self.config, '...'
+			print('Reading configuration file:', self.config, '...')
 			parser.read(self.config)
 
 			if parser.has_section('ANALYSIS'):
@@ -144,16 +144,16 @@ class CCD_Analysis:
 
 	def OpenROOTFile(self, mode='READ'):
 		if not os.path.isdir(self.outDir):
-			print 'Directory:', self.outDir, '; does not exist. Exiting!'
+			print('Directory:', self.outDir, '; does not exist. Exiting!')
 			exit()
 		if not os.path.isfile('{o}/{f}'.format(o=self.outDir, f=self.inputFile)):
-			print 'File:', self.inputFile, '; does not exist in:', self.outDir, '. Exiting!'
+			print('File:', self.inputFile, '; does not exist in:', self.outDir, '. Exiting!')
 			exit()
 		if self.fileRaw:
 			if self.fileRaw.IsOpen():
 				if self.fileRaw.GetOption().lower() != mode.lower():
 					if self.fileRaw.ReOpen(mode) == -1:
-						print 'Could not reopen file:', self.fileRaw, 'in mode:', mode, '. Exiting!'
+						print('Could not reopen file:', self.fileRaw, 'in mode:', mode, '. Exiting!')
 						exit()
 				return
 			else:
@@ -162,7 +162,7 @@ class CCD_Analysis:
 
 	def LoadTree(self):
 		if not self.fileRaw.IsOpen():
-			print 'First OpenROOTFile before Loading Tree'
+			print('First OpenROOTFile before Loading Tree')
 			return
 		self.treeRaw = self.fileRaw.Get(self.treeName)
 		self.hasBranch = {branch: self.TreeHasBranch(branch) for branch in self.branchesAll}
@@ -225,30 +225,30 @@ class CCD_Analysis:
 
 		leng = self.treeRaw.Draw(':'.join(self.branches1DLoad), self.cut0, 'goff para', self.max_events)
 		if leng == -1:
-			print 'Error, could not load the branches: {b}. Try again :('.format(b=':'.join(self.branches1DLoad))
+			print('Error, could not load the branches: {b}. Try again :('.format(b=':'.join(self.branches1DLoad)))
 			return
 		while leng > self.treeRaw.GetEstimate():
 			self.treeRaw.SetEstimate(leng)
 			leng = self.treeRaw.Draw(':'.join(self.branches1DLoad), self.cut0, 'goff para', self.max_events)
 		self.events = leng
 		for pos, branch in enumerate(self.branches1DLoad):
-			if self.verb: print 'Vectorising branch:', branch, '...', ; sys.stdout.flush()
+			if self.verb: print('Vectorising branch:', branch, '...', end=' ') ; sys.stdout.flush()
 			temp = self.treeRaw.GetVal(pos)
-			self.dicBraVect1D[branch] = np.array([temp[ev] for ev in xrange(self.events)], dtype=np.dtype(self.branches1DType[branch]))
-			if self.verb: print 'Done'
+			self.dicBraVect1D[branch] = np.array([temp[ev] for ev in range(self.events)], dtype=np.dtype(self.branches1DType[branch]))
+			if self.verb: print('Done')
 
 		leng = self.treeRaw.Draw(':'.join(self.branchesWavesLoad), self.cut0, 'goff para', self.max_events)
 		if leng == -1:
-			print 'Error, could not load the branches {b}. Try again :('.format(b=':'.join(self.branchesWavesLoad))
+			print('Error, could not load the branches {b}. Try again :('.format(b=':'.join(self.branchesWavesLoad)))
 			return
 		while leng > self.treeRaw.GetEstimate():
 			self.treeRaw.SetEstimate(leng)
 			leng = self.treeRaw.Draw(':'.join(self.branchesWavesLoad), self.cut0, 'goff para', self.max_events)
 		for pos, branch in enumerate(self.branchesWavesLoad):
-			if self.verb: print 'Vectorising branch:', branch, '...', ; sys.stdout.flush()
+			if self.verb: print('Vectorising branch:', branch, '...', end=' ') ; sys.stdout.flush()
 			temp = self.treeRaw.GetVal(pos)
-			self.dicBraVectWaves[branch] = np.array([[temp[ev * self.ptsWave + pt] for pt in xrange(self.ptsWave)] for ev in xrange(self.events)], dtype=np.dtype(self.branchesWavesType[branch]))
-			if self.verb: print 'Done'
+			self.dicBraVectWaves[branch] = np.array([[temp[ev * self.ptsWave + pt] for pt in range(self.ptsWave)] for ev in range(self.events)], dtype=np.dtype(self.branchesWavesType[branch]))
+			if self.verb: print('Done')
 
 	def ExplicitVectorsFromDictionary(self):
 		if self.hasBranch['voltageSignal']:
@@ -278,27 +278,27 @@ class CCD_Analysis:
 			self.peak_positions = self.dicBraVect1D['peakPosition']
 
 	def FindRealPeakPosition(self):
-		print 'Getting real peak positions...', ;sys.stdout.flush()
+		print('Getting real peak positions...', end=' ') ;sys.stdout.flush()
 		mpos = self.signalWaveVect.argmin(axis=1) if self.bias >= 0 else self.signalWaveVect.argmax(axis=1)
 		time_mpos = self.timeVect[:, mpos].diagonal()
 		xmin, xmax = time_mpos - self.pedestalIntegrationTime / 2.0, time_mpos + self.pedestalIntegrationTime / 2.0
 		fit = [ro.TGraph(len(timei), timei, self.signalWaveVect[it]).Fit('pol2', 'QMN0FS', '', xmin[it], xmax[it]) for it, timei in enumerate(self.timeVect)]
 		b, a = np.array([fiti.Parameter(1) for fiti in fit]), np.array([fiti.Parameter(2) for fiti in fit])
 		self.peak_positions = np.divide(-b, 2 * a)
-		print 'Done'
+		print('Done')
 
 	def FillTreePeakPositions(self):
-		print 'Filling tree with peak positions...'
+		print('Filling tree with peak positions...')
 		peakPosBra = self.treeRaw.Branch('peakPosition', self.peak_position, 'peakPosition/F')
 		self.utils.CreateProgressBar(self.treeRaw.GetEntries())
 		self.utils.bar.start()
-		for ev in xrange(self.treeRaw.GetEntries()):
+		for ev in range(self.treeRaw.GetEntries()):
 			self.treeRaw.GetEntry(ev)
 			if ev in self.eventVect:
 				try:
 					self.peak_position.itemset(self.peak_positions[np.argwhere(ev == self.eventVect).flatten()])
 				except ValueError:
-					print 'could not fill event', ev, 'it should have a peak position of:', self.peak_positions[np.argwhere(ev == self.eventVect).flatten()]
+					print('could not fill event', ev, 'it should have a peak position of:', self.peak_positions[np.argwhere(ev == self.eventVect).flatten()])
 					exit()
 			else:
 				self.peak_position.itemset(0)
@@ -328,26 +328,26 @@ class CCD_Analysis:
 		self.cut0 += ro.TCut('peakTimeCut', 'abs(peakPosition-{pp})<={ppc}'.format(pp=self.peakTime, ppc=self.peakPosCut))
 
 	def FindPedestalPosition(self):
-		print 'Calculating position of pedestals...', ;sys.stdout.flush()
+		print('Calculating position of pedestals...', end=' ') ;sys.stdout.flush()
 		self.pedestalTimeIndices = [np.argwhere(np.bitwise_and(self.pedestalTEndPos - self.pedestalIntegrationTime <= timeVectEvi, timeVectEvi <= self.pedestalTEndPos)).flatten() for timeVectEvi in self.timeVect]
-		print 'Done'
+		print('Done')
 
 	def FindSignalPositions(self, backward, forward):
-		print 'Calculating position of signals...', ;sys.stdout.flush()
+		print('Calculating position of signals...', end=' ') ;sys.stdout.flush()
 		self.signalTimeIndices = [np.argwhere(abs(timeVectEvi - self.peak_positions[it] + (forward - backward)/2.0) <= (forward + backward)/2.0).flatten() for it, timeVectEvi in enumerate(self.timeVect)]
-		print 'Done'
+		print('Done')
 
 	def CalculatePedestalsAndSignals(self):
-		print 'Calculating pedestals and signals...', ;sys.stdout.flush()
+		print('Calculating pedestals and signals...', end=' ') ;sys.stdout.flush()
 		self.pedVect = np.array([self.signalWaveVect[ev, pedTimeIndxs].mean() if pedTimeIndxs.size > 0 else -10 for ev, pedTimeIndxs in enumerate(self.pedestalTimeIndices)])
 		self.pedSigmaVect = np.array([self.signalWaveVect[ev, pedTimeIndxs].std() if pedTimeIndxs.size > 1 else -10 for ev, pedTimeIndxs in enumerate(self.pedestalTimeIndices)])
 		self.sigAndPedVect = np.array([self.signalWaveVect[ev, sigTimeIndxs].mean() if sigTimeIndxs.size > 0 else -10 for ev, sigTimeIndxs in enumerate(self.signalTimeIndices)])
 		self.sigAndPedSigmaVect = np.array([self.signalWaveVect[ev, sigTimeIndxs].std() if sigTimeIndxs.size > 1 else -10 for ev, sigTimeIndxs in enumerate(self.signalTimeIndices)])
 		self.sigVect = np.subtract(self.sigAndPedVect, self.pedVect)
-		print 'Done'
+		print('Done')
 
 	def FillPedestalsAndSignals(self):
-		print 'Filling tree with peak positions...'
+		print('Filling tree with peak positions...')
 		pedBra = self.treeRaw.Branch('pedestal', self.ped, 'pedestal/F')
 		pedSigmaBra = self.treeRaw.Branch('pedestalSigma', self.pedSigma, 'pedestalSigma/F')
 		pedSignalBra = self.treeRaw.Branch('signalAndPedestal', self.sigAndPed, 'signalAndPedestal/F')
@@ -355,7 +355,7 @@ class CCD_Analysis:
 		sigBra = self.treeRaw.Branch('signal', self.sig, 'signal/F')
 		self.utils.CreateProgressBar(self.max_events)
 		self.utils.bar.start()
-		for ev in xrange(self.max_events):
+		for ev in range(self.max_events):
 			self.treeRaw.GetEntry(ev)
 			if ev in self.eventVect:
 				try:
@@ -366,7 +366,7 @@ class CCD_Analysis:
 					self.sigAndPedSigma.itemset(self.sigAndPedSigmaVect[argum])
 					self.sig.itemset(self.sigVect[argum])
 				except ValueError:
-					print 'Could not fill event', ev
+					print('Could not fill event', ev)
 					exit()
 			else:
 				self.ped.itemset(0)
@@ -388,8 +388,8 @@ class CCD_Analysis:
 		self.signalWaveSigmaVect = self.signalWaveVect.std(axis=0)
 
 	def ResetTreeToOriginal(self, keepBranches=['event','time','voltageSignal','voltageTrigger','voltageVeto','vetoedEvent','badShape','badPedestal','voltageHV','currentHV','timeHV']):
-		print 'Restoring tree with the following branches:', keepBranches, '...'
-		raw_input('Press a key and Enter to continue: ')
+		print('Restoring tree with the following branches:', keepBranches, '...')
+		input('Press a key and Enter to continue: ')
 		self.OpenROOTFile('READ')
 		self.LoadTree()
 		self.treeRaw.SetBranchStatus('*', 0)
@@ -412,12 +412,12 @@ class CCD_Analysis:
 					doMoveFile = False
 					break
 			if doMoveFile:
-				print 'The file was cloned successfully :)'
+				print('The file was cloned successfully :)')
 				checkFile.Close()
 				del checkFile
 				shutil.move('{o}/temp.root'.format(o=self.outDir), '{o}/{f}'.format(o=self.outDir, f=self.inputFile))
 				return
-		print 'The file was not cloned successfully :S. Check original tree and "temp.root"'
+		print('The file was not cloned successfully :S. Check original tree and "temp.root"')
 
 if __name__ == '__main__':
 

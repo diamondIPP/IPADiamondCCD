@@ -5,12 +5,12 @@ import struct
 import subprocess as subp
 import sys
 import time
-from ConfigParser import ConfigParser
+from configparser import ConfigParser
 from optparse import OptionParser
 
 import ROOT as ro
 import numpy as np
-import cPickle as pickle
+import pickle as pickle
 import ipdb
 
 from Channel_Caen import Channel_Caen
@@ -25,7 +25,7 @@ wait_time_hv = 7
 
 class CCD_Caen:
 	def __init__(self, infile='None', verbose=False, settingsObj=None, iscal=False):
-		print 'Starting CCD program ...'
+		print('Starting CCD program ...')
 		self.infile = infile
 		self.verb = verbose
 		self.is_cal_run = iscal
@@ -102,9 +102,9 @@ class CCD_Caen:
 	def StartHVControl(self):
 		if self.settings.do_hv_control:
 			self.hv_control = HV_Control(self.settings)
-			print 'Waiting {t} seconds for the HVClient to start... '.format(t=wait_time_hv), ; sys.stdout.flush()
+			print('Waiting {t} seconds for the HVClient to start... '.format(t=wait_time_hv), end=' ') ; sys.stdout.flush()
 			time.sleep(wait_time_hv)
-			print 'Done'
+			print('Done')
 			self.hv_control.CheckVoltage()
 
 	def AdjustBaseLines(self, ntries=5):
@@ -119,7 +119,7 @@ class CCD_Caen:
 		if self.p.poll() is None:
 			self.GetWaveforms(int(-1 * ntriggers), True, False)
 		else:
-			print 'Wavedump did not start'
+			print('Wavedump did not start')
 			self.settings.RemoveBinaries()
 			self.RemoveFiles()
 			if ntries > 0:
@@ -128,12 +128,12 @@ class CCD_Caen:
 				ExitMessage('There is a problem with Wavedump... exiting')
 
 		if self.total_events != ntriggers:
-			print 'Saved', self.total_events, 'which is different to the', ntriggers, 'sent'
+			print('Saved', self.total_events, 'which is different to the', ntriggers, 'sent')
 			ntriggers = self.total_events
 
 		with open('raw_wave{t}.dat'.format(t=self.trigger_ch.ch), 'rb') as self.ft0:
 			triggADCs = np.empty(0, dtype='H')
-			for ev in xrange(ntriggers):
+			for ev in range(ntriggers):
 				self.ft0.seek(ev * self.settings.struct_len, 0)
 				self.datat = self.ft0.read(self.settings.struct_len)
 				t = struct.Struct(self.settings.struct_fmt).unpack_from(self.datat)
@@ -143,7 +143,7 @@ class CCD_Caen:
 
 		with open('raw_wave{ac}.dat'.format(ac=self.veto_ch.ch), 'rb') as self.fv0:
 			acADCs = np.empty(0, dtype='H')
-			for ev in xrange(ntriggers):
+			for ev in range(ntriggers):
 				self.fv0.seek(ev * self.settings.struct_len, 0)
 				self.datav = self.fv0.read(self.settings.struct_len)
 				ac = struct.Struct(self.settings.struct_fmt).unpack_from(self.datav)
@@ -152,7 +152,7 @@ class CCD_Caen:
 			std_ac = acADCs.std()
 
 		# clear possible ADCs with non-baseline signals
-		for i in xrange(10):
+		for i in range(10):
 			condition_t = (np.abs(triggADCs - mean_t) < 3 * std_t)
 			mean_t = np.extract(condition_t, triggADCs).mean()
 			std_t = np.extract(condition_t, triggADCs).std()
@@ -194,7 +194,7 @@ class CCD_Caen:
 			self.fv0 = open('raw_wave{a}.dat'.format(a=self.veto_ch.ch), mode)
 
 	def CloseFiles(self):
-		print 'Closing files'
+		print('Closing files')
 		if self.ft0:
 			self.ft0.close()
 			if self.ft0.closed:
@@ -235,7 +235,7 @@ class CCD_Caen:
 			self.p.stdin.write('W')
 			self.p.stdin.flush()
 			# time.sleep(1)
-			for it in xrange(abs(events)):
+			for it in range(abs(events)):
 				time.sleep(0.5)
 				self.p.stdin.write('t')
 				self.p.stdin.flush()
@@ -278,7 +278,7 @@ class CCD_Caen:
 					self.p.stdin.flush()
 					time.sleep(1)
 				elif (self.written_events_sig + self.sig_written >= events) or self.stop_run:
-					if self.stop_run: print 'run was stopped'
+					if self.stop_run: print('run was stopped')
 					self.p.stdin.write('s')
 					self.p.stdin.flush()
 					self.settings.RemoveBinaries()
@@ -308,7 +308,7 @@ class CCD_Caen:
 		if self.total_events_sig == self.total_events_trig:
 			self.total_events = self.total_events_sig
 		else:
-			print 'Written events are of different sizes (signal: {s}, trigger: {t}, veto: {v}). Missmatch!'.format(s=self.total_events_sig, t=self.total_events_trig, v=self.total_events_veto)
+			print('Written events are of different sizes (signal: {s}, trigger: {t}, veto: {v}). Missmatch!'.format(s=self.total_events_sig, t=self.total_events_trig, v=self.total_events_veto))
 			exit()
 		del self.total_events_sig, self.total_events_trig, self.total_events_veto
 		self.total_events_sig, self.total_events_trig, self.total_events_veto = None, None, None
@@ -316,7 +316,7 @@ class CCD_Caen:
 	def CloseSubprocess(self, pname='wave_dump', stdin=False, stdout=False):
 		p = self.p if pname == 'wave_dump' else self.pconv if pname == 'converter' else None
 		if not p:
-			print 'Something failed! Exiting!'
+			print('Something failed! Exiting!')
 			exit()
 		pid = p.pid
 		if stdin:
@@ -324,24 +324,24 @@ class CCD_Caen:
 		if stdout:
 			p.stdout.close()
 		if p.wait() is None:
-			print 'Could not terminate subprocess... forcing termination'
+			print('Could not terminate subprocess... forcing termination')
 			p.kill()
 			if p.wait() is None:
-				print 'Could not kill subprocess... quitting'
+				print('Could not kill subprocess... quitting')
 				exit()
 		try:
 			os.kill(pid, 0)
 		except OSError:
 			pass
 		else:
-			print 'The subprocess is still running. Killing it with os.kill'
+			print('The subprocess is still running. Killing it with os.kill')
 			os.kill(pid, 15)
 			try:
 				os.kill(pid, 0)
 			except OSError:
 				pass
 			else:
-				print 'The process does not die... quitting program'
+				print('The process does not die... quitting program')
 				exit()
 		del p, pid
 
@@ -416,7 +416,7 @@ class CCD_Caen:
 			temptimens = int(1e9 * (temptime - temptimes))
 			datatime = struct.pack(self.settings.time_struct_fmt, temptimes, temptimens)
 			with open('raw_time.dat', 'ab') as self.file_time_stamp:
-				for ev in xrange(self.events_to_write):
+				for ev in range(self.events_to_write):
 					self.file_time_stamp.write(datatime)
 					self.file_time_stamp.flush()
 			del self.file_time_stamp
@@ -446,7 +446,7 @@ class CCD_Caen:
 		self.CreateEmptyFiles()
 		self.CloseFiles()
 		self.total_events = 0
-		print 'Getting {n} events...'.format(n=self.settings.num_events)
+		print('Getting {n} events...'.format(n=self.settings.num_events))
 		if self.settings.simultaneous_conversion:
 			self.CreateRootFile(files_moved=False)
 		else:
@@ -455,30 +455,30 @@ class CCD_Caen:
 		self.settings.SetupDigitiser(doBaseLines=False, signal=self.signal_ch, trigger=self.trigger_ch, ac=self.veto_ch, events_written=self.total_events)
 		doBreak = False
 		while (self.total_events < self.settings.num_events) and not doBreak:
-			print 'Calculating written events'
+			print('Calculating written events')
 			self.sig_written = self.CalculateEventsWritten(self.signal_ch.ch)
 			self.trg_written = self.CalculateEventsWritten(self.trigger_ch.ch)
 			self.veto_written = self.CalculateEventsWritten(self.veto_ch.ch) if not self.is_cal_run else 0
 			self.timestamp_written = self.CalculateEventsWritten(-1)
 			if not self.stop_run:
-				print 'Starting wavedump'
+				print('Starting wavedump')
 				self.p = subp.Popen(['{p}/wavedump'.format(p=self.settings.wavedump_path), '{d}/WaveDumpConfig_CCD.txt'.format(d=self.settings.outdir)], bufsize=-1, stdin=subp.PIPE, stdout=subp.PIPE, close_fds=True)
 				time.sleep(2)
 				if self.p.poll() is None:
 					self.GetWaveforms(self.settings.num_events, stdin=True, stdout=True)
 				else:
-					print 'Wavedump did not start'
+					print('Wavedump did not start')
 					if ntries <= 0:
 						ExitMessage('There is a problem with Wavedump... exiting')
 					else:
 						ntries = ntries - 1
 			else:
 				doBreak = True
-				print 'run was stopped. Wavedump will not start (again)'
+				print('run was stopped. Wavedump will not start (again)')
 
 		self.CloseFiles()
 		if not self.settings.simultaneous_conversion:
-			print 'Time getting {n} events: {t} seconds'.format(n=self.total_events, t=time.time() - self.t0)
+			print('Time getting {n} events: {t} seconds'.format(n=self.total_events, t=time.time() - self.t0))
 			self.settings.bar.finish()
 		else:
 			wait_time_if_stopped = 10
@@ -486,7 +486,7 @@ class CCD_Caen:
 			while self.pconv.poll() is None:
 				time.sleep(2)
 				if self.stop_run and time.time() - temp_t > wait_time_if_stopped:
-					print 'killing converter because run was stopped'
+					print('killing converter because run was stopped')
 					self.pconv.kill()
 			self.CloseSubprocess('converter', stdin=False, stdout=False)
 		return self.total_events
@@ -516,8 +516,8 @@ class CCD_Caen:
 			pickle.dump(self.veto_ch, fv, pickle.HIGHEST_PROTOCOL)
 
 	def PrintPlotLimits(self, ti=-5.12e-7, tf=4.606e-6, vmin=-0.7, vmax=0.05):
-		print np.double([(tf-ti)/float(self.settings.time_res) +1, ti-self.settings.time_res/2.0,
-		                      tf+self.settings.time_res/2.0, (vmax-vmin)/self.settings.sigRes, vmin, vmax])
+		print(np.double([(tf-ti)/float(self.settings.time_res) +1, ti-self.settings.time_res/2.0,
+		                      tf+self.settings.time_res/2.0, (vmax-vmin)/self.settings.sigRes, vmin, vmax]))
 
 def main():
 	parser = OptionParser()
@@ -543,7 +543,7 @@ def main():
 		ccd.SavePickles()
 		time.sleep(time_wait)
 		written_events = ccd.GetData()
-		if ccd.stop_run: print 'Run stopped because current is too high'
+		if ccd.stop_run: print('Run stopped because current is too high')
 		ccd.settings.num_events = written_events
 		ccd.SavePickles()  # update pickles with the real amount of written events
 		ccd.settings.MoveBinaryFiles()
@@ -556,7 +556,7 @@ def main():
 				time.sleep(3)
 			ccd.CloseSubprocess('converter', stdin=False, stdout=False)
 
-	print 'Finished :)'
+	print('Finished :)')
 	sys.stdout.write('\a\a\a')
 	sys.stdout.flush()
 	return ccd

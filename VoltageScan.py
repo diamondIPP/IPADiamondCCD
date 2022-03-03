@@ -5,12 +5,12 @@ import struct
 import subprocess as subp
 import sys
 import time
-from ConfigParser import ConfigParser
+from configparser import ConfigParser
 from optparse import OptionParser
 
 import ROOT as ro
 import numpy as np
-import cPickle as pickle
+import pickle as pickle
 
 from Channel_Caen import Channel_Caen
 from Settings_Caen import Settings_Caen
@@ -24,7 +24,7 @@ wait_time_hv = 7
 
 class VoltageScan:
 	def __init__(self, infile='None', vini=5, vend=10, vstep=5, lista=[], listn=[], timebla=1, verbose=False):
-		print 'Starting CCD program ...'
+		print('Starting CCD program ...')
 		self.infile = infile
 		self.verb = verbose
 		self.vini = vini
@@ -41,7 +41,7 @@ class VoltageScan:
 		self.p = {volt: None for volt in self.voltages}
 		self.time0 = time.time()
 		self.num_events = self.settings.num_events * np.ones(len(self.voltages), 'int32') if listn == [] else np.array(listn, 'int32')
-		print self.num_events
+		print(self.num_events)
 
 	def DoVoltageScan(self):
 
@@ -56,11 +56,11 @@ class VoltageScan:
 			self.p[volt].StartHVControl()
 			self.p[volt].AdjustBaseLines()
 			self.p[volt].SavePickles()
-			print 'Waiting {s} seconds before starting run...'.format(s=self.time_sleep), ; sys.stdout.flush()
+			print('Waiting {s} seconds before starting run...'.format(s=self.time_sleep), end=' ') ; sys.stdout.flush()
 			time.sleep(self.time_sleep)
-			print 'Done'
+			print('Done')
 			written_events = self.p[volt].GetData()
-			if self.p[volt].stop_run: print 'Run stopped because current is too high'
+			if self.p[volt].stop_run: print('Run stopped because current is too high')
 			self.settings.num_events = written_events
 			self.p[volt].SavePickles()
 			self.p[volt].settings.MoveBinaryFiles()
@@ -72,13 +72,13 @@ class VoltageScan:
 					time.sleep(3)
 				self.p[volt].CloseSubprocess('converter', stdin=False, stdout=False)
 
-			print '\nFinished voltage scan for {v} Volts :)\n'.format(v=volt)
+			print('\nFinished voltage scan for {v} Volts :)\n'.format(v=volt))
 			sys.stdout.write('\a\a\a')
 			sys.stdout.flush()
 
 			self.p[volt] = None
 
-		print 'Finished all voltage scan :D'
+		print('Finished all voltage scan :D')
 		sys.stdout.write('\a\a\a')
 		sys.stdout.flush()
 
@@ -112,7 +112,7 @@ def main():
 	vstep = int(options.step)
 	lista = str(options.listvals)
 	listn = str(options.numevts)
-	print lista
+	print(lista)
 	timebla = int(options.timebetween)
 	lista1 = []
 	if lista != '[]':
@@ -126,7 +126,7 @@ def main():
 				else:
 					ExitMessage('The entered values in -l or --list are not all integers')
 	# tau = int(options.time)
-	print listn
+	print(listn)
 	listn1 = []
 	if listn != '[]':
 		if listn[0] != '[' or listn[-1] != ']':

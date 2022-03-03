@@ -4,7 +4,7 @@ from struct import unpack
 import time, os, sys
 from optparse import OptionParser
 import ipdb
-import cPickle as pickle
+import pickle as pickle
 from Utils import *
 from Settings_Caen import Settings_Caen
 from Converter_Caen import Converter_Caen
@@ -30,12 +30,12 @@ class ClearAnalysisAllRunsInFolder:
 	def DoAll(self):
 		self.time0 = time.time()
 		self.LoopRuns()
-		print 'Finished in', time.time() - self.time0, 'seconds'
+		print('Finished in', time.time() - self.time0, 'seconds')
 
 	def LoopRuns(self):
 		# ro.gROOT.SetBatch(True)
 		for run in self.runs:
-			print 'Clearing Analysis in run:', run
+			print('Clearing Analysis in run:', run)
 			if os.path.isdir(run):
 				root_files = glob.glob('{d}/*.root'.format(d=run))
 				if len(root_files) > 0:
@@ -43,7 +43,7 @@ class ClearAnalysisAllRunsInFolder:
 
 					if len(analysis_root_files) > 0:
 						for anaf in analysis_root_files:
-							print 'Removing file: ', anaf
+							print('Removing file: ', anaf)
 							os.remove(anaf)
 
 

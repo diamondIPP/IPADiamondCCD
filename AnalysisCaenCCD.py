@@ -5,14 +5,14 @@ import struct
 import subprocess as subp
 import sys
 import time
-from ConfigParser import ConfigParser
+from configparser import ConfigParser
 from optparse import OptionParser
 
 from collections import OrderedDict
 
 import ROOT as ro
 import numpy as np
-import cPickle as pickle
+import pickle as pickle
 
 from Channel_Caen import Channel_Caen
 from Settings_Caen import Settings_Caen
@@ -46,7 +46,7 @@ LOAD_IGNORE_NAMES = ['analysis', 'pedestal', 'waveform', 'voltage', 'signal', 'd
 
 class AnalysisCaenCCD:
 	def __init__(self, directory='.', config='CAENAnalysisConfig.cfg', infile='', bias=0.0, overw=False, verbose=False, doDebug=False):
-		print 'Starting CCD Analysis ...'
+		print('Starting CCD Analysis ...')
 		self.config = config
 		self.verb = verbose
 		self.overw = overw
@@ -161,7 +161,7 @@ class AnalysisCaenCCD:
 		self.vcal_to_q = VcalToElectrons()
 
 		if infile == '' and directory != '.':
-			print 'Is analysis of data after 06/18...'
+			print('Is analysis of data after 06/18...')
 			self.LoadInputTree()
 			self.LoadPickles()
 			self.outDir = self.inDir
@@ -169,7 +169,7 @@ class AnalysisCaenCCD:
 			self.SetFromSettingsFile()
 
 		elif infile != '' and directory == '.':
-			print 'Is analysis of data before 06/18...'
+			print('Is analysis of data before 06/18...')
 			self.outDir, self.inputFile = '/'.join(infile.split('/')[:-1]), infile.split('/')[-1]
 			self.in_tree_name = '.'.join(self.inputFile.split('.')[:-1])
 			self.inDir = self.outDir
@@ -207,31 +207,31 @@ class AnalysisCaenCCD:
 		self.cut0CF.Delete()
 		self.CloseInputROOTFiles()
 		self.CloseAnalysisROOTFile()
-		for key in self.line.keys():
+		for key in list(self.line.keys()):
 			del self.line[key]
-		for key in self.graph.keys():
+		for key in list(self.graph.keys()):
 			del self.graph[key]
-		for key in self.langaus.keys():
+		for key in list(self.langaus.keys()):
 			del self.langaus[key]
-		for key in self.histo.keys():
+		for key in list(self.histo.keys()):
 			del self.histo[key]
-		for key in self.profile.keys():
+		for key in list(self.profile.keys()):
 			del self.profile[key]
-		for key in self.canvas.keys():
+		for key in list(self.canvas.keys()):
 			self.canvas[key].Close()
 			del self.canvas[key]
-		print 'Deleted analysis object\n'
+		print('Deleted analysis object\n')
 
 	def SetRandomGenerator(self, seed=0):
 		seedi = seed if seed != 0 else int(time.time() % 1000000)
-		print 'Using seed', seedi, 'for random generator TRandom3'
+		print('Using seed', seedi, 'for random generator TRandom3')
 		self.random = ro.TRandom3(seedi)
 		ro.gRandom = self.random
 
 	def Load_Config_File(self):
 		parser = ConfigParser()
 		if os.path.isfile(self.config):
-			print 'Reading configuration file:', self.config, '...', ; sys.stdout.flush()
+			print('Reading configuration file:', self.config, '...', end=' ') ; sys.stdout.flush()
 			parser.read(self.config)
 
 			if parser.has_section('ANALYSIS'):
@@ -284,11 +284,11 @@ class AnalysisCaenCCD:
 					self.voltageDiaMaxOffset = parser.getfloat('CUTS', 'dia_voltage_offset')
 				if parser.has_option('CUTS', 'dia_voltage_spread'):
 					self.voltageDiaMaxSigmas = parser.getfloat('CUTS', 'dia_voltage_spread')
-			print 'Done'
+			print('Done')
 
 	def SetFromSettingsFile(self):
 		if self.settings:
-			self.is_cal_run = self.settings.is_cal_run if 'is_cal_run' in self.settings.__dict__.keys() else False
+			self.is_cal_run = self.settings.is_cal_run if 'is_cal_run' in list(self.settings.__dict__.keys()) else False
 			self.bias = self.settings.bias if not self.is_cal_run else self.settings.pulser_amplitude
 			self.ch_caen_signal = self.settings.sigCh
 			if self.is_cal_run:
@@ -306,10 +306,10 @@ class AnalysisCaenCCD:
 			elif len(root_files) == 0:
 				ExitMessage('There is no root file inside the directory {d}. Exiting...'.format(d=self.inDir), os.EX_DATAERR)
 			else:
-				print 'The following files were encountered:'
+				print('The following files were encountered:')
 				for it in root_files:
-					print it
-				file_to_open = raw_input('Copy and paste the one that you want to open (should be input converted root file): ')
+					print(it)
+				file_to_open = input('Copy and paste the one that you want to open (should be input converted root file): ')
 				if file_to_open in root_files:
 					self.in_tree_name = file_to_open.split('/')[-1].split('.root')[0]
 				else:
@@ -317,10 +317,10 @@ class AnalysisCaenCCD:
 		if os.path.isfile('{d}/{f}.root'.format(d=self.inDir, f=self.in_tree_name)):
 			self.in_root_file = ro.TFile('{d}/{f}.root'.format(d=self.inDir, f=self.in_tree_name))
 			if self.in_root_file.GetListOfKeys().GetSize() == 0:
-				print 'The file {d}/{f}.root is empty. Run won\'t be analysed.'.format(d=self.inDir, f=self.in_tree_name)
+				print('The file {d}/{f}.root is empty. Run won\'t be analysed.'.format(d=self.inDir, f=self.in_tree_name))
 			else:
 				self.in_root_tree = self.in_root_file.Get(self.in_tree_name)
-				print 'Loaded raw tree'
+				print('Loaded raw tree')
 		else:
 			ExitMessage('The file {f} is not inside {d}. Exiting...'.format(d=self.inDir, f=self.in_tree_name), os.EX_DATAERR)
 
@@ -345,7 +345,7 @@ class AnalysisCaenCCD:
 
 	def CheckLoadedVectors(self):
 		if self.eventVect.size == 0:
-			print 'There are no waves that pass the cuts:', self.cut0.GetTitle(), '. Exiting'
+			print('There are no waves that pass the cuts:', self.cut0.GetTitle(), '. Exiting')
 			self.CloseAnalysisROOTFile()
 			self.CloseInputROOTFiles()
 			self.emptyAnalysis = True
@@ -393,10 +393,10 @@ class AnalysisCaenCCD:
 				if self.suffix >= 0:
 					self.CloseAnalysisROOTFile()
 					if self.suffix >=0:
-						print 'Merging analysis files...'
+						print('Merging analysis files...')
 						if os.path.isfile('{d}/{f}.root'.format(d=self.outDir, f=self.analysisTreeNameStem)):
 							os.remove('{d}/{f}.root'.format(d=self.outDir, f=self.analysisTreeNameStem))
-						mergep = subp.Popen(['hadd', '-k', '-O', '-n', '0', '{d}/{f}.root'.format(d=self.outDir, f=self.analysisTreeNameStem)] + ['{d}/{f}{s}.root'.format(d=self.outDir, f=self.analysisTreeNameStem, s=si) for si in xrange(self.suffix)],  bufsize=-1, stdin=subp.PIPE, stdout=subp.PIPE, close_fds=True)
+						mergep = subp.Popen(['hadd', '-k', '-O', '-n', '0', '{d}/{f}.root'.format(d=self.outDir, f=self.analysisTreeNameStem)] + ['{d}/{f}{s}.root'.format(d=self.outDir, f=self.analysisTreeNameStem, s=si) for si in range(self.suffix)],  bufsize=-1, stdin=subp.PIPE, stdout=subp.PIPE, close_fds=True)
 						while mergep.poll() is None:
 							time.sleep(2)
 						pid = mergep.pid
@@ -409,13 +409,13 @@ class AnalysisCaenCCD:
 						except OSError:
 							pass
 						del mergep
-						print 'Finished merging analysis files'
-						for si in xrange(self.suffix):
+						print('Finished merging analysis files')
+						for si in range(self.suffix):
 							os.remove('{d}/{f}{s}.root'.format(d=self.outDir, f=self.analysisTreeNameStem, s=si))
-						print 'Merging CF files...'
+						print('Merging CF files...')
 						if os.path.isfile('{d}/{f}.timeCF.{de}.{att}.root'.format(d=self.outDir, f=self.analysisTreeNameStem, de=self.timeCFDelay, att=self.attenCF)):
 							os.remove('{d}/{f}.timeCF.{de}.{att}.root'.format(d=self.outDir, f=self.analysisTreeNameStem, de=self.timeCFDelay, att=self.attenCF))
-						mergep = subp.Popen(['hadd', '-k', '-O', '-n', '0', '{d}/{f}.timeCF.{de}.{att}.root'.format(d=self.outDir, f=self.analysisTreeNameStem, de=self.timeCFDelay, att=self.attenCF)] + ['{d}/{f}{s}.timeCF.{de}.{att}.root'.format(d=self.outDir, f=self.analysisTreeNameStem, s=si, de=self.timeCFDelay, att=self.attenCF) for si in xrange(self.suffix)],  bufsize=-1, stdin=subp.PIPE, stdout=subp.PIPE, close_fds=True)
+						mergep = subp.Popen(['hadd', '-k', '-O', '-n', '0', '{d}/{f}.timeCF.{de}.{att}.root'.format(d=self.outDir, f=self.analysisTreeNameStem, de=self.timeCFDelay, att=self.attenCF)] + ['{d}/{f}{s}.timeCF.{de}.{att}.root'.format(d=self.outDir, f=self.analysisTreeNameStem, s=si, de=self.timeCFDelay, att=self.attenCF) for si in range(self.suffix)],  bufsize=-1, stdin=subp.PIPE, stdout=subp.PIPE, close_fds=True)
 						while mergep.poll() is None:
 							time.sleep(2)
 						pid = mergep.pid
@@ -428,8 +428,8 @@ class AnalysisCaenCCD:
 						except OSError:
 							pass
 						del mergep
-						print 'Finished merging CF files'
-						for si in xrange(self.suffix):
+						print('Finished merging CF files')
+						for si in range(self.suffix):
 							os.remove('{d}/{f}{s}.timeCF.{de}.{att}.root'.format(d=self.outDir, f=self.analysisTreeNameStem, s=si, de=self.timeCFDelay, att=self.attenCF))
 					self.suffix = None
 					self.OpenAnalysisROOTFile('READ')
@@ -481,10 +481,10 @@ class AnalysisCaenCCD:
 		self.analysisTreeExisted = True
 		if self.analysisFile:
 			if not self.analysisFile.IsOpen():
-				print 'Analysis file is closed. Opening it in {m} mode...'.format(m=mode.lower())
+				print('Analysis file is closed. Opening it in {m} mode...'.format(m=mode.lower()))
 				self.OpenAnalysisROOTFile(mode)
 		else:
-			print 'The file has not been opened. Call method OpenAnalysisROOTFile first'
+			print('The file has not been opened. Call method OpenAnalysisROOTFile first')
 			return
 		self.analysisFile.cd()
 		self.analysisTree = self.analysisFile.Get(self.analysisTreeName)
@@ -530,13 +530,13 @@ class AnalysisCaenCCD:
 				if 'timeHV.Convert()' in self.branches1DLoad: self.branches1DLoad.remove('timeHV.Convert()')
 				# del self.branches1DType['timeHV']
 				# self.branches1DType['timeHV.AsDouble()'] = 'float64'
-				if self.branches1DType.has_key('timeHV.Convert()'): del self.branches1DType['timeHV.Convert()']
+				if 'timeHV.Convert()' in self.branches1DType: del self.branches1DType['timeHV.Convert()']
 			else:
 				# self.branches1DLoad = ['timeHV.Convert()' if branch == 'timeHV' else branch for branch in self.branches1DLoad]
 				if 'timeHV.AsDouble()' in self.branches1DLoad: self.branches1DLoad.remove('timeHV.AsDouble()')
 				# del self.branches1DType['timeHV']
 				# self.branches1DType['timeHV.Convert()'] = 'uint32'
-				if self.branches1DType.has_key('timeHV.AsDouble()'): del self.branches1DType['timeHV.AsDouble()']
+				if 'timeHV.AsDouble()' in self.branches1DType: del self.branches1DType['timeHV.AsDouble()']
 
 	def UpdateBranchesLists(self):
 		for branch in self.branches1DTotal[:]:
@@ -547,14 +547,14 @@ class AnalysisCaenCCD:
 				if not self.hasBranch['timeHV']:
 					self.branches1DLoad.remove(branch)
 				else:
-					if self.dicBraVect1D.has_key(branch):
+					if branch in self.dicBraVect1D:
 						self.dic1DVectLoaded[branch] = True if self.dicBraVect1D[branch] else False
 					else:
 						self.dic1DVectLoaded[branch] = False
 			elif not self.hasBranch[branch]:
 				self.branches1DLoad.remove(branch)
 			else:
-				if self.dicBraVect1D.has_key(branch):
+				if branch in self.dicBraVect1D:
 					self.dic1DVectLoaded[branch] = True if self.dicBraVect1D[branch] else False
 				else:
 					self.dic1DVectLoaded[branch] = False
@@ -566,7 +566,7 @@ class AnalysisCaenCCD:
 			if not self.hasBranch[branch]:
 				self.branchesWavesLoad.remove(branch)
 			else:
-				if self.dicBraVectWaves.has_key(branch):
+				if branch in self.dicBraVectWaves:
 					self.dicWavesVectLoaded[branch] = True if self.dicBraVectWaves[branch] else False
 				else:
 					self.dicWavesVectLoaded[branch] = False
@@ -612,35 +612,35 @@ class AnalysisCaenCCD:
 		if len(branches_to_load_1D) > 0:
 			leng = working_tree.Draw(':'.join(branches_to_load_1D), self.cut0, options, self.max_events, self.start_entry)
 			if leng == -1:
-				print 'Error, could not load the branches: {b}. Try again :('.format(b=':'.join(branches_to_load_1D))
+				print('Error, could not load the branches: {b}. Try again :('.format(b=':'.join(branches_to_load_1D)))
 				return
 			while leng > working_tree.GetEstimate():
 				working_tree.SetEstimate(leng)
 				leng = working_tree.Draw(':'.join(branches_to_load_1D), self.cut0, options, self.max_events, self.start_entry)
 			self.events = leng
 			for pos, branch in enumerate(branches_to_load_1D):
-				if self.verb: print 'Vectorising branch:', branch, '...', ; sys.stdout.flush()
+				if self.verb: print('Vectorising branch:', branch, '...', end=' ') ; sys.stdout.flush()
 				temp = working_tree.GetVal(pos)
-				self.dicBraVect1D[branch] = np.array([temp[ev] for ev in xrange(self.events)], dtype=np.dtype(self.branches1DType[branch]))
+				self.dicBraVect1D[branch] = np.array([temp[ev] for ev in range(self.events)], dtype=np.dtype(self.branches1DType[branch]))
 				self.dic1DVectLoaded[branch] = True
-				if self.verb: print 'Done'
+				if self.verb: print('Done')
 				del temp
 
 		branches_to_load_waves = [branch for branch in self.branchesWavesLoad if not self.dicWavesVectLoaded[branch]]
 		if len(branches_to_load_waves) > 0:
 			leng = working_tree.Draw(':'.join(branches_to_load_waves), self.cut0, 'goff para', self.max_events, self.start_entry)
 			if leng == -1:
-				print 'Error, could not load the branches {b}. Try again :('.format(b=':'.join(branches_to_load_waves))
+				print('Error, could not load the branches {b}. Try again :('.format(b=':'.join(branches_to_load_waves)))
 				return
 			while leng > working_tree.GetEstimate():
 				working_tree.SetEstimate(leng)
 				leng = working_tree.Draw(':'.join(branches_to_load_waves), self.cut0, 'goff para', self.max_events, self.start_entry)
 			for pos, branch in enumerate(branches_to_load_waves):
-				if self.verb: print 'Vectorising branch:', branch, '...', ; sys.stdout.flush()
+				if self.verb: print('Vectorising branch:', branch, '...', end=' ') ; sys.stdout.flush()
 				temp = working_tree.GetVal(pos)
-				self.dicBraVectWaves[branch] = np.array([[temp[ev * self.ptsWave + pt] for pt in xrange(self.ptsWave)] for ev in xrange(self.events)], dtype=np.dtype(self.branchesWavesType[branch]))
+				self.dicBraVectWaves[branch] = np.array([[temp[ev * self.ptsWave + pt] for pt in range(self.ptsWave)] for ev in range(self.events)], dtype=np.dtype(self.branchesWavesType[branch]))
 				self.dicWavesVectLoaded[branch] = True
-				if self.verb: print 'Done'
+				if self.verb: print('Done')
 				del temp
 
 	def LoadSignalScalars(self):
@@ -649,7 +649,7 @@ class AnalysisCaenCCD:
 			temp2 = self.eventVectCF[0] + self.sigVectCF[0] + self.pedVectCF[0]
 		except Exception:
 			branchesLoad = ['event', 'signal', 'pedestal', 'signalCF', 'pedestalCF']
-			print 'Loading {b} branches...'.format(b=':'.join(branchesLoad)), ; sys.stdout.flush()
+			print('Loading {b} branches...'.format(b=':'.join(branchesLoad)), end=' ') ; sys.stdout.flush()
 			tempCut = ro.TCut('cutScalars', '')
 			tempCut += self.ReturnBasicCut0()
 			leng = self.analysisTree.Draw(':'.join(branchesLoad), tempCut, 'goff para')
@@ -662,13 +662,13 @@ class AnalysisCaenCCD:
 			dicBranches = {}
 			for pos, branch in enumerate(branchesLoad):
 				temp = self.analysisTree.GetVal(pos)
-				dicBranches[branch] = np.array([temp[ev] for ev in xrange(events)], 'f4')
+				dicBranches[branch] = np.array([temp[ev] for ev in range(events)], 'f4')
 			self.eventVect = dicBranches['event'].astype('uint32')
 			self.sigVect = dicBranches['signal'].astype('f4')
 			self.sigVectCF = dicBranches['signalCF'].astype('f4')
 			self.pedVect = dicBranches['pedestal'].astype('f4')
 			self.pedVectCF = dicBranches['pedestalCF'].astype('f4')
-			print 'Done'
+			print('Done')
 
 	def ExplicitVectorsFromDictionary(self):
 		if self.hasBranch['voltageSignal']:
@@ -701,7 +701,7 @@ class AnalysisCaenCCD:
 		self.AddTimeCFFriend(self.timeCFDelay, self.attenCF, self.overw)
 
 	def FindRealPeakPosition(self):
-		print 'Getting real peak positions...'
+		print('Getting real peak positions...')
 		# mpos = self.signalWaveVect.argmin(axis=1) if self.bias >= 0 else self.signalWaveVect.argmax(axis=1)
 		# time_mpos = self.timeVect[:, mpos].diagonal()
 		# time_mpos = np.array([self.timeVect[it[0], pos] for it, pos in np.ndenumerate(mpos)])
@@ -715,7 +715,7 @@ class AnalysisCaenCCD:
 		ro.gErrorIgnoreLevel = ro.kFatal
 		self.peak_positions = []
 		self.peak_positionsCF = []
-		print 'Calculating peak positions...'
+		print('Calculating peak positions...')
 		self.utils.CreateProgressBar(len(self.timeVect))
 		self.utils.bar.start()
 		fit_fcn = ro.TF1('fit_peak', '[0]*exp(-((x-[1])/[2])^2)+pol1(3)', self.peakTime - 2e-6, self.peakTime + 2e-6)
@@ -746,7 +746,7 @@ class AnalysisCaenCCD:
 			fit_res = None
 			grafit = ro.TGraph(len(timei), np.add(timei, self.time_CF_deltas[it], dtype='f8'), self.signalWaveVect[it])
 			grafit.GetXaxis().SetRangeUser(xmin, xmax)
-			for it2 in xrange(3):
+			for it2 in range(3):
 				fit_res = grafit.Fit('fit_peak', 'QBN0S', '', xmin, xmax)
 				xpeak = fit_fcn.GetMaximumX(xmin, xmax) if self.bias < 0 else fit_fcn.GetMinimumX(xmin, xmax)
 				xwindow = 600e-9 if it2 == 0 else 400e-9
@@ -777,10 +777,10 @@ class AnalysisCaenCCD:
 		self.peak_positionsCF = np.array(self.peak_positionsCF)
 		self.peak_positions = np.array(self.peak_positions)
 		self.utils.bar.finish()
-		print 'Done getting real peak positions'
+		print('Done getting real peak positions')
 
 	def FindRealPeakPosition2(self):
-		print 'Getting real peak positions...'
+		print('Getting real peak positions...')
 		mpos = self.signalWaveVect.argmin(axis=1) if self.bias >= 0 else self.signalWaveVect.argmax(axis=1)
 		# time_mpos = self.timeVect[:, mpos].diagonal()
 		time_mpos = np.array([self.timeVect[it[0], pos] for it, pos in np.ndenumerate(mpos)])
@@ -789,7 +789,7 @@ class AnalysisCaenCCD:
 		par0ini = 3.14 if self.bias >= 0 else -3.14
 		ro.Math.MinimizerOptions.SetDefaultMinimizer('Minuit2', 'Migrad')
 		self.peak_positions = []
-		print 'Calculating peak positions...'
+		print('Calculating peak positions...')
 		self.utils.CreateProgressBar(len(self.timeVect))
 		self.utils.bar.start()
 		for it, timei in enumerate(self.timeVect):
@@ -821,17 +821,17 @@ class AnalysisCaenCCD:
 		# self.peak_positions = np.array([fiti.Parameter(1) for fiti in fit])
 		self.peak_positions = np.array(self.peak_positions)
 		self.utils.bar.finish()
-		print 'Done getting real peak positions'
+		print('Done getting real peak positions')
 
 	def FillTreePeakPositions(self):
-		print 'Filling tree with peak positions...'
+		print('Filling tree with peak positions...')
 		peakPosBra = self.analysisTree.Branch('peakPosition', self.peak_position, 'peakPosition/F')
 		entries = self.in_root_tree.GetEntries()
 		self.CloseInputROOTFiles()
 		self.utils.CreateProgressBar(entries)
 		self.utils.bar.start()
 		self.analysisFile.cd()
-		for ev in xrange(entries):
+		for ev in range(entries):
 			# self.in_root_tree.GetEntry(ev)
 			if ev in self.eventVect:
 				try:
@@ -896,19 +896,19 @@ class AnalysisCaenCCD:
 			self.cut0 += ro.TCut('voltageDiaOffsetCut', 'abs(voltageDia-{b})<{v}'.format(b=self.bias, v=self.voltageDiaMaxOffset))
 
 	def FindPedestalPosition(self):
-		print 'Calculating position of pedestals...', ;sys.stdout.flush()
+		print('Calculating position of pedestals...', end=' ') ;sys.stdout.flush()
 		self.pedestalTimeIndices = [np.argwhere(np.bitwise_and(self.pedestalTEndPos - self.pedestalIntegrationTime <= timeVectEvi, timeVectEvi <= self.pedestalTEndPos)).flatten() for it, timeVectEvi in enumerate(self.timeVect)]
 		self.pedestalTimeIndicesCF = [np.argwhere(np.bitwise_and(self.pedestalTEndPos - self.pedestalIntegrationTime <= np.add(timeVectEvi, self.time_CF_deltas[it]), np.add(timeVectEvi, self.time_CF_deltas[it]) <= self.pedestalTEndPos)).flatten() for it, timeVectEvi in enumerate(self.timeVect)]
-		print 'Done'
+		print('Done')
 
 	def FindSignalPositions(self, backward, forward):
-		print 'Calculating position of signals...', ;sys.stdout.flush()
+		print('Calculating position of signals...', end=' ') ;sys.stdout.flush()
 		self.signalTimeIndices = [np.argwhere(abs(timeVectEvi - self.peak_positions[it] - (forward - backward)/2.0) <= (forward + backward)/2.0).flatten() for it, timeVectEvi in enumerate(self.timeVect)]
 		self.signalTimeIndicesCF = [np.argwhere(abs(np.add(timeVectEvi, self.time_CF_deltas[it]) - self.peak_positionsCF[it] - (forward - backward)/2.0) <= (forward + backward)/2.0).flatten() for it, timeVectEvi in enumerate(self.timeVect)]
-		print 'Done'
+		print('Done')
 
 	def CalculatePedestalsAndSignals(self):
-		print 'Calculating pedestals and signals...', ;sys.stdout.flush()
+		print('Calculating pedestals and signals...', end=' ') ;sys.stdout.flush()
 		self.pedVect = np.array([self.signalWaveVect[ev, pedTimeIndxs].mean() if pedTimeIndxs.size > 0 else -10 for ev, pedTimeIndxs in enumerate(self.pedestalTimeIndices)])
 		self.pedVectCF = np.array([self.signalWaveVect[ev, pedTimeIndxs].mean() if pedTimeIndxs.size > 0 else -10 for ev, pedTimeIndxs in enumerate(self.pedestalTimeIndicesCF)])
 		self.pedSigmaVect = np.array([self.signalWaveVect[ev, pedTimeIndxs].std() if pedTimeIndxs.size > 1 else -10 for ev, pedTimeIndxs in enumerate(self.pedestalTimeIndices)])
@@ -919,10 +919,10 @@ class AnalysisCaenCCD:
 		self.sigAndPedSigmaVectCF = np.array([self.signalWaveVect[ev, sigTimeIndxs].std() if sigTimeIndxs.size > 1 else -10 for ev, sigTimeIndxs in enumerate(self.signalTimeIndicesCF)])
 		self.sigVect = np.subtract(self.sigAndPedVect, self.pedVect)
 		self.sigVectCF = np.subtract(self.sigAndPedVectCF, self.pedVectCF)
-		print 'Done'
+		print('Done')
 
 	def FillPedestalsAndSignals(self):
-		print 'Filling tree with scalars...'
+		print('Filling tree with scalars...')
 		pedBra = self.analysisTree.Branch('pedestal', self.ped, 'pedestal/F')
 		pedSigmaBra = self.analysisTree.Branch('pedestalSigma', self.pedSigma, 'pedestalSigma/F')
 		pedSignalBra = self.analysisTree.Branch('signalAndPedestal', self.sigAndPed, 'signalAndPedestal/F')
@@ -933,7 +933,7 @@ class AnalysisCaenCCD:
 		self.analysisFile.cd()
 		self.utils.CreateProgressBar(self.max_events)
 		self.utils.bar.start()
-		for ev in xrange(entries):
+		for ev in range(entries):
 			# self.in_root_tree.GetEntry(ev)
 			self.analysisTree.GetEntry(ev)
 			if ev in self.eventVect:
@@ -966,7 +966,7 @@ class AnalysisCaenCCD:
 		self.utils.bar.finish()
 
 	def FillAnalysisBranches(self):
-		print 'Filling analysis tree ...'
+		print('Filling analysis tree ...')
 		peakPosBra = self.analysisTree.Branch('peakPosition', self.peak_position, 'peakPosition/F')
 		peakPosBra = self.analysisTree.Branch('peakPositionCF', self.peak_positionCF, 'peakPositionCF/F')
 		pedBra = self.analysisTree.Branch('pedestal', self.ped, 'pedestal/F')
@@ -985,7 +985,7 @@ class AnalysisCaenCCD:
 		self.analysisFile.cd()
 		self.utils.CreateProgressBar(entries)
 		self.utils.bar.start()
-		for ev in xrange(self.start_entry, self.start_entry + entries):
+		for ev in range(self.start_entry, self.start_entry + entries):
 			# self.in_root_tree.GetEntry(ev)
 			if ev in self.eventVect:
 				try:
@@ -1033,13 +1033,13 @@ class AnalysisCaenCCD:
 
 	def DrawHisto(self, name, xmin, xmax, deltax, var, varname, cuts='', option='e'):
 		if not IsFloat(xmin) or not IsFloat(xmax) or not IsFloat(deltax):
-			print 'Won\'t create histogram as the limits are not well defined (xmin, xmax, deltax): {mi}, {ma}, {dx}'.format(mi=xmin, ma=xmax, dx=deltax)
+			print('Won\'t create histogram as the limits are not well defined (xmin, xmax, deltax): {mi}, {ma}, {dx}'.format(mi=xmin, ma=xmax, dx=deltax))
 			return
 		elif deltax <= 0 or xmin >= xmax:
-			print 'Won\'t create histogram as the limits are not well defined (xmin, xmax, deltax): {mi}, {ma}, {dx}'.format(mi=xmin, ma=xmax, dx=deltax)
+			print('Won\'t create histogram as the limits are not well defined (xmin, xmax, deltax): {mi}, {ma}, {dx}'.format(mi=xmin, ma=xmax, dx=deltax))
 			return
 		ro.TFormula.SetMaxima(100000)
-		if self.histo.has_key(name):
+		if name in self.histo:
 			if self.histo[name]:
 				self.histo[name].Delete()
 			del self.histo[name]
@@ -1047,7 +1047,7 @@ class AnalysisCaenCCD:
 		self.histo[name].GetXaxis().SetTitle(varname)
 		self.histo[name].GetYaxis().SetTitle('entries')
 		if 'goff' not in option:
-			if self.canvas.has_key(name):
+			if name in self.canvas:
 				if self.canvas[name]:
 					self.canvas[name].Close()
 				del self.canvas[name]
@@ -1066,13 +1066,13 @@ class AnalysisCaenCCD:
 
 	def DrawProfile(self, name, varx, xmin, xmax, deltax, xname, vary, ymin, ymax, yname, cuts='', options='e hist'):
 		if not IsFloat(xmin) or not IsFloat(xmax) or not IsFloat(deltax) or not IsFloat(ymin) or not IsFloat(ymax):
-			print 'Won\'t create profile as the limits are not well defined (xmin, xmax, deltax, ymin, ymax): {mi}, {ma}, {dx}, {ym}, {yma}'.format(mi=xmin, ma=xmax, dx=deltax, ym=ymin, yma=ymax)
+			print('Won\'t create profile as the limits are not well defined (xmin, xmax, deltax, ymin, ymax): {mi}, {ma}, {dx}, {ym}, {yma}'.format(mi=xmin, ma=xmax, dx=deltax, ym=ymin, yma=ymax))
 			return
 		elif deltax <= 0 or xmin >= xmax or ymin >= ymax:
-			print 'Won\'t create profile as the limits are not well defined (xmin, xmax, deltax, ymin, ymax): {mi}, {ma}, {dx}, {ym}, {yma}'.format(mi=xmin, ma=xmax, dx=deltax, ym=ymin, yma=ymax)
+			print('Won\'t create profile as the limits are not well defined (xmin, xmax, deltax, ymin, ymax): {mi}, {ma}, {dx}, {ym}, {yma}'.format(mi=xmin, ma=xmax, dx=deltax, ym=ymin, yma=ymax))
 			return
 		ro.TFormula.SetMaxima(100000)
-		if self.profile.has_key(name):
+		if name in self.profile:
 			if self.profile[name]:
 				self.profile[name].Delete()
 			del self.profile[name]
@@ -1080,7 +1080,7 @@ class AnalysisCaenCCD:
 		self.profile[name].GetXaxis().SetTitle(xname)
 		self.profile[name].GetYaxis().SetTitle(yname)
 		if 'goff' not in options:
-			if self.canvas.has_key(name):
+			if name in self.canvas:
 				if self.canvas[name]:
 					self.canvas[name].Close()
 				del self.canvas[name]
@@ -1099,13 +1099,13 @@ class AnalysisCaenCCD:
 
 	def DrawHisto2D(self, name, varx, xmin, xmax, deltax, xname, vary, ymin, ymax, deltay, yname, cuts='', option='colz', num_evts=1000000000, start_ev=0):
 		if not IsFloat(xmin) or not IsFloat(xmax) or not IsFloat(deltax) or not IsFloat(ymin) or not IsFloat(ymax) or not IsFloat(deltay):
-			print 'Won\'t create histogram as the limits are not well defined (xmin, xmax, deltax, ymin, ymax, deltay): {mi}, {ma}, {dx}, {ym}, {yma}, {dy}'.format(mi=xmin, ma=xmax, dx=deltax, ym=ymin, yma=ymax, dy=deltay)
+			print('Won\'t create histogram as the limits are not well defined (xmin, xmax, deltax, ymin, ymax, deltay): {mi}, {ma}, {dx}, {ym}, {yma}, {dy}'.format(mi=xmin, ma=xmax, dx=deltax, ym=ymin, yma=ymax, dy=deltay))
 			return
 		elif deltax <= 0 or xmin >= xmax or deltay <= 0 or ymin >= ymax:
-			print 'Won\'t create histogram as the limits are not well defined (xmin, xmax, deltax, ymin, ymax, deltay): {mi}, {ma}, {dx}, {ym}, {yma}, {dy}'.format(mi=xmin, ma=xmax, dx=deltax, ym=ymin, yma=ymax, dy=deltay)
+			print('Won\'t create histogram as the limits are not well defined (xmin, xmax, deltax, ymin, ymax, deltay): {mi}, {ma}, {dx}, {ym}, {yma}, {dy}'.format(mi=xmin, ma=xmax, dx=deltax, ym=ymin, yma=ymax, dy=deltay))
 			return
 		ro.TFormula.SetMaxima(100000)
-		if self.histo.has_key(name):
+		if name in self.histo:
 			if self.histo[name]:
 				self.histo[name].Delete()
 			del self.histo[name]
@@ -1114,7 +1114,7 @@ class AnalysisCaenCCD:
 		self.histo[name].GetYaxis().SetTitle(yname)
 		self.histo[name].GetZaxis().SetTitle('entries')
 		if 'goff' not in option:
-			if self.canvas.has_key(name):
+			if name in self.canvas:
 				if self.canvas[name]:
 					self.canvas[name].Close()
 				del self.canvas[name]
@@ -1133,7 +1133,7 @@ class AnalysisCaenCCD:
 
 	def DrawGraphFromTree(self, name, varx, xname, vary, yname, cuts='', option='AP', num_evts=100, start_ev=0):
 		ro.TFormula.SetMaxima(100000)
-		if self.graph.has_key(name):
+		if name in self.graph:
 			if self.graph[name]:
 				self.graph[name].Delete()
 			del self.graph[name]
@@ -1150,11 +1150,11 @@ class AnalysisCaenCCD:
 		nbins2 = nbins
 		funcArgs = (name, low_t0, up_t0, float(up_t0 - low_t0) / nbins2, 'deltaTimeCF*1000000', 'CF Time Shift [us]', cut, 'e')
 		self.DrawHisto(*funcArgs)
-		if not name in self.histo.keys():
-			print 'There was a problem creating the histogram {n}'.format(n=name)
+		if not name in list(self.histo.keys()):
+			print('There was a problem creating the histogram {n}'.format(n=name))
 			return
 		if not self.histo[name] or IsHistogramEmpty(self.histo[name]):
-			print 'There was a problem with the created histogram {n}'.format(n=name)
+			print('There was a problem with the created histogram {n}'.format(n=name))
 			return
 		self.histo[name].GetXaxis().SetRangeUser(-0.5, 0.5)
 		peakbin = self.histo[name].GetMaximumBin()
@@ -1192,11 +1192,11 @@ class AnalysisCaenCCD:
 		nbins2 = nbins
 		funcArgs = (name, low_t, up_t, float(up_t - low_t) / nbins2, 'peakPosition{a}*1000000'.format(a=appendCF), 'Peak Position [us]', cut, 'e')
 		self.DrawHisto(*funcArgs)
-		if not name in self.histo.keys():
-			print 'There was a problem creating the histogram {n}'.format(n=name)
+		if not name in list(self.histo.keys()):
+			print('There was a problem creating the histogram {n}'.format(n=name))
 			return
 		if not self.histo[name] or IsHistogramEmpty(self.histo[name]):
-			print 'There was a problem with the created histogram {n}'.format(n=name)
+			print('There was a problem with the created histogram {n}'.format(n=name))
 			return
 		deltax = CheckBinningForFit(self, name, self.DrawHisto, funcArgs, 3, 12)
 		self.histo[name].GetXaxis().SetRangeUser(max(low_t, self.histo[name].GetMean() - 5 * self.histo[name].GetRMS()), min(up_t, self.histo[name].GetMean() + 5 * self.histo[name].GetRMS()))
@@ -1223,10 +1223,10 @@ class AnalysisCaenCCD:
 				func.SetParLimits(1, self.histo[name].GetMean() - self.histo[name].GetRMS(), self.histo[name].GetMean() + 5 * self.histo[name].GetRMS())
 				func.SetParLimits(4, self.histo[name].GetMean() - 5 * self.histo[name].GetRMS(), self.histo[name].GetMean() + self.histo[name].GetRMS())
 			fit = self.histo[name].Fit('fit_' + name, 'QEMSB', '', max(low_t, self.histo[name].GetMean() - 4 * self.histo[name].GetRMS()), min(up_t, self.histo[name].GetMean() + 4 * self.histo[name].GetRMS()))
-			params = np.array([fit.Parameter(i) for i in xrange(6)], 'f8')
+			params = np.array([fit.Parameter(i) for i in range(6)], 'f8')
 			xpeak = func.GetMaximumX(max(low_t, self.histo[name].GetMean() - 4 * self.histo[name].GetRMS()), min(up_t, self.histo[name].GetMean() + 4 * self.histo[name].GetRMS()))
 			fit2 = self.histo[name].Fit('fit_' + name, 'QEMSB', '', xpeak - 3 * self.histo[name].GetRMS(), xpeak + 3* self.histo[name].GetRMS())
-			params = np.array([fit2.Parameter(i) for i in xrange(6)], 'f8')
+			params = np.array([fit2.Parameter(i) for i in range(6)], 'f8')
 			# fit = self.histo[name].Fit('fit_' + name, 'QEMSB', '', params[1] - 2 * params[2], params[1] + 2 * params[2])
 			SetDefaultFitStats(self.histo[name], func)
 			#TODO check if fit is good enough to update peakTime
@@ -1245,11 +1245,11 @@ class AnalysisCaenCCD:
 		deltav = max(float(maxv - minv) / nbins, resVoltage)
 		funcArgs = (name, minv, maxv + resVoltage, resVoltage, 'voltageDia', 'Voltage on Diamond [V]', cut, 'e')
 		self.DrawHisto(*funcArgs)
-		if not name in self.histo.keys():
-			print 'There was a problem creating the histogram' + name
+		if not name in list(self.histo.keys()):
+			print('There was a problem creating the histogram' + name)
 			return
 		if not self.histo[name] or IsHistogramEmpty(self.histo[name]):
-			print 'There was a problem with the created histogram' + name
+			print('There was a problem with the created histogram' + name)
 			return
 		deltax = CheckBinningForFit(self, name, self.DrawHisto, funcArgs, 3, 6, resVoltage, True)
 		self.voltageDiaMean = self.histo[name].GetMean()
@@ -1305,14 +1305,14 @@ class AnalysisCaenCCD:
 		vmax = maxx if maxx != 0 else GetMaximumBranch(self.analysisTree, branch, cuts) * 1000 if 'charge' not in branch.lower() else GetMaximumBranch(self.analysisTree, branch, cuts)
 		deltax = (vmax - vmin) / 100.0 if bins == 0 else (vmax - vmin) / float(bins)
 		self.DrawHisto(name, vmin - deltax/2.0, vmax + deltax/2.0, deltax, '{f}*{b}'.format(f=1000 if 'charge' not in branch.lower() else 1, b=branch), '{b} {u}'.format(b=branch, u='[e]' if 'charge' in branch.lower() else '[mV]'), cuts, option)
-		if not name in self.histo.keys():
-			print 'The dictionary histogram does not have the key ' + name
+		if not name in list(self.histo.keys()):
+			print('The dictionary histogram does not have the key ' + name)
 			return
 		if not self.histo[name] or IsHistogramEmpty(self.histo[name]):
-			print 'The created histogram {n} is empty'.format(n=name)
+			print('The created histogram {n} is empty'.format(n=name))
 			return
 		if self.histo[name].GetMean() == 0 and self.histo[name].GetRMS() == 0:
-			print 'The created histogram {n} is empty'.format(n=name)
+			print('The created histogram {n} is empty'.format(n=name))
 			return
 		lowbin, highbin = self.histo[name].FindFirstBinAbove(0), self.histo[name].FindLastBinAbove(0)
 		vmin, vmax = self.histo[name].GetBinLowEdge(lowbin), self.histo[name].GetBinLowEdge(highbin + 1)
@@ -1363,7 +1363,7 @@ class AnalysisCaenCCD:
 		else:
 			var = '1000*(voltageSignal-pedestalCF)' if 'signal_ped_cor' in sigtype.lower() else '1000*voltageSignal' if 'signal' in sigtype.lower() else '1000*voltageTrigger' if 'trig' in sigtype.lower() else '1000*voltageVeto' if 'veto' in sigtype.lower() else ''
 		if var == '':
-			print 'sigtype should be "signal", "signal_ped_corrected", "trigger" or "veto"'
+			print('sigtype should be "signal", "signal_ped_corrected", "trigger" or "veto"')
 			return
 		# cuts0 = self.cut0.GetTitle() if cuts == '' else cuts
 		vname = ('signal - ped' if var == '1000*(voltageSignal-pedestal)' else 'signal' if var == '1000*voltageSignal' else 'trigger' if var == '1000*voltageTrigger' else 'veto' if var == '1000*voltageVeto' else '') + ' [mV]'
@@ -1399,7 +1399,7 @@ class AnalysisCaenCCD:
 		if self.peakTime:
 			store_peakTime = self.peakTime
 		else:
-			print 'Find first the peak of the distribution with PlotPeakDistributions'
+			print('Find first the peak of the distribution with PlotPeakDistributions')
 			return
 		self.utils.CreateProgressBar(len(t0_vec))
 		self.utils.bar.start()
@@ -1422,8 +1422,8 @@ class AnalysisCaenCCD:
 		self.peakTime = store_peakTime
 
 	def ResetTreeToOriginal(self, keepBranches=['event','time','voltageSignal','voltageTrigger','voltageVeto','vetoedEvent','badShape','badPedestal','voltageHV','currentHV','timeHV']):
-		print 'Restoring tree with the following branches:', keepBranches, '...'
-		raw_input('Press a key and Enter to continue: ')
+		print('Restoring tree with the following branches:', keepBranches, '...')
+		input('Press a key and Enter to continue: ')
 		self.OpenAnalysisROOTFile('READ')
 		self.LoadAnalysisTree()
 		self.in_root_tree.SetBranchStatus('*', 0)
@@ -1446,27 +1446,27 @@ class AnalysisCaenCCD:
 					doMoveFile = False
 					break
 			if doMoveFile:
-				print 'The file was cloned successfully :)'
+				print('The file was cloned successfully :)')
 				checkFile.Close()
 				del checkFile
 				shutil.move('{o}/temp.root'.format(o=self.outDir), '{o}/{f}'.format(o=self.outDir, f=self.inputFile))
 				return
-		print 'The file was not cloned successfully :S. Check original tree and "temp.root"'
+		print('The file was not cloned successfully :S. Check original tree and "temp.root"')
 
 	def PrintPlotLimits(self, ti=-5.12e-7, tf=4.606e-6, vmin=-0.7, vmax=0.05):
-		print np.double([(tf-ti)/float(self.settings.time_res) +1, ti-self.settings.time_res/2.0,
-		                 tf+self.settings.time_res/2.0, (vmax-vmin)/self.settings.sigRes, vmin, vmax])
+		print(np.double([(tf-ti)/float(self.settings.time_res) +1, ti-self.settings.time_res/2.0,
+		                 tf+self.settings.time_res/2.0, (vmax-vmin)/self.settings.sigRes, vmin, vmax]))
 
 	def PlotHVCurrents(self, name='HVCurrents', cuts='', deltat=30., options='e hist'):
 		if not self.in_root_tree:
 			return
-		print 'Plotting HV current'
+		print('Plotting HV current')
 		if self.in_root_tree.GetLeaf('timeHV').GetTypeName() == 'TDatime':
-			print 'Time format is TDataime. Not implemented yet :P'
+			print('Time format is TDataime. Not implemented yet :P')
 		else:
 			leng = self.analysisTree.Draw('timeHV.AsDouble()', cuts, 'goff')
 			timehv = self.analysisTree.GetVal(0)
-			timehv = np.array([timehv[i] for i in xrange(leng)])
+			timehv = np.array([timehv[i] for i in range(leng)])
 			xmin, xmax, deltax = np.floor(timehv.min()), np.ceil(timehv.max()), deltat
 			ymin, ymax = self.analysisTree.GetMinimum('currentHV'), self.analysisTree.GetMaximum('currentHV')
 			if ymin == ymax:
@@ -1493,13 +1493,13 @@ class AnalysisCaenCCD:
 	def PlotDiaVoltage(self, name='DUTVoltage', cuts='', deltat=30, options='e hist'):
 		if not self.in_root_tree:
 			return
-		print 'Plotting DUT voltage'
+		print('Plotting DUT voltage')
 		if self.in_root_tree.GetLeaf('timeHV').GetTypeName() == 'TDatime':
-			print 'Time format is TDataime. Not implemented yet :P'
+			print('Time format is TDataime. Not implemented yet :P')
 		else:
 			leng = self.analysisTree.Draw('timeHV.AsDouble()', cuts, 'goff')
 			timehv = self.analysisTree.GetVal(0)
-			timehv = np.array([timehv[i] for i in xrange(leng)])
+			timehv = np.array([timehv[i] for i in range(leng)])
 			xmin, xmax, deltax = np.floor(timehv.min()), np.ceil(timehv.max()), deltat
 			ymin, ymax = self.analysisTree.GetMinimum('voltageDia'), self.analysisTree.GetMaximum('voltageDia')
 			if ymin == ymax:
@@ -1541,17 +1541,17 @@ class AnalysisCaenCCD:
 			self.profile[name].GetXaxis().SetTimeDisplay(1)
 
 	def FitLanGaus(self, name, conv_steps=100, color=ro.kRed, doToyStats=False):
-		if not name in self.canvas.keys() or not name in self.histo.keys():
-			print 'Can\'t do Langaus fit as there is a problem with the histogram'
+		if not name in list(self.canvas.keys()) or not name in list(self.histo.keys()):
+			print('Can\'t do Langaus fit as there is a problem with the histogram')
 			return
 		if not self.canvas[name] or not self.histo[name]:
-			print 'Can\'t do Langaus fit as there is a problem with the histogram'
+			print('Can\'t do Langaus fit as there is a problem with the histogram')
 			return
 		if self.histo[name].GetEntries() == 0 or self.histo[name].GetMean()== 0 and self.histo[name].GetRMS() == 0:
-			print 'Can\'t do Langaus fit as there is a problem with the histogram'
+			print('Can\'t do Langaus fit as there is a problem with the histogram')
 			return
 		if self.histo[name].Integral(1, self.histo[name].GetNbinsX()) < 2:
-			print 'Can\'t do Langaus fit with only 2 filled bins'
+			print('Can\'t do Langaus fit with only 2 filled bins')
 			return
 		self.canvas[name].cd()
 		self.langaus[name] = LanGaus(self.histo[name])
@@ -1567,19 +1567,19 @@ class AnalysisCaenCCD:
 		self.langaus[name].fit.SetLineColor(color)
 		self.line[name].Draw('same')
 		ro.gPad.Update()
-		print u'Histo {n}: <PH> = {f} \u00B1 {f2}'.format(n=name, f=self.histo[name].GetMean(), f2=self.histo[name].GetMeanError())
-		print 'Fit {n}: <PH> = {f}'.format(n=name, f=fitmean)
-		print 'Fit {n}: MP_fit = {f}'.format(n=name, f=self.langaus[name].fit_mp)
+		print('Histo {n}: <PH> = {f} \u00B1 {f2}'.format(n=name, f=self.histo[name].GetMean(), f2=self.histo[name].GetMeanError()))
+		print('Fit {n}: <PH> = {f}'.format(n=name, f=fitmean))
+		print('Fit {n}: MP_fit = {f}'.format(n=name, f=self.langaus[name].fit_mp))
 		lineToAddInStats = ['Mean_{Fit}', 'MP_{Fit}']
 		valuesLineToAddInStats = [fitmean, self.langaus[name].fit_mp]
 		if doToyStats:
-			self.toy_histos = [self.histo[name].Clone('h_' + name + '_toy_' + str(it)) for it in xrange(100)]
+			self.toy_histos = [self.histo[name].Clone('h_' + name + '_toy_' + str(it)) for it in range(100)]
 			self.utils.CreateProgressBar(len(self.toy_histos))
 			self.utils.bar.start()
 			for itj, toyhisto in enumerate(self.toy_histos):
 				toyhisto.SetTitle(toyhisto.GetName())
 				toyhisto.Reset()
-				for it in xrange(self.langaus[name].entries_under_curve):
+				for it in range(self.langaus[name].entries_under_curve):
 					toyhisto.Fill(self.langaus[name].fit.GetRandom(self.langaus[name].fit.GetXmin(), self.langaus[name].fit.GetXmax()))
 				self.utils.bar.update(itj + 1)
 			self.utils.bar.finish()
@@ -1589,7 +1589,7 @@ class AnalysisCaenCCD:
 			mean_toys = np.average(toys_means, weights=toys_means_weights)
 			lineToAddInStats.append('Mean_{100toys}')
 			valuesLineToAddInStats.append(mean_toys)
-			print '100 Toys Fit {n}: <PH> = {f}'.format(n=name, f=mean_toys)
+			print('100 Toys Fit {n}: <PH> = {f}'.format(n=name, f=mean_toys))
 		self.histo[name].FindObject('stats').SetX1NDC(0.55)
 		self.histo[name].FindObject('stats').SetX2NDC(0.9)
 		self.histo[name].FindObject('stats').SetY1NDC(0.5)
@@ -1600,14 +1600,14 @@ class AnalysisCaenCCD:
 		ro.gPad.Update()
 
 	def FitConvolutedGaussians(self, name, conv_steps=100, color=ro.kRed):
-		if not name in self.canvas.keys() or not name in self.histo.keys():
-			print 'Can\'t do convoluted gaussians fit as there is aproblem with the histogram'
+		if not name in list(self.canvas.keys()) or not name in list(self.histo.keys()):
+			print('Can\'t do convoluted gaussians fit as there is aproblem with the histogram')
 			return
 		if not self.canvas[name] or not self.histo[name]:
-			print 'Can\'t do convoluted gaussians fit as there is a problem with the histogram'
+			print('Can\'t do convoluted gaussians fit as there is a problem with the histogram')
 			return
 		if self.histo[name].GetEntries() == 0 or self.histo[name].GetMean()== 0 and self.histo[name].GetRMS() == 0:
-			print 'Can\'t do convoluted gaussians fit as there is a problem with the histogram'
+			print('Can\'t do convoluted gaussians fit as there is a problem with the histogram')
 			return
 		self.canvas[name].cd()
 		# self.langaus[name] = LanGaus(self.histo[name])
@@ -1638,10 +1638,10 @@ class AnalysisCaenCCD:
 		self.langaus[name].SetLineColor(color)
 		self.line[name].Draw('same')
 		ro.gPad.Update()
-		print u'Histo {n}: <PH> = {f} \u00B1 {f2}'.format(n=name, f=self.histo[name].GetMean(), f2=self.histo[name].GetMeanError())
-		print 'Fit {n}: <PH> = {f}'.format(n=name, f=fitmean)
-		print 'Fit {n}: signal_sigma = {f}'.format(n=name, f=self.langaus[name].GetParameter(2))
-		print 'Fit {n}: pedestal_sigma = {f}'.format(n=name, f=self.langaus[name].GetParameter(3))
+		print('Histo {n}: <PH> = {f} \u00B1 {f2}'.format(n=name, f=self.histo[name].GetMean(), f2=self.histo[name].GetMeanError()))
+		print('Fit {n}: <PH> = {f}'.format(n=name, f=fitmean))
+		print('Fit {n}: signal_sigma = {f}'.format(n=name, f=self.langaus[name].GetParameter(2)))
+		print('Fit {n}: pedestal_sigma = {f}'.format(n=name, f=self.langaus[name].GetParameter(3)))
 		xlow, xhigh = self.langaus[name].GetMaximumX(xlow, xhigh) - 5 * self.histo[name].GetRMS(), self.langaus[name].GetMaximumX(xlow, xhigh) + 5 * self.histo[name].GetRMS()
 		self.histo[name].GetXaxis().SetRangeUser(xlow, xhigh)
 		self.histo[name].FindObject('stats').SetX1NDC(0.55)
@@ -1657,13 +1657,13 @@ class AnalysisCaenCCD:
 		if not os.path.isdir('{d}'.format(d=self.inDir)):
 			ExitMessage('The directory does not exist!!!!', os.EX_UNAVAILABLE)
 		for canv in lista:
-			if self.canvas.has_key(canv):
+			if canv in self.canvas:
 				if self.canvas[canv]:
 					self.canvas[canv].SaveAs('{d}/{c}.png'.format(d=self.inDir, c=canv))
 					self.canvas[canv].SaveAs('{d}/{c}.root'.format(d=self.inDir, c=canv))
 
 	def SaveAllCanvas(self):
-		self.SaveCanvasInlist(self.canvas.keys())
+		self.SaveCanvasInlist(list(self.canvas.keys()))
 
 	def AddVcalFriend(self, overwr=False, isCF=False):
 		appendCF = '' if not isCF else 'CF'
@@ -1711,7 +1711,7 @@ class AnalysisCaenCCD:
 	def FillVcalFriend(self, isCF=False):
 		appendCF = '' if not isCF else 'CF'
 		self.LoadSignalScalars()
-		print 'Creating vcal{a} root tree:'.format(a=appendCF)
+		print('Creating vcal{a} root tree:'.format(a=appendCF))
 		vcalfile = ro.TFile('{d}/{f}.vcal{a}.root'.format(d=self.outDir, f=self.analysisTreeName, a=appendCF), 'RECREATE')
 		vcaltree = ro.TTree('vcalTree' + appendCF, 'vcalTree' + appendCF)
 		vcalSignalEv = np.zeros(1, 'f4')
@@ -1721,7 +1721,7 @@ class AnalysisCaenCCD:
 		totEvents = self.settings.num_events
 		self.utils.CreateProgressBar(totEvents + 1)
 		self.utils.bar.start()
-		for ev in xrange(totEvents):
+		for ev in range(totEvents):
 			if ev in self.eventVect:
 				try:
 					argum = np.argwhere(ev == self.eventVect).flatten()
@@ -1739,7 +1739,7 @@ class AnalysisCaenCCD:
 		vcalfile.Write()
 		vcalfile.Close()
 		self.utils.bar.finish()
-		print 'Finished creating vcalTree{a} in {d}/{f}.vcal{a}.root'.format(d=self.outDir, f=self.analysisTreeName, a=appendCF)
+		print('Finished creating vcalTree{a} in {d}/{f}.vcal{a}.root'.format(d=self.outDir, f=self.analysisTreeName, a=appendCF))
 
 	def AddChargeFriend(self, overwr=False, isCF=False):
 		appendCF = '' if not isCF else 'CF'
@@ -1763,7 +1763,7 @@ class AnalysisCaenCCD:
 	def FillChargeFriend(self, isCF=False):
 		appendCF = '' if not isCF else 'CF'
 		self.LoadSignalScalars()
-		print 'Creating charge{a} root tree:'.format(a=appendCF)
+		print('Creating charge{a} root tree:'.format(a=appendCF))
 		chargefile = ro.TFile('{d}/{f}.charge{a}.root'.format(d=self.outDir, f=self.analysisTreeName, a=appendCF), 'RECREATE')
 		chargetree = ro.TTree('chargeTree' + appendCF, 'chargeTree' + appendCF)
 		chargeSignalEv = np.zeros(1, 'f4')
@@ -1773,7 +1773,7 @@ class AnalysisCaenCCD:
 		totevents = self.in_root_tree.GetEntries()
 		self.utils.CreateProgressBar(totevents + 1)
 		self.utils.bar.start()
-		for ev in xrange(totevents):
+		for ev in range(totevents):
 			if ev in self.eventVect:
 				try:
 					argum = np.argwhere(ev == self.eventVect).flatten()
@@ -1791,7 +1791,7 @@ class AnalysisCaenCCD:
 		chargefile.Write()
 		chargefile.Close()
 		self.utils.bar.finish()
-		print 'Finished creating chargeTree{a} in {d}/{f}.charge{a}.root'.format(d=self.outDir, f=self.analysisTreeName, a=appendCF)
+		print('Finished creating chargeTree{a} in {d}/{f}.charge{a}.root'.format(d=self.outDir, f=self.analysisTreeName, a=appendCF))
 
 	def AddTimeCFFriend(self, delay=1800, attPercent=75, overwr=False):
 		if not self.analysisTree.GetFriend('timeCFTree'):
@@ -1804,7 +1804,7 @@ class AnalysisCaenCCD:
 					self.AddTimeCFFriend(delay, attPercent, False)
 
 	def CreateTimeCFFriend(self, delay=1800, attPercent=75):
-		print 'Creating shifted constant fraction time tree:'
+		print('Creating shifted constant fraction time tree:')
 		crossPosition0 = 1.2195e-6
 		ndelay = np.floor(np.multiply(delay, 1e-9, dtype='f8') / self.settings.time_res + 0.5).astype('int32')
 		func = ro.TF1('fit_CF', '[0]*cos([1]*x+pi/(2e-6*[1])-1+[2])+[3]', 0.5e-6, 2e-6)
@@ -1822,7 +1822,7 @@ class AnalysisCaenCCD:
 		# self.timeCFVect = []
 		self.time_CF_deltas = []
 		# for it, timei in enumerate(self.timeVect):
-		for ev in xrange(entries):
+		for ev in range(entries):
 			deltaTimeCF.fill(-100e-6)
 			if ev in self.eventVect:
 				it = np.argwhere(ev == self.eventVect).flatten()[0]
@@ -1868,16 +1868,16 @@ class AnalysisCaenCCD:
 		self.utils.bar.finish()
 		# self.timeCFVect = np.array(self.timeCFVect, 'f8')
 		self.time_CF_deltas = np.array(self.time_CF_deltas, 'f8')
-		print 'Finished creating timeCFTree in {d}/{f}.timeCF.{de}.{att}.root'.format(d=self.outDir, f=self.analysisTreeName, de=delay, att=attPercent)
+		print('Finished creating timeCFTree in {d}/{f}.timeCF.{de}.{att}.root'.format(d=self.outDir, f=self.analysisTreeName, de=delay, att=attPercent))
 
 	def RemovePedestalFromSignal(self, namePlot0, namePlotZoom, pedSigma, xmin=10000, xmax=-10000, namePlotNewSuffix='NoPedestal'):
 		namec = namePlot0+namePlotNewSuffix
-		if not self.histo.has_key(namePlotZoom):
+		if namePlotZoom not in self.histo:
 			return namec
 		elif self.histo[namePlotZoom].Integral(0, self.histo[namePlotZoom].GetNbinsX()) < 1:
 			return namec
-		if self.histo.has_key(namePlot0) and self.histo.has_key(namePlotZoom):
-			if self.histo.has_key(namec):
+		if namePlot0 in self.histo and namePlotZoom in self.histo:
+			if namec in self.histo:
 				if self.histo[namec]:
 					self.histo[namec].Delete()
 				del self.histo[namec]
@@ -1922,7 +1922,7 @@ class AnalysisCaenCCD:
 			# histoc.Fill(histo0.GetBinCenter(bini), compBin)
 			histoc.SetBinContent(bini, max(0, histo0.GetBinContent(bini) - compBin))
 			histoc.ResetStats()
-			if self.canvas.has_key(namec):
+			if namec in self.canvas:
 				if self.canvas[namec]:
 					self.canvas[namec].Close()
 				del self.canvas[namec]
@@ -1945,9 +1945,9 @@ class AnalysisCaenCCD:
 		ndelay = np.floor(delay / self.settings.time_res + 0.5).astype('int32')
 		leng = self.analysisTree.Draw('voltageSignal:time', 'event==' + str(event), 'goff')
 		sig = self.analysisTree.GetVal(0)
-		sig = np.array([sig[i] * 1e3 for i in xrange(leng)], 'f8')
+		sig = np.array([sig[i] * 1e3 for i in range(leng)], 'f8')
 		tim = self.analysisTree.GetVal(1)
-		tim = np.array([tim[i] * 1e6 for i in xrange(leng)], 'f8')
+		tim = np.array([tim[i] * 1e6 for i in range(leng)], 'f8')
 		sig0 = np.multiply(-att, np.roll(sig, -ndelay), dtype='f8')
 		sig1 = np.add(sig, sig0, dtype='f8')
 		graf = ro.TGraph(len(tim), tim, sig1)
@@ -2028,8 +2028,8 @@ class AnalysisCaenCCD:
 		blah1 = ro.TH1F('blah1', 'blah1', 500, -1, 1)
 		blah2 = ro.TH1F('blah2', 'blah2', 1000, -1, 3)
 		blah3 = ro.TH2F('blah3', 'blah3', 1000, -1, 3, 500, 1, 3)
-		for i in xrange(int(self.analysisTree.GetEntries())):
-			if i % 1000 == 0: print i
+		for i in range(int(self.analysisTree.GetEntries())):
+			if i % 1000 == 0: print(i)
 			self.analysisTree.GetEntry(i)
 			pi = self.analysisTree.peakPosition * 1e6
 			if 1 < pi < 3:
@@ -2234,7 +2234,7 @@ if __name__ == '__main__':
 	ana = AnalysisCaenCCD(directory, config, infile, bias, overw, verb, doDebug)
 
 	if doBatch:
-		print 'Running in Batch mode!'
+		print('Running in Batch mode!')
 		ro.gROOT.SetBatch(1)
 
 	# ana.LoadAnalysisTree()

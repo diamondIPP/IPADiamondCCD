@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 import imp
-import cPickle as pickle
+import pickle as pickle
 from optparse import OptionParser
 import shutil, os
 import ipdb
@@ -25,12 +25,12 @@ class ConvertPicklesOldToNew:
 			if var in self.old_attributes:
 				exec('self.new_pickle.{v} = self.old_pickle.{v}'.format(v=var))
 
-		user_input = raw_input('type "y" if you want to backup old pickle and save the new one: ')
+		user_input = input('type "y" if you want to backup old pickle and save the new one: ')
 		if user_input.lower() == 'y':
-			print 'Backing up old pickle and saving new one...'
+			print('Backing up old pickle and saving new one...')
 			self.ReplacePickleAndBackUp()
 		else:
-			print 'Not bakcing up old pickle and not saving the new one. You can modify variables in the pickle and later do this by running on interactive mode'
+			print('Not bakcing up old pickle and not saving the new one. You can modify variables in the pickle and later do this by running on interactive mode')
 
 
 	def BackUpAndReplacePickle(self):
@@ -40,7 +40,7 @@ class ConvertPicklesOldToNew:
 
 	def PrintVariablesStatus(self):
 		for var in self.new_variables:
-			print var, eval('self.new_pickle.{v}'.format(v=var))
+			print(var, eval('self.new_pickle.{v}'.format(v=var)))
 
 
 

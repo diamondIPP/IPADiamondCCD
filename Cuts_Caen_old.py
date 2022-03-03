@@ -8,7 +8,7 @@ from optparse import OptionParser
 import progressbar
 import ipdb
 from pykeyboard import PyKeyboard
-from ConfigParser import ConfigParser
+from configparser import ConfigParser
 import subprocess as subp
 import struct
 import ROOT as ro
@@ -73,7 +73,7 @@ class Cuts_Caen:
 		parser = ConfigParser()
 		if self.infile != 'None':
 			if os.path.isfile(self.infile):
-				print 'Reading input file: {f} ...'.format(f=self.infile)
+				print('Reading input file: {f} ...'.format(f=self.infile))
 				parser.read(self.infile)
 				if parser.has_section('OPTILINK'):
 					if parser.has_option('OPTILINK', 'link'):
@@ -103,7 +103,7 @@ class Cuts_Caen:
 					if parser.has_option('OUTPUT', 'suffix'):
 						self.suffix = parser.get('OUTPUT', 'suffix')
 			else:
-				print 'Input file {f} does not exist. Loading default values...'.format(f=self.infile)
+				print('Input file {f} does not exist. Loading default values...'.format(f=self.infile))
 				self.LoadDefaults()
 		else:
 			self.LoadDefaults()
@@ -136,7 +136,7 @@ class Cuts_Caen:
 	def TakeTwoWaves(self):
 		t0 = time.time()
 		self.SetupDigitiser()
-		print 'Starting getting data using wavedump...'
+		print('Starting getting data using wavedump...')
 		p = subp.Popen(['wavedump', '{d}/WaveDumpConfig_CCD_cal.txt'.format(d=self.outdir)], bufsize=-1, stdin=subp.PIPE)
 		t1 = time.time()
 		# while p.poll() is None:
@@ -155,7 +155,7 @@ class Cuts_Caen:
 		while p.poll() is None:
 			continue
 		t0 = time.time() - t0
-		print 'Total time saving {m} events:'.format(m=self.meas), t0, 'seconds'
+		print('Total time saving {m} events:'.format(m=self.meas), t0, 'seconds')
 		self.CreateRootFile()
 		self.MoveBinaryFiles()
 
@@ -166,7 +166,7 @@ class Cuts_Caen:
 		return
 
 	def SetupDigitiser(self):
-		print 'Creating digitiser CAEN V1730D configuration file... ', ; sys.stdout.flush()
+		print('Creating digitiser CAEN V1730D configuration file... ', end=' ') ; sys.stdout.flush()
 		rfile = open('{d}/WaveDumpConfig_CCD_cal.txt'.format(d=self.outdir), 'w')
 		rfile.write('[COMMON]')
 		rfile.write('\n\n# open the digitezer')
@@ -199,7 +199,7 @@ class Cuts_Caen:
 		sig_polarity = 'POSITIVE' if self.bias >= 0 else 'NEGATIVE'
 
 		rfile.write('\n\n# configuration for each channel [0] to [7]')
-		for ch in xrange(16):
+		for ch in range(16):
 			rfile.write('\n\n[{ch}]'.format(ch=ch))
 			if ch == self.sigCh or ch == self.trigCh:
 				rfile.write('\nENABLE_INPUT\tYES')
@@ -216,10 +216,10 @@ class Cuts_Caen:
 				rfile.write('\nTRIGGER_THRESHOLD\t{th}'.format(th=int(round(np.divide(self.trigVal+1-self.trig_offset/50.0, self.sigRes)))))
 		rfile.write('\n')
 		rfile.close()
-		print 'Done'
+		print('Done')
 
 	def CreateRootFile(self):
-		print 'Start creating root file'
+		print('Start creating root file')
 		t0 = time.time()
 		self.rawFile = ro.TFile('{d}/Runs/{r}.root'.format(d=self.outdir, r=self.filename), 'RECREATE')
 		self.treeRaw = ro.TTree(self.filename, self.filename)
@@ -233,13 +233,13 @@ class Cuts_Caen:
 		self.treeRaw.Branch('voltageSignal', voltBra, 'voltageSignal[{s}]/D'.format(s=self.points))
 		self.CreateProgressBar(self.meas)
 		self.bar.start()
-		for ev in xrange(self.meas):
+		for ev in range(self.meas):
 			fs.seek(ev * self.struct_len)
 			ft.seek(ev * self.struct_len)
 			datas = fs.read(self.struct_len)
 			datat = ft.read(self.struct_len)
 			if not datas or not datat:
-				print 'No event in files... exiting'
+				print('No event in files... exiting')
 				exit()
 			s = struct.Struct(self.struct_fmt).unpack_from(datas)
 			signalADCs = np.array(s, 'H')
@@ -263,13 +263,13 @@ class Cuts_Caen:
 		fs.close()
 		ft.close()
 		t0 = time.time() - t0
-		print 'Time creating root tree:', t0, 'seconds'
+		print('Time creating root tree:', t0, 'seconds')
 
 	def MoveBinaryFiles(self):
-		print 'Moving binary files... ', ; sys.stdout.flush()
+		print('Moving binary files... ', end=' ') ; sys.stdout.flush()
 		shutil.move('wave{chs}.dat'.format(chs=self.sigCh), '{d}/Runs/{f}_signal.dat'.format(d=self.outdir, f=self.filename))
 		shutil.move('wave{cht}.dat'.format(cht=self.trigCh), '{d}/Runs/{f}_trigger.dat'.format(d=self.outdir, f=self.filename))
-		print 'Done'
+		print('Done')
 
 	def CreateProgressBar(self, maxVal=1):
 		widgets = [
@@ -285,4 +285,4 @@ class Cuts_Caen:
 
 
 if __name__ == '__main__':
-	print 'blaaa'
+	print('blaaa')

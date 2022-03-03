@@ -10,7 +10,7 @@ class Crystalball:
 		self.graph = graph
 		self.bias = bias
 		yvect, npoints = self.graph.GetY(), self.graph.GetN()
-		yvect = [yvect[i] for i in xrange(npoints)]
+		yvect = [yvect[i] for i in range(npoints)]
 		par0 = max(yvect) if bias < 0 else min(yvect)
 		self.params = np.array([par0, alpha, n, peakpos, sigma, 0], 'f8')
 		self.paramErrors = np.zeros(6, 'f8')
@@ -69,12 +69,12 @@ class Crystalball:
 		self.fit.SetParNames('N', 'Alpha', 'n', 'peakPos', 'Sigma')
 		options = 'QBN0S'
 		ro.Math.MinimizerOptions.SetDefaultMinimizer('Minuit2', 'Migrad')
-		for i in xrange(len(self.params)):
+		for i in range(len(self.params)):
 			self.fit.SetParLimits(i, self.paramsLimitsLow[i], self.paramsLimitsHigh[i])
 		self.resFit = self.graph.Fit(fit_name, options, '', xmin, xmax)
 		self.resFit = self.graph.Fit(fit_name, options, '', xmin, xmax)
 		self.fit.GetParameters(self.params)
-		for i in xrange(len(self.params)):
+		for i in range(len(self.params)):
 			self.paramsFitErrors[i] = self.fit.GetParError(i)
 		self.chi2 = self.fit.GetChisquare()
 		self.ndf = self.fit.GetNDF()
@@ -82,4 +82,4 @@ class Crystalball:
 
 
 if __name__ == '__main__':
-	print 'Bla'
+	print('Bla')

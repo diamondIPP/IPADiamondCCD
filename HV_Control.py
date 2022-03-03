@@ -8,7 +8,7 @@ from optparse import OptionParser
 import progressbar
 import ipdb
 from pykeyboard import PyKeyboard
-from ConfigParser import ConfigParser
+from configparser import ConfigParser
 import subprocess as subp
 import struct
 import ROOT as ro
@@ -33,7 +33,7 @@ class HV_Control:
 		self.ramp = settings.hv_ramp
 		self.supply_number = 0
 		self.time_update = 2.0
-		self.r_passive = self.settings.r_passive if 'r_passive' in self.settings.__dict__.keys() else 230e6
+		self.r_passive = self.settings.r_passive if 'r_passive' in list(self.settings.__dict__.keys()) else 230e6
 		self.abort_percentage_drop = 0.1
 		self.stop_run = False
 		self.out_file = None
@@ -43,7 +43,7 @@ class HV_Control:
 		self.out_file_name = 'hvfile_{f}.dat'.format(f=self.settings.filename)
 		self.time0 = None
 		if self.Pics_folder_path == '':
-			print 'Cannot control voltage because Pics folder (Micha) was not found XD'
+			print('Cannot control voltage because Pics folder (Micha) was not found XD')
 			self.doControlHV = False
 		self.process = None
 		if self.doControlHV:
@@ -70,7 +70,7 @@ class HV_Control:
 
 	def CreateHVClientConfig(self):
 		num_supplies = 9
-		supplies_num = range(1, num_supplies + 1)
+		supplies_num = list(range(1, num_supplies + 1))
 		supplies_ids = {1: 'Keithley1', 2: 'Keithley2410', 3: 'Keithley237', 4: 'Keithley6517', 5: '', 6: 'Keithley2657A', 7: 'ISEG-NHS-6220x', 8: 'ISEG-NHS-6220n', 9: 'Keithley6517B'}
 		conf_file = open('config/hv_{f}.cfg'.format(f=self.filename), 'w')
 
@@ -132,12 +132,12 @@ class HV_Control:
 		iseg_chs = 6
 		conf_file = open('config/iseg_{f}.cfg'.format(f=self.filename), 'w')
 		conf_file.write('[Names]\n')
-		for ch in xrange(iseg_chs):
+		for ch in range(iseg_chs):
 			if ch == self.ch:
 				conf_file.write('CH{ch}: {d}\n'.format(ch=ch, d=self.dut))
 			else:
 				conf_file.write('CH{ch}: None\n'.format(ch=ch))
-		for ch in xrange(iseg_chs):
+		for ch in range(iseg_chs):
 			conf_file.write('\n[CH{ch}]\n'.format(ch=ch))
 			conf_file.write('name: CH{ch}\n'.format(ch=ch))
 			compliance = self.current_limit if ch == self.ch else 250e-9
@@ -170,15 +170,15 @@ class HV_Control:
 		do_ramp = False
 		if delta_voltage >= 1:
 			do_ramp = True
-			print 'Ramping voltage... ', ; sys.stdout.flush()
+			print('Ramping voltage... ', end=' ') ; sys.stdout.flush()
 		while delta_voltage >= 1 and max_tries != 0:
 			self.CorrectBias(delta_voltage)
 			self.ReadLastLine()
 			delta_voltage = abs(self.last_line['voltage'] - self.bias)
 			max_tries -= 1
 			if max_tries == 0:
-				print '\nCould not set the desired voltage. Taking data with {v}V\n'.format(v=self.last_line['voltage'])
-		if do_ramp: print 'Done'
+				print('\nCould not set the desired voltage. Taking data with {v}V\n'.format(v=self.last_line['voltage']))
+		if do_ramp: print('Done')
 
 	def GetLastLogFilePath(self):
 		list_logs = glob.glob('{d}/*.log'.format(d=self.logs_dir))
@@ -242,7 +242,7 @@ class HV_Control:
 					self.last_line['current'] = float(temp_line[2]) if abs(self.last_line['current']) < 100e-6 else 0
 					if self.last_line['voltage'] != 0:
 						if abs(self.last_line['current'] * self.r_passive) > abs(self.abort_percentage_drop * self.last_line['voltage']):
-							print 'due to high current, the voltage in the diamond is below 90% of the intended value. Sending termination signal to the run'
+							print('due to high current, the voltage in the diamond is below 90% of the intended value. Sending termination signal to the run')
 							self.stop_run = True
 		return
 
@@ -288,7 +288,7 @@ class HV_Control:
 	def MoveLogsAndConfig(self):
 		path_dir = '{d}/Runs/{f}/HV_{f}'.format(d=self.settings.outdir, f=self.filename)
 		if os.path.isdir(path_dir) or os.path.isfile(path_dir):
-			print 'HV directory already exists. Recreating'
+			print('HV directory already exists. Recreating')
 			if os.path.isdir(path_dir):
 				shutil.rmtree(path_dir)
 			else:
@@ -297,17 +297,17 @@ class HV_Control:
 		'Moved hv logs to output folder'
 		if os.path.isfile('config/hv_{f}.cfg'.format(f=self.filename)):
 			shutil.move('config/hv_{f}.cfg'.format(f=self.filename), path_dir)
-			print 'Moved hv config file to output folder'
+			print('Moved hv config file to output folder')
 			if self.hv_supply.lower().startswith('iseg'):
 				shutil.move('config/iseg_{f}.cfg'.format(f=self.filename), path_dir)
 			shutil.move(self.out_file_name, path_dir)
-			print 'Moved hv data structure to output folder'
+			print('Moved hv data structure to output folder')
 		del path_dir
 		if os.path.islink('config/keithley.cfg'):
 			os.unlink('config/keithley.cfg')
-			print 'Unlinked config/keithley.cfg'
+			print('Unlinked config/keithley.cfg')
 
 if __name__ == '__main__':
-	print 'blaaaa'
+	print('blaaaa')
 
 

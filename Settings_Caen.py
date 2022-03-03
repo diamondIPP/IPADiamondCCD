@@ -8,13 +8,13 @@ from optparse import OptionParser
 import progressbar
 import ipdb
 from pykeyboard import PyKeyboard
-from ConfigParser import ConfigParser
+from configparser import ConfigParser
 import subprocess as subp
 import struct
 import ROOT as ro
 import shutil
 from Utils import *
-import cPickle as pickle
+import pickle as pickle
 # from DataAcquisition import DataAcquisition
 
 
@@ -100,7 +100,7 @@ class Settings_Caen:
 		parser = ConfigParser()
 		if self.infile != 'None':
 			if os.path.isfile(self.infile):
-				print 'Reading input file: {f} ...'.format(f=self.infile)
+				print('Reading input file: {f} ...'.format(f=self.infile))
 				parser.read(self.infile)
 
 				if parser.has_section('OPTILINK'):
@@ -194,7 +194,7 @@ class Settings_Caen:
 					if parser.has_option('SIGNALCALIBRATION', 'type'):
 						self.cal_type = parser.get('SIGNALCALIBRATION', 'type').lower()
 						if not self.cal_type in ['in', 'out']:
-							print 'The calibration "type" should be either "in" or "out". Exiting'
+							print('The calibration "type" should be either "in" or "out". Exiting')
 							exit()
 					if parser.has_option('SIGNALCALIBRATION', 'trigger_polarity'):
 						self.trig_cal_polarity = 1 if parser.getfloat('SIGNALCALIBRATION', 'trigger_polarity') >= 0 else -1
@@ -235,7 +235,7 @@ class Settings_Caen:
 		if self.voltage_calib_dir != '':
 			if os.path.isdir(self.voltage_calib_dir):
 				v_adc_calfile = ''
-				if 'sig_dc_offset_percent' in self.__dict__.keys():
+				if 'sig_dc_offset_percent' in list(self.__dict__.keys()):
 					v_adc_calfile = 'adc_cal_{c}_{dop}.cal'.format(c=self.sigCh, dop=self.sig_dc_offset_percent)
 				else:
 					v_adc_calfile = 'adc_cal_{c}_{dop}.cal'.format(c=self.sigCh, dop=45 if self.bias < 0 else -45)
@@ -271,7 +271,7 @@ class Settings_Caen:
 			os.makedirs('{d}/Runs/{f}'.format(d=self.outdir, f=self.filename))
 
 	def SetupDigitiser(self, doBaseLines=False, signal=None, trigger=None, ac=None, events_written=0):
-		print 'Creating digitiser CAEN V1730D configuration file... ', ; sys.stdout.flush()
+		print('Creating digitiser CAEN V1730D configuration file... ', end=' ') ; sys.stdout.flush()
 		name_dest = '{d}/WaveDumpConfig_CCD_BL.txt'.format(d=self.outdir) if doBaseLines else '{d}/WaveDumpConfig_CCD.txt'.format(d=self.outdir)
 
 		sig_polarity = 'POSITIVE' if self.bias < 0 else 'NEGATIVE'
@@ -293,7 +293,7 @@ class Settings_Caen:
 							dest_file.write(line)
 
 				dest_file.write('\n# configuration for each channel [0] to [15], although it only has 8 channels ;)')
-				for ch in xrange(16):
+				for ch in range(16):
 					dest_file.write('\n\n[{ch}]'.format(ch=ch))
 					channels = [signal.ch, trigger.ch, ac.ch] if not self.is_cal_run and ac else [signal.ch, trigger.ch]
 					if ch in channels:
@@ -319,7 +319,7 @@ class Settings_Caen:
 							dest_file.write('\nDC_OFFSET\t{o}'.format(o=ac.dc_offset_percent))
 							dest_file.write('\nCHANNEL_TRIGGER\tDISABLED')
 				dest_file.write('\n')
-		print 'Done'
+		print('Done')
 
 	def ADC_to_Volts(self, adcs, channel):
 		return channel.ADC_to_Volts(adcs)
@@ -331,7 +331,7 @@ class Settings_Caen:
 			return int(round(channel.base_line_u_adcs - channel.thr_counts - (2.0**self.dig_bits - 1) * (channel.dc_offset_percent/100.0 - 0.5)))
 
 	def MoveBinaryFiles(self):
-		print 'Moving binary files... ', ; sys.stdout.flush()
+		print('Moving binary files... ', end=' ') ; sys.stdout.flush()
 		shutil.move('raw_wave{chs}.dat'.format(chs=self.sigCh), '{d}/Runs/{f}/{f}_signal.dat'.format(d=self.outdir, f=self.filename))
 		shutil.move('raw_wave{cht}.dat'.format(cht=self.trigCh), '{d}/Runs/{f}/{f}_trigger.dat'.format(d=self.outdir, f=self.filename))
 		if not self.is_cal_run:
@@ -339,12 +339,12 @@ class Settings_Caen:
 		if os.path.isfile('raw_time.dat'):
 			shutil.move('raw_time.dat', '{d}/Runs/{f}/{f}_time.dat'.format(d=self.outdir, f=self.filename))
 		self.RemoveBinaries()
-		print 'Done'
+		print('Done')
 
 	def RenameDigitiserSettings(self):
-		print 'Moving digitiser settings... ', ; sys.stdout.flush()
+		print('Moving digitiser settings... ', end=' ') ; sys.stdout.flush()
 		shutil.move('{d}/WaveDumpConfig_CCD.txt'.format(d=self.outdir), '{d}/Runs/{f}/WDConfig_CCD_{f}.txt'.format(d=self.outdir, f=self.filename))
-		print 'Done'
+		print('Done')
 
 	def RemoveBinaries(self):
 		channels = [self.sigCh, self.trigCh, self.acCh] if not self.is_cal_run else [self.sigCh, self.trigCh]
@@ -366,4 +366,4 @@ class Settings_Caen:
 
 
 if __name__ == '__main__':
-	print 'bla'
+	print('bla')

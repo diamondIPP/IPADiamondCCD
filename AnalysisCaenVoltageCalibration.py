@@ -5,13 +5,13 @@ import struct
 import subprocess as subp
 import sys
 import time
-from ConfigParser import ConfigParser
+from configparser import ConfigParser
 from optparse import OptionParser
 
 
 import ROOT as ro
 import numpy as np
-import cPickle as pickle
+import pickle as pickle
 
 from Channel_Caen import Channel_Caen
 from Settings_Caen import Settings_Caen
@@ -24,7 +24,7 @@ fit_method = ('Minuit2', 'Migrad', )
 
 class AnalysisCaenVoltageCalibration:
 	def __init__(self, directory='.'):
-		print 'Starting Caen Voltage Calibration Analysis ...'
+		print('Starting Caen Voltage Calibration Analysis ...')
 		self.utils = Utils()
 		self.graphs = {}
 		self.canvas = {}
@@ -98,7 +98,7 @@ class AnalysisCaenVoltageCalibration:
 			self.fits['ADC_Voltage_cal'].SetParError(1, self.cal_pickle['fit_p1_error'])
 			self.fits['ADC_Voltage_cal'].SetChisquare(self.cal_pickle['fit_chi2'])
 			self.fits['ADC_Voltage_cal'].SetNDF(self.cal_pickle['fit_ndf'])
-			print 'Loaded pickle:', self.cal_pickles[pos], '. Run LoadPickle again with another argument if you want to load another pickle'
+			print('Loaded pickle:', self.cal_pickles[pos], '. Run LoadPickle again with another argument if you want to load another pickle')
 
 	def EstimateSystematicUncertainty(self, reading, reading_percent=0.6, reading_fixed=0.2):
 		resol = reading_fixed / float(str(reading_fixed).split('.')[-1].strip('0')) if reading_fixed != 0 else ExitMessage('reading_fixed cannot be 0!. Exiting', os.EX_PROTOCOL)
@@ -114,10 +114,10 @@ class AnalysisCaenVoltageCalibration:
 			self.vcals_uncertainty.append(self.EstimateSystematicUncertainty(vcal, ref_acc['percent'], ref_acc['digits']))
 
 	def LoopRuns(self):
-		print 'Looping over all vcals:'
+		print('Looping over all vcals:')
 		self.utils.CreateProgressBar(len(self.vcals))
 		self.utils.bar.start()
-		for pos in xrange(len(self.vcals)):
+		for pos in range(len(self.vcals)):
 			self.working_adcs = []
 			self.LoadRun(pos)
 			self.LoadEvents()
@@ -130,7 +130,7 @@ class AnalysisCaenVoltageCalibration:
 			self.adcs_std.append(np.std(self.working_adcs, dtype='f8') if valid_vcal else 0)
 			self.utils.bar.update(pos + 1)
 		self.utils.bar.finish()
-		print 'Finished with all vcals :)'
+		print('Finished with all vcals :)')
 
 	def LoadEvents(self):
 		unpack_fmt = '@' + str(self.working_num_events * self.working_settings.points) + 'H'
@@ -211,7 +211,7 @@ class AnalysisCaenVoltageCalibration:
 		self.canvas[name].SaveAs('{d}/{n}_{c}_{o}.root'.format(d=self.inDir, n=name, c=self.working_caen_ch, o=self.working_caen_ch_dc_off_percent))
 
 	def FitGraph(self, name='ADC_Voltage_cal'):
-		if name in self.graphs.keys():
+		if name in list(self.graphs.keys()):
 			if self.graphs[name]:
 				ro.Math.MinimizerOptions.SetDefaultMinimizer(*fit_method)
 				ro.Math.MinimizerOptions.SetDefaultMaxFunctionCalls(1000000)
@@ -229,18 +229,18 @@ class AnalysisCaenVoltageCalibration:
 				self.fits[name].Draw('same')
 
 	def CheckExistingCanvas(self, name='ADC_Voltage_cal'):
-		if name in self.canvas.keys():
+		if name in list(self.canvas.keys()):
 			if self.canvas[name]:
 				self.canvas[name].Close()
 				del self.canvas[name]
 				
 	def CheckExistingGraph(self, name='ADC_Voltage_cal'):
-		if name in self.graphs.keys():
+		if name in list(self.graphs.keys()):
 			if self.graphs[name]:
 				del self.graphs[name]
 
 	def CheckExistingFits(self, name='ADC_Voltage_cal'):
-		if name in self.fits.keys():
+		if name in list(self.fits.keys()):
 			if self.fits[name]:
 				del self.fits[name]
 
@@ -266,11 +266,11 @@ class AnalysisCaenVoltageCalibration:
 			self.FillPickle(name)
 		if os.path.isfile('{d}/{pn}'.format(d=self.inDir, pn=self.cal_pickle_name)):
 			if not overwrite:
-				print 'The file', self.cal_pickle_name, 'already exists in', self.inDir
+				print('The file', self.cal_pickle_name, 'already exists in', self.inDir)
 				return
 		with open('{d}/{pn}'.format(d=self.inDir, pn=self.cal_pickle_name), 'wb') as fpickle:
 			pickle.dump(self.cal_pickle, fpickle, pickle.HIGHEST_PROTOCOL)
-		print 'Saved calibration pickle', self.cal_pickle_name, 'in', self.inDir
+		print('Saved calibration pickle', self.cal_pickle_name, 'in', self.inDir)
 
 
 if __name__ == '__main__':

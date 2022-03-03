@@ -55,28 +55,28 @@ class ParallelManager:
 
 	def RunParallelConversion(self):
 		os.chdir(self.workind_dir)
-		print '\nRunning', len(self.runlist), 'jobs in parallel for', self.num_cores, 'cores\n'
-		self.runs_dic_completed = OrderedDict(zip(self.runlist, [False for r in self.runlist]))
-		self.runs_dic_running = OrderedDict(zip(self.runlist, [False for r in self.runlist]))
-		self.queue = {c: None for c in xrange(self.num_cores)}
-		self.queue_running = {c: False for c in xrange(self.num_cores)}
-		self.queue_showing = {c: False for c in xrange(self.num_cores)}
-		self.queue_runs = {c: None for c in xrange(self.num_cores)}
+		print('\nRunning', len(self.runlist), 'jobs in parallel for', self.num_cores, 'cores\n')
+		self.runs_dic_completed = OrderedDict(list(zip(self.runlist, [False for r in self.runlist])))
+		self.runs_dic_running = OrderedDict(list(zip(self.runlist, [False for r in self.runlist])))
+		self.queue = {c: None for c in range(self.num_cores)}
+		self.queue_running = {c: False for c in range(self.num_cores)}
+		self.queue_showing = {c: False for c in range(self.num_cores)}
+		self.queue_runs = {c: None for c in range(self.num_cores)}
 		first_time = True
 		# ipdb.set_trace()
 		with open(os.devnull, 'w') as FNULL:
-			while not np.array(self.runs_dic_completed.values(), '?').all():
-				pending = np.bitwise_not(np.bitwise_or(self.runs_dic_running.values(), self.runs_dic_completed.values()))
+			while not np.array(list(self.runs_dic_completed.values()), '?').all():
+				pending = np.bitwise_not(np.bitwise_or(list(self.runs_dic_running.values()), list(self.runs_dic_completed.values())))
 				pos_run, num_runs_left = pending.argmax(), pending.sum()
 				jobi = self.runlist[pos_run]
 				option = self.options[pos_run]
-				do_add_queue = not np.array(self.queue_running.values(), '?').all() and num_runs_left > 0
+				do_add_queue = not np.array(list(self.queue_running.values()), '?').all() and num_runs_left > 0
 				if do_add_queue:
-					pos_q, nfree = np.array(self.queue_running.values(), '?').argmin(), np.bitwise_not(self.queue_running.values()).sum()
-					print '\nRunning job', jobi, '...'
+					pos_q, nfree = np.array(list(self.queue_running.values()), '?').argmin(), np.bitwise_not(list(self.queue_running.values())).sum()
+					print('\nRunning job', jobi, '...')
 					command = [self.workind_dir + '/' + self.exec_command] + option
-					if nfree == 1 and not np.array(self.queue_showing.values(), '?').any() and self.verb:
-						print '\nShowing output for job', jobi
+					if nfree == 1 and not np.array(list(self.queue_showing.values()), '?').any() and self.verb:
+						print('\nShowing output for job', jobi)
 						self.queue[pos_q] = subp.Popen(command, bufsize=-1, stdin=subp.PIPE, close_fds=True)
 						# self.queue[pos_q] = 'blaa'
 						self.queue_showing[pos_q] = True
@@ -88,13 +88,13 @@ class ParallelManager:
 					self.queue_runs[pos_q] = jobi
 				if not first_time:
 					temp = deepcopy(self.queue_running)
-					for p, queue_p in temp.iteritems():
+					for p, queue_p in temp.items():
 						if queue_p:
 							if self.queue[p]:
 								temp2 = self.queue[p]
 								if temp2.poll() is not None:
 									jobj = self.queue_runs[p]
-									print '\nJob', jobj, 'completed :). Closing ...\r',
+									print('\nJob', jobj, 'completed :). Closing ...\r', end=' ')
 									self.CloseSubprocess(self.queue[p], stdin=True, stdout=False)
 									self.queue[p] = None
 									self.queue_running[p] = False
@@ -102,15 +102,15 @@ class ParallelManager:
 										self.queue_showing[p] = False
 									self.runs_dic_running[jobj] = False
 									self.runs_dic_completed[jobj] = True
-									print 'Job', jobj, 'completed :). Closing ... Done\n'
+									print('Job', jobj, 'completed :). Closing ... Done\n')
 					time.sleep(3)
 				else:
-					first_time = not np.array(self.queue_running.values(), '?').all()
+					first_time = not np.array(list(self.queue_running.values()), '?').all()
 
 	def GetAvailablePos(self):
 		pos = -1
 		num_free = 0
-		for p, elem in self.queue.iteritems():
+		for p, elem in self.queue.items():
 			if not elem:
 				if pos == -1:
 					pos = p
@@ -125,25 +125,25 @@ class ParallelManager:
 			p.stdout.close()
 		time.sleep(1)
 		if p.wait() is None:
-			print 'Could not terminate subprocess... forcing termination'
+			print('Could not terminate subprocess... forcing termination')
 			p.kill()
 			time.sleep(1)
 			if p.wait() is None:
-				print 'Could not kill subprocess... quitting'
+				print('Could not kill subprocess... quitting')
 				exit(os.EX_SOFTWARE)
 		try:
 			os.kill(pid, 0)
 		except OSError:
 			pass
 		else:
-			print 'The subprocess is still running. Killing it with os.kill'
+			print('The subprocess is still running. Killing it with os.kill')
 			os.kill(pid, 15)
 			try:
 				os.kill(pid, 0)
 			except OSError:
 				pass
 			else:
-				print 'The process does not die... quitting'
+				print('The process does not die... quitting')
 				exit(os.EX_SOFTWARE)
 		del pid
 		p = None

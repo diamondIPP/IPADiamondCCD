@@ -5,14 +5,14 @@ import struct
 import subprocess as subp
 import sys
 import time
-from ConfigParser import ConfigParser
+from configparser import ConfigParser
 from optparse import OptionParser
 
 from collections import OrderedDict
 
 import ROOT as ro
 import numpy as np
-import cPickle as pickle
+import pickle as pickle
 
 from Channel_Caen import Channel_Caen
 from Settings_Caen import Settings_Caen
@@ -33,7 +33,7 @@ ANALYSISSCALARBRANCHES = ['pedestal', 'pedestalSigma', 'signalAndPedestal', 'sig
 
 class VoltageScanResults:
 	def __init__(self, directory='.', runlist='RunList.ini'):
-		print 'Gathering Voltage scan results ...'
+		print('Gathering Voltage scan results ...')
 
 		self.runlist = runlist
 		self.inputFile = ''
@@ -43,10 +43,10 @@ class VoltageScanResults:
 		self.LoadRunList()
 
 	def LoadRunList(self):
-		print 'Reading Run List...', ; sys.stdout.flush()
-		with open(self.runlist, 'r') as rl:
+		print('Reading Run List...', end=' ') ; sys.stdout.flush()
+		# with open(self.runlist, 'r') as rl:
 			
-		print 'Done'
+		print('Done')
 
 	def SetFromSettingsFile(self):
 		if self.settings:
@@ -62,10 +62,10 @@ class VoltageScanResults:
 			elif len(root_files) == 0:
 				ExitMessage('There is no root file inside the directory {d}. Exiting...'.format(d=self.inDir), os.EX_DATAERR)
 			else:
-				print 'The following files were encountered:'
+				print('The following files were encountered:')
 				for it in root_files:
-					print it
-				file_to_open = raw_input('Copy and paste the one that you want to open (should be input converted root file): ')
+					print(it)
+				file_to_open = input('Copy and paste the one that you want to open (should be input converted root file): ')
 				if file_to_open in root_files:
 					self.in_tree_name = file_to_open.split('/')[-1].split('.root')[0]
 				else:
@@ -149,7 +149,7 @@ class VoltageScanResults:
 	def LoadAnalysisTree(self):
 		self.analysisTreeExisted = True
 		if not self.analysisFile.IsOpen():
-			print 'Analysis file is closed. Opening it in update mode...'
+			print('Analysis file is closed. Opening it in update mode...')
 			self.OpenAnalysisROOTFile('UPDATE')
 		self.analysisFile.cd()
 		self.analysisTree = self.analysisFile.Get(self.analysisTreeName)
@@ -175,13 +175,13 @@ class VoltageScanResults:
 				if 'timeHV.Convert()' in self.branches1DLoad: self.branches1DLoad.remove('timeHV.Convert()')
 				# del self.branches1DType['timeHV']
 				# self.branches1DType['timeHV.AsDouble()'] = 'float64'
-				if self.branches1DType.has_key('timeHV.Convert()'): del self.branches1DType['timeHV.Convert()']
+				if 'timeHV.Convert()' in self.branches1DType: del self.branches1DType['timeHV.Convert()']
 			else:
 				# self.branches1DLoad = ['timeHV.Convert()' if branch == 'timeHV' else branch for branch in self.branches1DLoad]
 				if 'timeHV.AsDouble()' in self.branches1DLoad: self.branches1DLoad.remove('timeHV.AsDouble()')
 				# del self.branches1DType['timeHV']
 				# self.branches1DType['timeHV.Convert()'] = 'uint32'
-				if self.branches1DType.has_key('timeHV.AsDouble()'): del self.branches1DType['timeHV.AsDouble()']
+				if 'timeHV.AsDouble()' in self.branches1DType: del self.branches1DType['timeHV.AsDouble()']
 
 	def UpdateBranchesLists(self):
 		for branch in self.branches1DTotal[:]:
@@ -192,14 +192,14 @@ class VoltageScanResults:
 				if not self.hasBranch['timeHV']:
 					self.branches1DLoad.remove(branch)
 				else:
-					if self.dicBraVect1D.has_key(branch):
+					if branch in self.dicBraVect1D:
 						self.dic1DVectLoaded[branch] = True if self.dicBraVect1D[branch] else False
 					else:
 						self.dic1DVectLoaded[branch] = False
 			elif not self.hasBranch[branch]:
 				self.branches1DLoad.remove(branch)
 			else:
-				if self.dicBraVect1D.has_key(branch):
+				if branch in self.dicBraVect1D:
 					self.dic1DVectLoaded[branch] = True if self.dicBraVect1D[branch] else False
 				else:
 					self.dic1DVectLoaded[branch] = False
@@ -211,7 +211,7 @@ class VoltageScanResults:
 			if not self.hasBranch[branch]:
 				self.branchesWavesLoad.remove(branch)
 			else:
-				if self.dicBraVectWaves.has_key(branch):
+				if branch in self.dicBraVectWaves:
 					self.dicWavesVectLoaded[branch] = True if self.dicBraVectWaves[branch] else False
 				else:
 					self.dicWavesVectLoaded[branch] = False
@@ -242,33 +242,33 @@ class VoltageScanResults:
 		options = 'goff' if len(branches_to_load_1D) == 1 else 'goff para'
 		leng = working_tree.Draw(':'.join(branches_to_load_1D), self.cut0, options, self.max_events)
 		if leng == -1:
-			print 'Error, could not load the branches: {b}. Try again :('.format(b=':'.join(branches_to_load_1D))
+			print('Error, could not load the branches: {b}. Try again :('.format(b=':'.join(branches_to_load_1D)))
 			return
 		while leng > working_tree.GetEstimate():
 			working_tree.SetEstimate(leng)
 			leng = working_tree.Draw(':'.join(branches_to_load_1D), self.cut0, options, self.max_events)
 		self.events = leng
 		for pos, branch in enumerate(branches_to_load_1D):
-			if self.verb: print 'Vectorising branch:', branch, '...', ; sys.stdout.flush()
+			if self.verb: print('Vectorising branch:', branch, '...', end=' ') ; sys.stdout.flush()
 			temp = working_tree.GetVal(pos)
-			self.dicBraVect1D[branch] = np.array([temp[ev] for ev in xrange(self.events)], dtype=np.dtype(self.branches1DType[branch]))
+			self.dicBraVect1D[branch] = np.array([temp[ev] for ev in range(self.events)], dtype=np.dtype(self.branches1DType[branch]))
 			self.dic1DVectLoaded[branch] = True
-			if self.verb: print 'Done'
+			if self.verb: print('Done')
 
 		branches_to_load_waves = [branch for branch in self.branchesWavesLoad if not self.dicWavesVectLoaded[branch]]
 		leng = working_tree.Draw(':'.join(branches_to_load_waves), self.cut0, 'goff para', self.max_events)
 		if leng == -1:
-			print 'Error, could not load the branches {b}. Try again :('.format(b=':'.join(branches_to_load_waves))
+			print('Error, could not load the branches {b}. Try again :('.format(b=':'.join(branches_to_load_waves)))
 			return
 		while leng > working_tree.GetEstimate():
 			working_tree.SetEstimate(leng)
 			leng = working_tree.Draw(':'.join(branches_to_load_waves), self.cut0, 'goff para', self.max_events)
 		for pos, branch in enumerate(branches_to_load_waves):
-			if self.verb: print 'Vectorising branch:', branch, '...', ; sys.stdout.flush()
+			if self.verb: print('Vectorising branch:', branch, '...', end=' ') ; sys.stdout.flush()
 			temp = working_tree.GetVal(pos)
-			self.dicBraVectWaves[branch] = np.array([[temp[ev * self.ptsWave + pt] for pt in xrange(self.ptsWave)] for ev in xrange(self.events)], dtype=np.dtype(self.branchesWavesType[branch]))
+			self.dicBraVectWaves[branch] = np.array([[temp[ev * self.ptsWave + pt] for pt in range(self.ptsWave)] for ev in range(self.events)], dtype=np.dtype(self.branchesWavesType[branch]))
 			self.dicWavesVectLoaded[branch] = True
-			if self.verb: print 'Done'
+			if self.verb: print('Done')
 
 	def ExplicitVectorsFromDictionary(self):
 		if self.hasBranch['voltageSignal']:
@@ -295,7 +295,7 @@ class VoltageScanResults:
 				self.peak_positions = self.dicBraVect1D['peakPosition']
 
 	def FindRealPeakPosition(self):
-		print 'Getting real peak positions...'
+		print('Getting real peak positions...')
 		mpos = self.signalWaveVect.argmin(axis=1) if self.bias >= 0 else self.signalWaveVect.argmax(axis=1)
 		# time_mpos = self.timeVect[:, mpos].diagonal()
 		time_mpos = np.array([self.timeVect[it[0], pos] for it, pos in np.ndenumerate(mpos)])
@@ -304,7 +304,7 @@ class VoltageScanResults:
 		par0ini = 3.14 if self.bias >= 0 else -3.14
 		ro.Math.MinimizerOptions.SetDefaultMinimizer('Minuit2', 'Migrad')
 		self.peak_positions = []
-		print 'Calculating peak positions...'
+		print('Calculating peak positions...')
 		self.utils.CreateProgressBar(len(self.timeVect))
 		self.utils.bar.start()
 		for it, timei in enumerate(self.timeVect):
@@ -335,17 +335,17 @@ class VoltageScanResults:
 		# self.peak_positions = np.array([fiti.Parameter(1) for fiti in fit])
 		self.peak_positions = np.array(self.peak_positions)
 		self.utils.bar.finish()
-		print 'Done getting real peak positions'
+		print('Done getting real peak positions')
 
 	def FillTreePeakPositions(self):
-		print 'Filling tree with peak positions...'
+		print('Filling tree with peak positions...')
 		peakPosBra = self.analysisTree.Branch('peakPosition', self.peak_position, 'peakPosition/F')
 		entries = self.in_root_tree.GetEntries()
 		self.CloseInputROOTFiles()
 		self.utils.CreateProgressBar(entries)
 		self.utils.bar.start()
 		self.analysisFile.cd()
-		for ev in xrange(entries):
+		for ev in range(entries):
 			# self.in_root_tree.GetEntry(ev)
 			if ev in self.eventVect:
 				try:
@@ -398,26 +398,26 @@ class VoltageScanResults:
 		self.cut0 += ro.TCut('peakTimeCut', 'abs(peakPosition-{pp})<={ppc}'.format(pp=self.peakTime, ppc=self.peakTimeCut))
 
 	def FindPedestalPosition(self):
-		print 'Calculating position of pedestals...', ;sys.stdout.flush()
+		print('Calculating position of pedestals...', end=' ') ;sys.stdout.flush()
 		self.pedestalTimeIndices = [np.argwhere(np.bitwise_and(self.pedestalTEndPos - self.pedestalIntegrationTime <= timeVectEvi, timeVectEvi <= self.pedestalTEndPos)).flatten() for timeVectEvi in self.timeVect]
-		print 'Done'
+		print('Done')
 
 	def FindSignalPositions(self, backward, forward):
-		print 'Calculating position of signals...', ;sys.stdout.flush()
+		print('Calculating position of signals...', end=' ') ;sys.stdout.flush()
 		self.signalTimeIndices = [np.argwhere(abs(timeVectEvi - self.peak_positions[it] + (forward - backward)/2.0) <= (forward + backward)/2.0).flatten() for it, timeVectEvi in enumerate(self.timeVect)]
-		print 'Done'
+		print('Done')
 
 	def CalculatePedestalsAndSignals(self):
-		print 'Calculating pedestals and signals...', ;sys.stdout.flush()
+		print('Calculating pedestals and signals...', end=' ') ;sys.stdout.flush()
 		self.pedVect = np.array([self.signalWaveVect[ev, pedTimeIndxs].mean() if pedTimeIndxs.size > 0 else -10 for ev, pedTimeIndxs in enumerate(self.pedestalTimeIndices)])
 		self.pedSigmaVect = np.array([self.signalWaveVect[ev, pedTimeIndxs].std() if pedTimeIndxs.size > 1 else -10 for ev, pedTimeIndxs in enumerate(self.pedestalTimeIndices)])
 		self.sigAndPedVect = np.array([self.signalWaveVect[ev, sigTimeIndxs].mean() if sigTimeIndxs.size > 0 else -10 for ev, sigTimeIndxs in enumerate(self.signalTimeIndices)])
 		self.sigAndPedSigmaVect = np.array([self.signalWaveVect[ev, sigTimeIndxs].std() if sigTimeIndxs.size > 1 else -10 for ev, sigTimeIndxs in enumerate(self.signalTimeIndices)])
 		self.sigVect = np.subtract(self.sigAndPedVect, self.pedVect)
-		print 'Done'
+		print('Done')
 
 	def FillPedestalsAndSignals(self):
-		print 'Filling tree with scalars...'
+		print('Filling tree with scalars...')
 		pedBra = self.analysisTree.Branch('pedestal', self.ped, 'pedestal/F')
 		pedSigmaBra = self.analysisTree.Branch('pedestalSigma', self.pedSigma, 'pedestalSigma/F')
 		pedSignalBra = self.analysisTree.Branch('signalAndPedestal', self.sigAndPed, 'signalAndPedestal/F')
@@ -428,7 +428,7 @@ class VoltageScanResults:
 		self.analysisFile.cd()
 		self.utils.CreateProgressBar(self.max_events)
 		self.utils.bar.start()
-		for ev in xrange(entries):
+		for ev in range(entries):
 			# self.in_root_tree.GetEntry(ev)
 			self.analysisTree.GetEntry(ev)
 			if ev in self.eventVect:
@@ -461,7 +461,7 @@ class VoltageScanResults:
 		self.utils.bar.finish()
 
 	def FillAnalysisBranches(self):
-		print 'Filling analysis tree ...'
+		print('Filling analysis tree ...')
 		peakPosBra = self.analysisTree.Branch('peakPosition', self.peak_position, 'peakPosition/F')
 		pedBra = self.analysisTree.Branch('pedestal', self.ped, 'pedestal/F')
 		pedSigmaBra = self.analysisTree.Branch('pedestalSigma', self.pedSigma, 'pedestalSigma/F')
@@ -473,7 +473,7 @@ class VoltageScanResults:
 		self.analysisFile.cd()
 		self.utils.CreateProgressBar(self.max_events)
 		self.utils.bar.start()
-		for ev in xrange(entries):
+		for ev in range(entries):
 			# self.in_root_tree.GetEntry(ev)
 			if ev in self.eventVect:
 				try:
@@ -507,7 +507,7 @@ class VoltageScanResults:
 
 	def DrawHisto(self, name, xmin, xmax, deltax, var, varname, cuts='', option='e'):
 		ro.TFormula.SetMaxima(100000)
-		if self.histo.has_key(name):
+		if name in self.histo:
 			if self.histo[name]:
 				self.histo[name].Delete()
 			del self.histo[name]
@@ -515,7 +515,7 @@ class VoltageScanResults:
 		self.histo[name].GetXaxis().SetTitle(varname)
 		self.histo[name].GetYaxis().SetTitle('entries')
 		if 'goff' not in option:
-			if self.canvas.has_key(name):
+			if name in self.canvas:
 				if self.canvas[name]:
 					self.canvas[name].Close()
 				del self.canvas[name]
@@ -534,7 +534,7 @@ class VoltageScanResults:
 
 	def DrawHisto2D(self, name, varx, xmin, xmax, deltax, xname, vary, ymin, ymax, deltay, yname, cuts='', option='colz', num_evts=1000000000, start_ev=0):
 		ro.TFormula.SetMaxima(100000)
-		if self.histo.has_key(name):
+		if name in self.histo:
 			if self.histo[name]:
 				self.histo[name].Delete()
 			del self.histo[name]
@@ -543,7 +543,7 @@ class VoltageScanResults:
 		self.histo[name].GetYaxis().SetTitle(yname)
 		self.histo[name].GetZaxis().SetTitle('entries')
 		if 'goff' not in option:
-			if self.canvas.has_key(name):
+			if name in self.canvas:
 				if self.canvas[name]:
 					self.canvas[name].Close()
 				del self.canvas[name]
@@ -632,7 +632,7 @@ class VoltageScanResults:
 	def PlotWaveforms(self, name='SignalWaveform', type='signal', vbins=0, cuts='', option='colz', start_ev=0, num_evs=0, do_logz=False):
 		var = 'voltageSignal' if 'signal' in type.lower() else 'voltageTrigger' if 'trig' in type.lower() else 'voltageVeto' if 'veto' in type.lower() else ''
 		if var == '':
-			print 'type should be "signal", "trigger" or "veto"'
+			print('type should be "signal", "trigger" or "veto"')
 			return
 		# cuts0 = self.cut0.GetTitle() if cuts == '' else cuts
 		vname = ('signal' if var == 'voltageSignal' else 'trigger' if var == 'voltageTrigger' else 'veto' if var == 'voltageVeto' else '') + ' [V]'
@@ -655,7 +655,7 @@ class VoltageScanResults:
 		if self.peakTime:
 			store_peakTime = self.peakTime
 		else:
-			print 'Find first the peak of the distribution with PlotPeakDistributions'
+			print('Find first the peak of the distribution with PlotPeakDistributions')
 			return
 		self.utils.CreateProgressBar(len(t0_vec))
 		self.utils.bar.start()
@@ -678,8 +678,8 @@ class VoltageScanResults:
 		self.peakTime = store_peakTime
 
 	def ResetTreeToOriginal(self, keepBranches=['event','time','voltageSignal','voltageTrigger','voltageVeto','vetoedEvent','badShape','badPedestal','voltageHV','currentHV','timeHV']):
-		print 'Restoring tree with the following branches:', keepBranches, '...'
-		raw_input('Press a key and Enter to continue: ')
+		print('Restoring tree with the following branches:', keepBranches, '...')
+		input('Press a key and Enter to continue: ')
 		self.OpenAnalysisROOTFile('READ')
 		self.LoadAnalysisTree()
 		self.in_root_tree.SetBranchStatus('*', 0)
@@ -702,16 +702,16 @@ class VoltageScanResults:
 					doMoveFile = False
 					break
 			if doMoveFile:
-				print 'The file was cloned successfully :)'
+				print('The file was cloned successfully :)')
 				checkFile.Close()
 				del checkFile
 				shutil.move('{o}/temp.root'.format(o=self.outDir), '{o}/{f}'.format(o=self.outDir, f=self.inputFile))
 				return
-		print 'The file was not cloned successfully :S. Check original tree and "temp.root"'
+		print('The file was not cloned successfully :S. Check original tree and "temp.root"')
 
 	def PrintPlotLimits(self, ti=-5.12e-7, tf=4.606e-6, vmin=-0.7, vmax=0.05):
-		print np.double([(tf-ti)/float(self.settings.time_res) +1, ti-self.settings.time_res/2.0,
-		                 tf+self.settings.time_res/2.0, (vmax-vmin)/self.settings.sigRes, vmin, vmax])
+		print(np.double([(tf-ti)/float(self.settings.time_res) +1, ti-self.settings.time_res/2.0,
+		                 tf+self.settings.time_res/2.0, (vmax-vmin)/self.settings.sigRes, vmin, vmax]))
 
 	def FitLanGaus(self, name, conv_steps=100, color=ro.kRed, xmin=-10000000, xmax=-10000000):
 		self.canvas[name].cd()
@@ -736,19 +736,19 @@ class VoltageScanResults:
 		self.histo[name].SetStats(0)
 		self.canvas[name].Modified()
 		ro.gPad.Update()
-		print 'Fit {n}: <PH> = {f}'.format(n=name, f=fitmean)
-		print 'Histo {n}: <PH> = {f}'.format(n=name, f=self.histo[name].GetMean())
+		print('Fit {n}: <PH> = {f}'.format(n=name, f=fitmean))
+		print('Histo {n}: <PH> = {f}'.format(n=name, f=self.histo[name].GetMean()))
 
 	def SaveCanvasInlist(self, lista):
 		if not os.path.isdir('{d}'.format(d=self.inDir)):
 			ExitMessage('The directory does not exist!!!!', os.EX_UNAVAILABLE)
 		for canv in lista:
-			if self.canvas.has_key(canv):
+			if canv in self.canvas:
 				self.canvas[canv].SaveAs('{d}/{c}.png'.format(d=self.inDir, c=canv))
 				self.canvas[canv].SaveAs('{d}/{c}.root'.format(d=self.inDir, c=canv))
 
 	def SaveAllCanvas(self):
-		self.SaveCanvasInlist(self.canvas.keys())
+		self.SaveCanvasInlist(list(self.canvas.keys()))
 
 # def main():
 # 	parser = OptionParser()

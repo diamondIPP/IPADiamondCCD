@@ -4,7 +4,7 @@ from struct import unpack
 import time, os, sys
 from optparse import OptionParser
 import ipdb
-import cPickle as pickle
+import pickle as pickle
 from Utils import *
 from Settings_Caen import Settings_Caen
 from Converter_Caen import Converter_Caen
@@ -46,14 +46,14 @@ class ConvertAllRunsAgain:
 		self.time0 = time.time()
 		working_dir = os.getcwd()
 		self.num_cores = num_cores if num_cores <= int(mp.cpu_count()/2.0) else int(mp.cpu_count()/2.0) if mp.cpu_count() != 1 else 1
-		self.job_chunks = [self.runs[i:i + self.num_cores] for i in xrange(0, self.num_runs, self.num_cores)]
+		self.job_chunks = [self.runs[i:i + self.num_cores] for i in range(0, self.num_runs, self.num_cores)]
 		self.num_cores = min(self.num_cores, self.num_runs)
 		self.parallelManager = ParallelManager()
-		options = [[self.runs_settings[pos], self.runs[pos], '0'] for pos in xrange(self.num_runs)]
+		options = [[self.runs_settings[pos], self.runs[pos], '0'] for pos in range(self.num_runs)]
 		self.parallelManager.SetVariables(working_dir=working_dir, runlist=self.runs, exec_command='Converter_Caen.py', options=options, num_cores=self.num_cores)
 		self.parallelManager.RunParallelConversion()
 		self.time0 = time.time() - self.time0
-		print 'Runs converted in', self.time0, 'seconds,', self.time0/float(self.num_runs + 0.0000001), 'seconds per run. Exiting :D'
+		print('Runs converted in', self.time0, 'seconds,', self.time0/float(self.num_runs + 0.0000001), 'seconds per run. Exiting :D')
 
 
 def main():

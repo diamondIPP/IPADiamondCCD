@@ -4,7 +4,7 @@ from struct import unpack
 import time, os, sys
 from optparse import OptionParser
 import ipdb
-import cPickle as pickle
+import pickle as pickle
 from Utils import *
 from Settings_Caen import Settings_Caen
 from Modify_Settings_Caen import Modify_Pickles_Caen
@@ -19,8 +19,8 @@ class CorrectAdcVoltageCalAllRuns:
 	def MakeAllCalibrationModifications(self, vcaldir=''):
 		for run in self.runs:
 			if os.path.isdir(run):
-				print 'Modifying run', run
-				print 'Backing up old pickles...', ; sys.stdout.flush()
+				print('Modifying run', run)
+				print('Backing up old pickles...', end=' ') ; sys.stdout.flush()
 				settingsfs = glob.glob(run + '/*.settings')
 				signalsfs =  glob.glob(run + '/*.signal_ch')
 				triggersfs =  glob.glob(run + '/*.trigger_ch')
@@ -33,11 +33,11 @@ class CorrectAdcVoltageCalAllRuns:
 					shutil.copy2(triggersfs[0], triggersfs[0] + '.bkp')
 				if len(vetosfs) > 0:
 					shutil.copy2(vetosfs[0], vetosfs[0] + '.bkp')
-				print 'Done'
+				print('Done')
 				modPickleRun = Modify_Pickles_Caen(run)
 				modPickleRun.CorrectAdcVoltageCal(vcaldir)
 				modPickleRun.SavePickles()
-				print 'Finish with run', run, '\n'
+				print('Finish with run', run, '\n')
 
 def main():
 	parser = OptionParser()

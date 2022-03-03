@@ -8,7 +8,7 @@ from optparse import OptionParser
 import progressbar
 import ipdb
 from pykeyboard import PyKeyboard
-from ConfigParser import ConfigParser
+from configparser import ConfigParser
 import subprocess as subp
 import struct
 import ROOT as ro
@@ -31,13 +31,13 @@ class Converter_Caen:
 		self.settings = pickle.load(open('{d}/{f}.settings'.format(d=self.output_dir, f=self.filename), 'rb'))
 		self.signal_ch = pickle.load(open('{d}/{f}.signal_ch'.format(d=self.output_dir, f=self.filename), 'rb'))
 		self.trigger_ch = pickle.load(open('{d}/{f}.trigger_ch'.format(d=self.output_dir, f=self.filename), 'rb'))
-		self.is_cal_run = self.settings.is_cal_run if 'is_cal_run' in self.settings.__dict__.keys() else False
+		self.is_cal_run = self.settings.is_cal_run if 'is_cal_run' in list(self.settings.__dict__.keys()) else False
 		self.doVeto = True if not self.is_cal_run else False
 		self.veto_ch = pickle.load(open('{d}/{f}.veto'.format(d=self.output_dir, f=self.filename), 'rb')) if self.doVeto else None
 
 		self.settings.simultaneous_conversion = simultaneous_data_conv #  overrides the flag used while taking data, if it is converted offline
 		self.control_hv = self.settings.do_hv_control
-		self.r_passive = self.settings.r_passive if 'r_passive' in self.settings.__dict__.keys() else 230e6
+		self.r_passive = self.settings.r_passive if 'r_passive' in list(self.settings.__dict__.keys()) else 230e6
 
 		self.signal_path = data_path + '/raw_wave{chs}.dat'.format(chs=self.settings.sigCh) if self.settings.simultaneous_conversion else data_path + '/' + self.filename + '_signal.dat'
 		self.trigger_path = data_path + '/raw_wave{cht}.dat'.format(cht=self.settings.trigCh) if self.settings.simultaneous_conversion else data_path + '/' + self.filename + '_trigger.dat'
@@ -48,7 +48,7 @@ class Converter_Caen:
 		if self.control_hv:
 			self.hv_log_files_path = data_path + '/{f}/{d}_CH{ch}'.format(f=self.filename, d=self.settings.hv_supply, ch=self.settings.hv_ch) if self.settings.simultaneous_conversion else '{d}/Runs/{f}/HV_{f}/{s}_CH{ch}'.format(d=self.settings.outdir, f=self.filename, s=self.settings.hv_supply, ch=self.settings.hv_ch)
 
-			print 'HV log files are in:', self.hv_log_files_path
+			print('HV log files are in:', self.hv_log_files_path)
 
 		self.points = self.settings.points
 		self.num_events = self.settings.num_events
@@ -151,7 +151,7 @@ class Converter_Caen:
 				if temptree.FindLeaf('timeHV'):
 					if temptree.GetLeaf('timeHV').GetTypeName() != 'TDatime':
 						if not os.path.isfile(self.time_path):
-							print 'Extracting timestamp from existing root tree.'
+							print('Extracting timestamp from existing root tree.')
 							temptimefile = open(self.time_path, 'wb')
 							temptimefile.close()
 							leng = temptree.Draw('timeHV.AsDouble()', '', 'goff')
@@ -159,27 +159,27 @@ class Converter_Caen:
 								temptree.SetEstimate(leng)
 								leng = temptree.Draw('timeHV.AsDouble()', '', 'goff')
 							timehv = temptree.GetVal(0)
-							timehv = np.array([timehv[i] for i in xrange(leng)], dtype='f8')
-							print 'Finished extracting timestamp from existing root tree.'
+							timehv = np.array([timehv[i] for i in range(leng)], dtype='f8')
+							print('Finished extracting timestamp from existing root tree.')
 							timehvseconds = timehv.astype('int32')
 							timehvnanoseconds = np.multiply(1e9, np.subtract(timehv, timehvseconds, dtype='f8'), dtype='f8').astype('int32')
-							print 'Extracted time in seconds and nanoseconds. Creating binary raw file'
+							print('Extracted time in seconds and nanoseconds. Creating binary raw file')
 							with open(self.time_path, 'ab') as temptimefile:
 								for tsec, tnsec in zip(timehvseconds, timehvnanoseconds):
 									datatime = struct.pack(self.time_struct_fmt, int(tsec), int(tnsec))
 									temptimefile.write(datatime)
 									temptimefile.flush()
-							print 'Finished creating raw timestamp file'
+							print('Finished creating raw timestamp file')
 				tempfile.Close()
 			return
 
 	def SetupRootFile(self):
 		if self.simultaneous_conversion:
-			print 'Start creating root file simultaneously with data taking'
+			print('Start creating root file simultaneously with data taking')
 		else:
-			print 'Checking if there is enough data'
+			print('Checking if there is enough data')
 			self.CheckSettingsAndBinaries()
-			print 'Start creating root file'
+			print('Start creating root file')
 		self.raw_file = ro.TFile('{wd}/{r}.root'.format(wd=self.output_dir, r=self.filename), 'RECREATE')
 		self.raw_tree = ro.TTree(self.filename, self.filename)
 		self.raw_tree.SetAutoFlush(100)
@@ -245,7 +245,7 @@ class Converter_Caen:
 
 	def ConvertEvents(self):
 		self.bar.start()
-		for ev in xrange(self.num_events):
+		for ev in range(self.num_events):
 			self.CheckFilesSizes(ev)
 			self.WaitForData(ev)
 			self.ReadData(ev)
@@ -288,7 +288,7 @@ class Converter_Caen:
 		while self.wait_for_data:
 			if self.simultaneous_conversion:
 				if time.time() - t1 > self.time_break:
-					print 'No data has been saved in file for event {ev} in the past {t} seconds... exiting!'.format(ev=ev, t=self.time_break)
+					print('No data has been saved in file for event {ev} in the past {t} seconds... exiting!'.format(ev=ev, t=self.time_break))
 					exit(os.EX_NOINPUT)
 				if not self.fs.closed:
 					self.fs.close()
@@ -304,7 +304,7 @@ class Converter_Caen:
 				if not self.wait_for_data:
 					self.OpenRawBinaries()
 			else:
-				print 'The data is corrupted... exiting'
+				print('The data is corrupted... exiting')
 				exit()
 
 	def ReadData(self, ev):
@@ -419,7 +419,7 @@ class Converter_Caen:
 
 	def CheckData(self):
 		if not self.datas or not self.datat or (self.doVeto and (not self.dataa)):
-			print 'No event in signal or trigger files... exiting'
+			print('No event in signal or trigger files... exiting')
 			exit(os.EX_DATAERR)
 
 	def LookForTime0(self):
@@ -558,7 +558,7 @@ class Converter_Caen:
 			self.fa.close()
 			del self.fa
 		self.t0 = time.time() - self.t0
-		print 'Time creating root tree:', self.t0, 'seconds'
+		print('Time creating root tree:', self.t0, 'seconds')
 		exit()
 
 	def IsPedestalNotFlat(self, signalADC, points, trigPos, time_res):
@@ -567,7 +567,7 @@ class Converter_Caen:
 
 	def ADC_to_Volts(self, sig_type):
 		def ChannelAdcToVolts(adcs, channel):
-			if 'adc_to_volts_cal' in channel.__dict__.keys():
+			if 'adc_to_volts_cal' in list(channel.__dict__.keys()):
 				return np.add(channel.adc_to_volts_cal['p0'], np.multiply(adcs, channel.adc_to_volts_cal['p1'], dtype='f8'), dtype='f8')
 			else:
 				ExitMessage('The channel object does not have "adc_to_volts_cal". Run Modify_Settings_Caen.py first.', os.EX_USAGE)
@@ -593,7 +593,7 @@ class Converter_Caen:
 			# self.adc_offset = self.veto_ch.adc_to_volts_cal['p0']
 			# self.adc_res = self.veto_ch.adc_to_volts_cal['p1']
 		else:
-			print 'Wrong type. Exiting'
+			print('Wrong type. Exiting')
 			exit()
 		# result = np.add(self.adc_offset, np.multiply(self.adc_res, np.add(adcs, np.multiply(2 ** self.dig_bits - 1.0, offset / 100.0 - 0.5, dtype='f8'), dtype='f8'), dtype='f8'), dtype='f8')
 		# result = channel.ADC_to_Volts(adcs)
@@ -613,24 +613,24 @@ if __name__ == '__main__':
 	# second argument is the path of the directory that contains the raw data.
 	# By default, it assumes simultaneous data conversion. If the conversion is done offline (aka. not simultaneous), then the 3rd parameter has to be given and should be '0'
 	if len(sys.argv) < 2:
-		print 'Usage is: Converter_Caen.py <settings_pickle_path> <dir_with_raw_data> 0 for offline conversion)'
+		print('Usage is: Converter_Caen.py <settings_pickle_path> <dir_with_raw_data> 0 for offline conversion)')
 		exit()
 	settings_object = str(sys.argv[1])  # settings pickle path
 	if settings_object in ['-h', '--help']:
-		print 'Usage is: Converter_Caen.py <settings_pickle_path> <dir_with_raw_data> 0 for offline conversion)'
+		print('Usage is: Converter_Caen.py <settings_pickle_path> <dir_with_raw_data> 0 for offline conversion)')
 		exit()
-	print 'settings object', settings_object
+	print('settings object', settings_object)
 	if len(sys.argv) > 2:
 		data_path = str(sys.argv[2])  # path where the binary data in adcs is. It is a directory path containing the raw files.
-		print 'data_path', data_path
+		print('data_path', data_path)
 	else:
 		data_path = ''
-		print 'data_path empty ""'
+		print('data_path empty ""')
 	is_simultaneous_data_conv = True
 	if len(sys.argv) > 3:
 		if IsInt(str(sys.argv[3])):
 			is_simultaneous_data_conv = bool(int(str(sys.argv[3])))
-			print 'simultaneous is now', is_simultaneous_data_conv
+			print('simultaneous is now', is_simultaneous_data_conv)
 	converter = Converter_Caen(settings_object=settings_object, data_path=data_path, simultaneous_data_conv=is_simultaneous_data_conv)
 
 	converter.CheckTimeStampRaw()

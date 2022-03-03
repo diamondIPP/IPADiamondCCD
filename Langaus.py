@@ -34,7 +34,7 @@ class LanGaus:
 		xlow, xhigh = [x[0] + self.sigma_conv * i * params[3] for i in [-1, 1]]
 		step = (xhigh - xlow) / self.conv_steps
 		sums = 0
-		for i in xrange(1, int(np.ceil(self.conv_steps/2.0 + 1))):
+		for i in range(1, int(np.ceil(self.conv_steps/2.0 + 1))):
 			xx = xlow + (i - 0.5) * step
 			fland = ro.TMath.Landau(xx, mpc, params[0]) / params[0]
 			sums += fland * ro.TMath.Gaus(x[0], xx, params[3])
@@ -75,11 +75,11 @@ class LanGaus:
 		self.fit.SetParNames('Width', 'MP', 'Area', 'GSigma')
 		options = 'QB0ML' if doLikelihood else 'QB0M'
 		ro.Math.MinimizerOptions.SetDefaultMinimizer('Minuit2', 'Migrad')
-		for i in xrange(len(self.params)):
+		for i in range(len(self.params)):
 			self.fit.SetParLimits(i, self.paramsLimitsLow[i], self.paramsLimitsHigh[i])
 		self.histo.Fit(fit_name, options, '', self.fit_range['min'], self.fit_range['max'])
 		self.fit.GetParameters(self.params)
-		for i in xrange(len(self.params)):
+		for i in range(len(self.params)):
 			self.paramsFitErrors[i] = self.fit.GetParError(i)
 		self.chi2 = self.fit.GetChisquare()
 		self.ndf = self.fit.GetNDF()
@@ -96,7 +96,7 @@ if __name__ == '__main__':
 	gaus_sigma = 5
 	rand = ro.TRandom3()
 	rand.SetSeed(0)
-	datad = np.array([rand.Landau(mu, sigma) + rand.Gaus(0, gaus_sigma) for i in xrange(1000)])
+	datad = np.array([rand.Landau(mu, sigma) + rand.Gaus(0, gaus_sigma) for i in range(1000)])
 	datah = ro.TH1F('datah', 'datah', 200, 0, 4000)
 	for point in datad:
 		datah.Fill(point)

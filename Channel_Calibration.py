@@ -6,7 +6,7 @@ import time, os, sys
 import progressbar
 import ipdb
 from pykeyboard import PyKeyboard
-from ConfigParser import ConfigParser
+from configparser import ConfigParser
 import subprocess as subp
 from optparse import OptionParser
 from Settings_Caen import Settings_Caen
@@ -52,14 +52,14 @@ class Channel_Calibration:
 
 		for volt in self.list_volts:
 			list_s = []
-			for ev in xrange(self.dic_settings[volt].num_events):
+			for ev in range(self.dic_settings[volt].num_events):
 				self.dic_adcs[volt].seek(ev * self.dic_settings[volt].struct_len, 0)
 				datas = self.dic_adcs[volt].read(self.dic_settings[volt].struct_len)
 				list_s += struct.Struct(self.dic_settings[volt].struct_fmt).unpack_from(datas)
 			array_s = np.array(list_s)
 			mean_s = array_s.mean(dtype='float64')
 			std_s = array_s.std(dtype='float64')
-			for it in xrange(10):
+			for it in range(10):
 				condition_s = (np.abs(array_s - mean_s) < 4 * std_s)
 				mean_s = np.extract(condition_s, array_s).mean(dtype='float64')
 				std_s = np.extract(condition_s, array_s).std(dtype='float64')
