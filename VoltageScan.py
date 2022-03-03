@@ -134,7 +134,7 @@ def main():
 		else:
 			listn0 = listn[1:-1].split(',')
 			for elem in listn0:
-				if IsInt(elem):
+				if is_int(elem):
 					listn1.append(int(elem))
 				else:
 					ExitMessage('The entered values in -n or --numevts are not all integers')

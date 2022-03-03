@@ -7,7 +7,7 @@ import ipdb
 import pickle as pickle
 from Utils import *
 from Settings_Caen import Settings_Caen
-from Converter_Caen import Converter_Caen
+from ConverterCaen import ConverterCaen
 import subprocess as subp
 from AnalysisCaenCCD import AnalysisCaenCCD
 import ROOT as ro

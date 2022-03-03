@@ -7,7 +7,7 @@ import ipdb
 import pickle as pickle
 from Utils import *
 from Settings_Caen import Settings_Caen
-from Converter_Caen import Converter_Caen
+from ConverterCaen import ConverterCaen
 import subprocess as subp
 import multiprocessing as mp
 from ParallelManager import ParallelManager
@@ -50,7 +50,7 @@ class ConvertAllRunsAgain:
 		self.num_cores = min(self.num_cores, self.num_runs)
 		self.parallelManager = ParallelManager()
 		options = [[self.runs_settings[pos], self.runs[pos], '0'] for pos in range(self.num_runs)]
-		self.parallelManager.SetVariables(working_dir=working_dir, runlist=self.runs, exec_command='Converter_Caen.py', options=options, num_cores=self.num_cores)
+		self.parallelManager.SetVariables(working_dir=working_dir, runlist=self.runs, exec_command='ConverterCaen.py', options=options, num_cores=self.num_cores)
 		self.parallelManager.RunParallelConversion()
 		self.time0 = time.time() - self.time0
 		print('Runs converted in', self.time0, 'seconds,', self.time0/float(self.num_runs + 0.0000001), 'seconds per run. Exiting :D')

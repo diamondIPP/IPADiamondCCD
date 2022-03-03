@@ -494,7 +494,7 @@ class CCD_Caen:
 	def CreateRootFile(self, files_moved=False):
 		settings_bin_path = os.path.abspath(self.settings.outdir + '/Runs/{f}/{f}.settings'.format(f=self.settings.filename))
 		data_bin_path = os.path.abspath(self.settings.outdir + '/Runs/{f}'.format(f=self.settings.filename)) if files_moved else os.getcwd()
-		conv_command = ['python', 'Converter_Caen.py', settings_bin_path, data_bin_path]
+		conv_command = ['python', 'ConverterCaen.py', settings_bin_path, data_bin_path]
 		if files_moved:
 			conv_command.append('0')
 		self.pconv = subp.Popen(conv_command, close_fds=True)

@@ -1,23 +1,12 @@
 #!/usr/bin/env python
-import visa
-import csv
 import numpy as np
-from struct import unpack
 import time, os, sys
-from optparse import OptionParser
 import progressbar
-import ipdb
-from pykeyboard import PyKeyboard
-from configparser import ConfigParser
-import subprocess as subp
 import struct
 import ROOT as ro
-import shutil
-from copy import deepcopy
-import glob
-
 
 # from DataAcquisition import DataAcquisition
+
 
 class Utils:
 	def __init__(self):
@@ -35,7 +24,8 @@ class Utils:
 		]
 		self.bar = progressbar.ProgressBar(widgets=widgets, maxval=maxVal)
 
-def FindRedundantEvents(settings):
+
+def find_redundant_events(settings):
 	channels = [settings.sigCh, settings.trigCh, settings.acCh] if settings.ac_enable else [settings.sigCh, settings.trigCh]
 	types = {settings.sigCh: 'signal_ch', settings.trigCh: 'trigger_ch', settings.acCh: 'veto'} if settings.ac_enable else {settings.sigCh: 'signal_ch', settings.trigCh: 'trigger_ch'}
 	for ch in channels:
@@ -58,7 +48,7 @@ def FindRedundantEvents(settings):
 					print('', ev0, '\t', ev1)
 		f0.close()
 
-def IsInt(i):
+def is_int(i):
 	try:
 		int(i)
 		return True

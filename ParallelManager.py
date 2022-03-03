@@ -10,7 +10,7 @@ import numpy as np
 from collections import OrderedDict
 
 class ParallelManager:
-	def __init__(self, working_dir='.', runlist=[], exec_command='Converter_Caen.py', options=[], num_cores=2, force=False, verb=True):
+	def __init__(self, working_dir='.', runlist=[], exec_command='ConverterCaen.py', options=[], num_cores=2, force=False, verb=True):
 		self.workind_dir = working_dir
 		self.exec_command = exec_command
 		self.options = options
