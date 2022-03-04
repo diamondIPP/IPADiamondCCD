@@ -1,39 +1,29 @@
 #!/usr/bin/env python
-import os
-import shutil
-import struct
 import subprocess as subp
-import sys
-import time
-from configparser import ConfigParser
 from optparse import OptionParser
-
-import ROOT as ro
-import numpy as np
 import pickle as pickle
-import ipdb
-
 from Channel_Caen import Channel_Caen
 from Settings_Caen import Settings_Caen
 from HV_Control import HV_Control
 from Utils import *
-# from memory_profiler import profile
 
 trig_rand_time = 0.001  # for voltage calibration
 # trig_rand_time = 0.2  # for system test
 wait_time_hv = 7
+# communicates with wavedump
+# with HV client and with the converter
 
 class CCD_Caen:
-	def __init__(self, infile='None', verbose=False, settingsObj=None, iscal=False):
+	def __init__(self, infile='None', verbose=False, settings=None, is_cal=False):
 		print('Starting CCD program ...')
 		self.infile = infile
 		self.verb = verbose
-		self.is_cal_run = iscal
+		self.is_cal_run = is_cal
 		if self.infile != 'None':
 			self.settings = Settings_Caen(self.infile, self.verb, self.is_cal_run)
 			self.settings.ReadInputFile()
-		elif settingsObj:
-			self.settings = settingsObj
+		elif settings:
+			self.settings = settings
 		else:
 			ExitMessage('No setting file was given, or settings object. Quitting!')
 		self.settings.Get_Calibration_Constants()
@@ -222,34 +212,35 @@ class CCD_Caen:
 		if events < 0:
 			# while self.p.poll() is None:
 			time.sleep(1)
-			self.p.stdin.write('c')
+			self.p.stdin.write('c')  # calibrate channels
 			self.p.stdin.flush()
 			time.sleep(1)
 			self.p.stdin.write('s')
 			self.p.stdin.flush()
 			if self.settings.plot_waveforms:
 				# time.sleep(1)
-				self.p.stdin.write('P')
+				self.p.stdin.write('P')  #  plot waveforms  continuously
 				self.p.stdin.flush()
 			# time.sleep(1)
-			self.p.stdin.write('W')
+			self.p.stdin.write('W')  #  write waveforms continuously into binaries
 			self.p.stdin.flush()
 			# time.sleep(1)
 			for it in range(abs(events)):
 				time.sleep(0.5)
-				self.p.stdin.write('t')
+				self.p.stdin.write('t') # issues software trigger
 				self.p.stdin.flush()
-			self.p.stdin.write('s')
+			self.p.stdin.write('s') # stop the wavedump
 			self.p.stdin.flush()
 			time.sleep(1)
-			self.p.stdin.write('q')
+			self.p.stdin.write('q')  # quit
 			self.p.stdin.flush()
+			# wait until it quits
 			while self.p.poll() is None:
 				continue
 			if self.settings.do_hv_control: self.stop_run = self.stop_run or self.hv_control.UpdateHVFile()
-			self.ConcatenateBinaries()
+			self.ConcatenateBinaries() # put binaries in a big binary file
 			self.CloseSubprocess('wave_dump', stdin=stdin, stdout=stdout)
-			self.settings.RemoveBinaries()
+			self.settings.RemoveBinaries() # remove the small binaries
 		else:
 			time.sleep(1)
 			self.p.stdin.write('c')
@@ -454,6 +445,7 @@ class CCD_Caen:
 			self.settings.bar.start()
 		self.settings.SetupDigitiser(doBaseLines=False, signal=self.signal_ch, trigger=self.trigger_ch, ac=self.veto_ch, events_written=self.total_events)
 		doBreak = False
+		# the while loop reading the digitizer and moving the data calculates how many data have been written in the binaries
 		while (self.total_events < self.settings.num_events) and not doBreak:
 			print('Calculating written events')
 			self.sig_written = self.CalculateEventsWritten(self.signal_ch.ch)
@@ -462,6 +454,7 @@ class CCD_Caen:
 			self.timestamp_written = self.CalculateEventsWritten(-1)
 			if not self.stop_run:
 				print('Starting wavedump')
+				# calls the wavedump software
 				self.p = subp.Popen(['{p}/wavedump'.format(p=self.settings.wavedump_path), '{d}/WaveDumpConfig_CCD.txt'.format(d=self.settings.outdir)], bufsize=-1, stdin=subp.PIPE, stdout=subp.PIPE, close_fds=True)
 				time.sleep(2)
 				if self.p.poll() is None:
@@ -534,14 +527,14 @@ def main():
 	verb = bool(options.verb)
 	iscal = bool(options.calrun)
 	time_wait = int(options.stabilizationtime) if not iscal else 10
-	ccd = CCD_Caen(infile, verb, iscal=iscal)
+	ccd = CCD_Caen(infile, verb, is_cal=iscal)
 
 	if auto or iscal:
 		if not iscal:
 			ccd.StartHVControl()
 			ccd.AdjustBaseLines()
 		ccd.SavePickles()
-		time.sleep(time_wait)
+		time.sleep(time_wait) # wait for voltage to stabilize
 		written_events = ccd.GetData()
 		if ccd.stop_run: print('Run stopped because current is too high')
 		ccd.settings.num_events = written_events
@@ -552,8 +545,8 @@ def main():
 			ccd.CloseHVClient()
 		if not ccd.settings.simultaneous_conversion:
 			ccd.CreateRootFile(files_moved=True)
-			while ccd.pconv.poll() is None:
-				time.sleep(3)
+			while ccd.pconv.poll() is None: # auxilary program running the converter
+				time.sleep(3) # wait for converter to finish then close the subprocess
 			ccd.CloseSubprocess('converter', stdin=False, stdout=False)
 
 	print('Finished :)')

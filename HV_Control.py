@@ -205,7 +205,7 @@ class HV_Control:
 		if self.log_file:
 			current_log = open('{f}'.format(f=self.log_file), 'r')
 			lines = current_log.readlines()
-			lines = [line.split() for line in lines if len(line.split()) >= 3 and IsFloat(line.split()[1]) and IsFloat(line.split()[2])]
+			lines = [line.split() for line in lines if len(line.split()) >= 3 and is_float(line.split()[1]) and is_float(line.split()[2])]
 			current_log.close()
 		tempTime = ro.TTimeStamp()
 		tempTime.Set(1970, 1, 1, 0, 0, timesec, timens, True, 0)
@@ -237,7 +237,7 @@ class HV_Control:
 		if len(lines) >= 1:
 			temp_line = lines[-1].split()
 			if len(temp_line) >= 3:
-				if IsFloat(temp_line[1]) and IsFloat(temp_line[2]):
+				if is_float(temp_line[1]) and is_float(temp_line[2]):
 					self.last_line['voltage'] = float(temp_line[1])
 					self.last_line['current'] = float(temp_line[2]) if abs(self.last_line['current']) < 100e-6 else 0
 					if self.last_line['voltage'] != 0:

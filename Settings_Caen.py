@@ -17,6 +17,7 @@ from Utils import *
 import pickle as pickle
 # from DataAcquisition import DataAcquisition
 
+# has all the setting required for data acquisition, it reads runs con
 
 class Settings_Caen:
 	def __init__(self, infile='None', verbose=False, iscal=False):

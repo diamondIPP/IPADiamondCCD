@@ -1032,7 +1032,7 @@ class AnalysisCaenCCD:
 		self.signalWaveSigmaVect = self.signalWaveVect.std(axis=0)
 
 	def DrawHisto(self, name, xmin, xmax, deltax, var, varname, cuts='', option='e'):
-		if not IsFloat(xmin) or not IsFloat(xmax) or not IsFloat(deltax):
+		if not is_float(xmin) or not is_float(xmax) or not is_float(deltax):
 			print('Won\'t create histogram as the limits are not well defined (xmin, xmax, deltax): {mi}, {ma}, {dx}'.format(mi=xmin, ma=xmax, dx=deltax))
 			return
 		elif deltax <= 0 or xmin >= xmax:
@@ -1065,7 +1065,7 @@ class AnalysisCaenCCD:
 		ro.TFormula.SetMaxima(1000)
 
 	def DrawProfile(self, name, varx, xmin, xmax, deltax, xname, vary, ymin, ymax, yname, cuts='', options='e hist'):
-		if not IsFloat(xmin) or not IsFloat(xmax) or not IsFloat(deltax) or not IsFloat(ymin) or not IsFloat(ymax):
+		if not is_float(xmin) or not is_float(xmax) or not is_float(deltax) or not is_float(ymin) or not is_float(ymax):
 			print('Won\'t create profile as the limits are not well defined (xmin, xmax, deltax, ymin, ymax): {mi}, {ma}, {dx}, {ym}, {yma}'.format(mi=xmin, ma=xmax, dx=deltax, ym=ymin, yma=ymax))
 			return
 		elif deltax <= 0 or xmin >= xmax or ymin >= ymax:
@@ -1098,7 +1098,7 @@ class AnalysisCaenCCD:
 		ro.TFormula.SetMaxima(1000)
 
 	def DrawHisto2D(self, name, varx, xmin, xmax, deltax, xname, vary, ymin, ymax, deltay, yname, cuts='', option='colz', num_evts=1000000000, start_ev=0):
-		if not IsFloat(xmin) or not IsFloat(xmax) or not IsFloat(deltax) or not IsFloat(ymin) or not IsFloat(ymax) or not IsFloat(deltay):
+		if not is_float(xmin) or not is_float(xmax) or not is_float(deltax) or not is_float(ymin) or not is_float(ymax) or not is_float(deltay):
 			print('Won\'t create histogram as the limits are not well defined (xmin, xmax, deltax, ymin, ymax, deltay): {mi}, {ma}, {dx}, {ym}, {yma}, {dy}'.format(mi=xmin, ma=xmax, dx=deltax, ym=ymin, yma=ymax, dy=deltay))
 			return
 		elif deltax <= 0 or xmin >= xmax or deltay <= 0 or ymin >= ymax:

@@ -8,6 +8,7 @@ import glob
 
 
 # from DataAcquisition import DataAcquisition
+# reads *.dat and transforms into raw root files
 
 class ConverterCaen:
 	def __init__(self, settings_object='', data_path='', simultaneous_data_conv=True):
@@ -17,15 +18,14 @@ class ConverterCaen:
 		self.output_dir = '/'.join(self.settings_full_path.split('/')[:-1])
 		self.raw_dir = self.output_dir if data_path == '' else data_path
 		self.filename = self.settings_full_path.split('/')[-1].split('.settings')[0]
-		self.settings = pickle.load(open('{d}/{f}.settings'.format(d=self.output_dir, f=self.filename), 'rb'))
-		self.signal_ch = pickle.load(open('{d}/{f}.signal_ch'.format(d=self.output_dir, f=self.filename), 'rb'))
-		self.trigger_ch = pickle.load(open('{d}/{f}.trigger_ch'.format(d=self.output_dir, f=self.filename), 'rb'))
+		self.settings = pickle.load(open(f'{self.output_dir}/{self.filename}.settings', 'rb'))
+		self.signal_ch = pickle.load(open(f'{self.output_dir}/{self.filename}.signal_ch', 'rb'))
+		self.trigger_ch = pickle.load(open(f'{self.output_dir}/{self.filename}.trigger_ch', 'rb'))
 		self.is_cal_run = self.settings.is_cal_run if 'is_cal_run' in list(self.settings.__dict__.keys()) else False
 		self.doVeto = True if not self.is_cal_run else False
-		self.veto_ch = pickle.load(
-			open('{d}/{f}.veto'.format(d=self.output_dir, f=self.filename), 'rb')) if self.doVeto else None
-
-		self.settings.simultaneous_conversion = simultaneous_data_conv  # overrides the flag used while taking data, if it is converted offline
+		self.veto_ch = pickle.load(open(f'{self.output_dir}/{self.filename}.veto', 'rb')) if self.doVeto else None
+		# overrides the flag used while taking data, if it is converted offline
+		self.settings.simultaneous_conversion = simultaneous_data_conv
 		self.control_hv = self.settings.do_hv_control
 		self.r_passive = self.settings.r_passive if 'r_passive' in list(self.settings.__dict__.keys()) else 230e6
 
@@ -355,7 +355,7 @@ class ConverterCaen:
 				lines = current_log.readlines()
 			lines = [line.split() for line in lines if
 					 re.match('{h:02d}:{m:02d}:{s:02d}'.format(h=temptime[3], m=temptime[4], s=temptime[5]),
-							  line) and len(line.split()) >= 3 and IsFloat(line.split()[1]) and IsFloat(
+							  line) and len(line.split()) >= 3 and is_float(line.split()[1]) and is_float(
 						 line.split()[2])]
 
 		tempdic = {'voltage': self.hv_data['voltage'], 'current': self.hv_data['current']}
@@ -363,9 +363,7 @@ class ConverterCaen:
 			if len(lines) == 1:
 				pos = 0
 			else:
-				lines2 = [abs(timesec + 1e-9 * timens - time.mktime(
-					[temptime[0], temptime[1], temptime[2], int(line[0].split(':')[0]), int(line[0].split(':')[1]),
-					 int(line[0].split(':')[2]), 0, 0, -1])) for line in lines]
+				lines2 = [abs(timesec + 1e-9 * timens - time.mktime([temptime[0], temptime[1], temptime[2], int(line[0].split(':')[0]), int(line[0].split(':')[1]),int(line[0].split(':')[2]), 0, 0, -1])) for line in lines]
 				pos = lines2.index(min(lines2))
 			tempdic['voltage'] = float(lines[pos][1]) if float(lines[pos][1]) != 0 else tempdic['voltage']
 			tempdic['current'] = float(lines[pos][2]) if abs(float(lines[pos][2])) < 100e-6 else tempdic['current']

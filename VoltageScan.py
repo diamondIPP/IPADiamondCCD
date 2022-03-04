@@ -52,7 +52,7 @@ class VoltageScan:
 			self.settings.Get_Calibration_Constants()
 			self.settings.SetOutputFiles()
 
-			self.p[volt] = CCD_Caen(settingsObj=self.settings)
+			self.p[volt] = CCD_Caen(settings=self.settings)
 			self.p[volt].StartHVControl()
 			self.p[volt].AdjustBaseLines()
 			self.p[volt].SavePickles()
@@ -121,7 +121,7 @@ def main():
 		else:
 			lista0 = lista[1:-1].split(',')
 			for elem in lista0:
-				if IsFloat(elem):
+				if is_float(elem):
 					lista1.append(float(elem))
 				else:
 					ExitMessage('The entered values in -l or --list are not all integers')

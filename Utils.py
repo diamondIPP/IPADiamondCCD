@@ -48,6 +48,7 @@ def find_redundant_events(settings):
 					print('', ev0, '\t', ev1)
 		f0.close()
 
+
 def is_int(i):
 	try:
 		int(i)
@@ -55,23 +56,27 @@ def is_int(i):
 	except ValueError:
 		return False
 
-def IsFloat(f):
+
+def is_float(f):
 	try:
 		float(f)
 		return True
 	except ValueError:
 		return False
 
+
 def PlotHisto2DLimits(xmin=-0.48e-6, xmax=4.68e-6, ymin=-0.5, ymax=0.1, xres=2e-9, yres=2.15/(2.0**14-1)):
 	xbins = int(round((xmax - xmin)/xres))
 	ybins = int(round((ymax - ymin)/yres))
-	print('({nx},{minx},{maxx},{ny},{miny},{maxy})'.format(nx=xbins, minx=xmin, maxx=xmax, ny=ybins, miny=ymin,maxy=ymax))
+	print(f'({xbins},{xmin},{xmax},{ybins},{ymin},{ymax})')
+
 
 def ExitMessage(msg, code=os.EX_SOFTWARE):
 	print('\n##########')
 	print(msg)
 	print('##########')
 	sys.exit(code)
+
 
 def SetDefault2DStats(histo):
 	if histo.FindObject('stats'):
@@ -85,6 +90,7 @@ def SetDefault2DStats(histo):
 		histo.FindObject('palette').SetX1NDC(0.87)
 		histo.FindObject('palette').SetX2NDC(0.92)
 		ro.gPad.Update()
+
 
 def SetDefault1DStats(histo):
 	if histo.FindObject('stats'):
@@ -102,6 +108,7 @@ def SetDefaultFitStats(histo, fit, color=ro.kRed):
 	histo.FindObject('stats').SetX2NDC(0.9)
 	histo.FindObject('stats').SetY1NDC(0.6)
 	histo.FindObject('stats').SetY2NDC(0.9)
+
 
 def SetDefault1DCanvasSettings(canvas):
 	canvas.SetGridx()
