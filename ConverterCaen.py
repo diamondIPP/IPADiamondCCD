@@ -11,10 +11,10 @@ import glob
 # reads *.dat and transforms into raw root files
 
 class ConverterCaen:
-	def __init__(self, settings_object='', data_path='', simultaneous_data_conv=True):
-		self.settings_object = settings_object
+	def __init__(self, settings='', data_path='', simultaneous_data_conv=True):
+		self.settings = settings
 
-		self.settings_full_path = os.path.abspath(settings_object)
+		self.settings_full_path = os.path.abspath(settings)
 		self.output_dir = '/'.join(self.settings_full_path.split('/')[:-1])
 		self.raw_dir = self.output_dir if data_path == '' else data_path
 		self.filename = self.settings_full_path.split('/')[-1].split('.settings')[0]
@@ -29,12 +29,9 @@ class ConverterCaen:
 		self.control_hv = self.settings.do_hv_control
 		self.r_passive = self.settings.r_passive if 'r_passive' in list(self.settings.__dict__.keys()) else 230e6
 
-		self.signal_path = data_path + '/raw_wave{chs}.dat'.format(
-			chs=self.settings.sigCh) if self.settings.simultaneous_conversion else data_path + '/' + self.filename + '_signal.dat'
-		self.trigger_path = data_path + '/raw_wave{cht}.dat'.format(
-			cht=self.settings.trigCh) if self.settings.simultaneous_conversion else data_path + '/' + self.filename + '_trigger.dat'
-		self.veto_path = data_path + '/raw_wave{cha}.dat'.format(
-			cha=self.settings.acCh) if self.settings.simultaneous_conversion else data_path + '/' + self.filename + '_veto.dat'
+		self.signal_path = data_path + f'/raw_wave{self.settings.sigCh}.dat' if self.settings.simultaneous_conversion else data_path + '/' + self.filename + '_signal.dat'
+		self.trigger_path = data_path + f'/raw_wave{self.settings.trigCh}.dat' if self.settings.simultaneous_conversion else data_path + '/' + self.filename + '_trigger.dat'
+		self.veto_path = data_path + f'/raw_wave{self.settings.acCh}.dat' if self.settings.simultaneous_conversion else data_path + '/' + self.filename + '_veto.dat'
 		self.time_path = data_path + '/raw_time.dat' if self.settings.simultaneous_conversion else data_path + '/' + self.filename + '_time.dat'
 		self.hv_log_files_path = None
 		self.current_hv_log_path = None
@@ -579,7 +576,7 @@ if __name__ == '__main__':
 		if is_int(str(sys.argv[3])):
 			is_simultaneous_data_conv = bool(int(str(sys.argv[3])))
 			print('simultaneous is now', is_simultaneous_data_conv)
-	converter = ConverterCaen(settings_object=settings_object, data_path=data_path,
+	converter = ConverterCaen(settings=settings_object, data_path=data_path,
 							  simultaneous_data_conv=is_simultaneous_data_conv)
 
 	converter.CheckTimeStampRaw()
