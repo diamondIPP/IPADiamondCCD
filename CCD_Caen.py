@@ -500,13 +500,13 @@ class CCD_Caen:
 
 	def SavePickles(self):
 		# save objects of settings, signal_ch, trigger_ch and veto_ch
-		with open('{d}/Runs/{f}/{f}.settings'.format(d=self.settings.outdir, f=self.settings.filename), 'wb') as fs:
+		with open(f'{self.settings.outdir}/Runs/{self.settings.filename}/{self.settings.filename}.settings', 'wb') as fs:
 			pickle.dump(self.settings, fs, pickle.HIGHEST_PROTOCOL)
-		with open('{d}/Runs/{f}/{f}.signal_ch'.format(d=self.settings.outdir, f=self.settings.filename), 'wb') as fsig:
+		with open(f'{self.settings.outdir}/Runs/{self.settings.filename}/{self.settings.filename}.signal_ch', 'wb') as fsig:
 			pickle.dump(self.signal_ch, fsig, pickle.HIGHEST_PROTOCOL)
-		with open('{d}/Runs/{f}/{f}.trigger_ch'.format(d=self.settings.outdir, f=self.settings.filename), 'wb') as ft:
+		with open(f'{self.settings.outdir}/Runs/{self.settings.filename}/{self.settings.filename}.trigger_ch', 'wb') as ft:
 			pickle.dump(self.trigger_ch, ft, pickle.HIGHEST_PROTOCOL)
-		with open('{d}/Runs/{f}/{f}.veto'.format(d=self.settings.outdir, f=self.settings.filename), 'wb') as fv:
+		with open(f'{self.settings.outdir}/Runs/{self.settings.filename}/{self.settings.filename}.veto', 'wb') as fv:
 			pickle.dump(self.veto_ch, fv, pickle.HIGHEST_PROTOCOL)
 
 	def PrintPlotLimits(self, ti=-5.12e-7, tf=4.606e-6, vmin=-0.7, vmax=0.05):

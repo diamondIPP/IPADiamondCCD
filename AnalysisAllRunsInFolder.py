@@ -685,14 +685,14 @@ class AnalysisAllRunsInFolder:
 						   }
 
 	def SavePickle(self, overWritePickle=False):
-		pickleName = 'signal_cal_{c}.cal'.format(c=self.caen_ch) if self.are_cal_runs else 'signal_{c}.cal'.format(c=self.caen_ch)
+		pickleName = f'signal_cal_{self.caen_ch}.cal' if self.are_cal_runs else f'signal_{self.caen_ch}.cal'
 		if not self.cal_pickle:
 			self.FillPickle()
-		if os.path.isfile('{d}/{f}'.format(d=self.runsdir, f=pickleName)):
+		if os.path.isfile(f'{self.runsdir}/{pickleName}'):
 			if not self.overwrite and not overWritePickle:
 				print('The file', pickleName, 'already exists in', self.runsdir, '. Not saving!')
 				return
-		with open('{d}/{f}'.format(d=self.runsdir, f=pickleName), 'wb') as fpickle:
+		with open(f'{self.runsdir}/{pickleName}', 'wb') as fpickle:
 			pickle.dump(self.cal_pickle, fpickle, pickle.HIGHEST_PROTOCOL)
 		print('Saved pickle', pickleName, 'in', self.runsdir)
 

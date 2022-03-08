@@ -1,23 +1,17 @@
 #!/usr/bin/env python
-import numpy as np
-from struct import unpack
-import time, os, sys
 from optparse import OptionParser
-import ipdb
 import pickle as pickle
 from Utils import *
 import glob
-from Settings_Caen import Settings_Caen
-# from DataAcquisition import DataAcquisition
 
 
 class Modify_Pickles_Caen:
 	def __init__(self, outdir='None'):
 		self.outdir = Correct_Path(outdir)
-		self.settings_path = glob.glob('{d}/*.settings'.format(d=outdir))
-		self.signalCh_path = glob.glob('{d}/*.signal_ch'.format(d=outdir))
-		self.triggerCh_path = glob.glob('{d}/*.trigger_ch'.format(d=outdir))
-		self.vetoCh_path = glob.glob('{d}/*.veto'.format(d=outdir))
+		self.settings_path = glob.glob(f'{outdir}/*.settings')
+		self.signalCh_path = glob.glob(f'{outdir}/*.signal_ch')
+		self.triggerCh_path = glob.glob(f'{outdir}/*.trigger_ch')
+		self.vetoCh_path = glob.glob(f'{outdir}/*.veto')
 
 		self.settings = pickle.load(open(self.settings_path[0], 'rb')) if len(self.settings_path) == 1 else None
 		self.signal_ch = pickle.load(open(self.signalCh_path[0], 'rb')) if len(self.signalCh_path) == 1 else None
@@ -120,6 +114,7 @@ def main():
 	outdir = str(options.outdir)
 	mp = Modify_Pickles_Caen(outdir)
 	return mp
+
 
 if __name__ == '__main__':
 	mp = main()

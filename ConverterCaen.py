@@ -6,11 +6,10 @@ import re
 from Utils import *
 import glob
 import time
+from pathlib import Path
 
 
-# from DataAcquisition import DataAcquisition
 # reads *.dat and transforms into raw root files
-
 class ConverterCaen:
 	def __init__(self, settings='', data_path='', simultaneous_data_conv=True):
 		self.settings = settings
@@ -197,11 +196,11 @@ class ConverterCaen:
 			self.hvCurrentBra = np.zeros(1, 'f4')
 			self.voltageDiaBra = np.zeros(1, 'f4')
 		self.raw_tree.Branch('event', self.eventBra, 'event/i')
-		self.raw_tree.Branch('time', self.timeBra, 'time[{s}]/D'.format(s=self.points))
-		self.raw_tree.Branch('voltageSignal', self.voltBra, 'voltageSignal[{s}]/D'.format(s=self.points))
-		self.raw_tree.Branch('voltageTrigger', self.trigBra, 'voltageTrigger[{s}]/D'.format(s=self.points))
+		self.raw_tree.Branch('time', self.timeBra, f'time[{self.points}]/D')
+		self.raw_tree.Branch('voltageSignal', self.voltBra, f'voltageSignal[{self.points}]/D')
+		self.raw_tree.Branch('voltageTrigger', self.trigBra, f'voltageTrigger[{self.points}]/D')
 		if self.doVeto:
-			self.raw_tree.Branch('voltageVeto', self.vetoBra, 'voltageVeto[{s}]/D'.format(s=self.points))
+			self.raw_tree.Branch('voltageVeto', self.vetoBra, f'voltageVeto[{self.points}]/D')
 			self.raw_tree.Branch('vetoedEvent', self.vetoedBra, 'vetoedEvent/O')
 		self.raw_tree.Branch('badShape', self.badShapeBra, 'badShape/B')  # signed char
 		self.raw_tree.Branch('badPedestal', self.badPedBra, 'badPedestal/O')
@@ -559,11 +558,11 @@ if __name__ == '__main__':
 	if len(sys.argv) < 2:
 		print('Usage is: ConverterCaen.py <settings_pickle_path> <dir_with_raw_data> 0 for offline conversion)')
 		exit()
-	settings_object = str(sys.argv[1])  # settings pickle path
-	if settings_object in ['-h', '--help']:
+	settings_path = str(sys.argv[1])  # settings pickle path
+	if settings_path in ['-h', '--help']:
 		print('Usage is: ConverterCaen.py <settings_pickle_path> <dir_with_raw_data> 0 for offline conversion)')
 		exit()
-	print('settings object', settings_object)
+	print('settings object', settings_path)
 	if len(sys.argv) > 2:
 		data_path = str(
 			sys.argv[2])  # path where the binary data in adcs is. It is a directory path containing the raw files.
@@ -576,7 +575,7 @@ if __name__ == '__main__':
 		if is_int(str(sys.argv[3])):
 			is_simultaneous_data_conv = bool(int(str(sys.argv[3])))
 			print('simultaneous is now', is_simultaneous_data_conv)
-	converter = ConverterCaen(settings=settings_object, data_path=data_path,
+	converter = ConverterCaen(settings=settings_path, data_path=data_path,
 							  simultaneous_data_conv=is_simultaneous_data_conv)
 
 	converter.CheckTimeStampRaw()

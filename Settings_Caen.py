@@ -6,8 +6,8 @@ import shutil
 from Utils import *
 import pickle as pickle
 
-# has all the setting required for data acquisition, it reads runs con
 
+# has all the setting required for data acquisition, it reads runs con
 class Settings_Caen:
 	def __init__(self, infile='None', verbose=False, iscal=False):
 		self.infile = infile
@@ -90,7 +90,7 @@ class Settings_Caen:
 		parser = ConfigParser()
 		if self.infile != 'None':
 			if os.path.isfile(self.infile):
-				print('Reading input file: {f} ...'.format(f=self.infile))
+				print(f'Reading input file: {self.infile} ...')
 				parser.read(self.infile)
 
 				if parser.has_section('OPTILINK'):
