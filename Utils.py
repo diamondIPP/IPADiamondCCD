@@ -1,11 +1,9 @@
 #!/usr/bin/env python
 import numpy as np
-import time, os, sys
+import os, sys
 import progressbar
 import struct
 import ROOT as ro
-
-# from DataAcquisition import DataAcquisition
 
 
 class Utils:

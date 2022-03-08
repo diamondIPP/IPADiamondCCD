@@ -1,21 +1,10 @@
 #!/usr/bin/env python
-import visa
-import csv
-import numpy as np
-from struct import unpack
-import time, os, sys
-from optparse import OptionParser
-import progressbar
-import ipdb
-from pykeyboard import PyKeyboard
+import time
 from configparser import ConfigParser
-import subprocess as subp
-import struct
 import ROOT as ro
 import shutil
 from Utils import *
 import pickle as pickle
-# from DataAcquisition import DataAcquisition
 
 # has all the setting required for data acquisition, it reads runs con
 

@@ -1,23 +1,9 @@
 #!/usr/bin/env python
-import visa
-import csv
-from struct import unpack
-import time, os, sys
-import progressbar
-import ipdb
-from pykeyboard import PyKeyboard
-from configparser import ConfigParser
-import subprocess as subp
 from optparse import OptionParser
-from Settings_Caen import Settings_Caen
-from Channel_Caen import Channel_Caen
 import pickle
 import struct
 import numpy as np
 import ROOT as ro
-import shutil
-from copy import deepcopy
-
 import glob
 
 class Channel_Calibration:

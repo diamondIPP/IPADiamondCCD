@@ -7,19 +7,15 @@ import sys
 import time
 from configparser import ConfigParser
 from optparse import OptionParser
-
 from collections import OrderedDict
-
 import ROOT as ro
 import numpy as np
 import pickle as pickle
-
 from Channel_Caen import Channel_Caen
 from Settings_Caen import Settings_Caen
 from HV_Control import HV_Control
 from Utils import *
 from Langaus import LanGaus
-# from memory_profiler import profile
 
 trig_rand_time = 0.2
 wait_time_hv = 7

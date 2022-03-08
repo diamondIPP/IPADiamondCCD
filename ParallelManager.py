@@ -2,12 +2,12 @@
 import time
 import subprocess as subp
 import multiprocessing as mp
-import os, shutil, sys
-import ipdb
+import os
 from optparse import OptionParser
 from copy import deepcopy
 import numpy as np
 from collections import OrderedDict
+
 
 class ParallelManager:
 	def __init__(self, working_dir='.', runlist=[], exec_command='ConverterCaen.py', options=[], num_cores=2, force=False, verb=True):

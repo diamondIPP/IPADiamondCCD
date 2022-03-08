@@ -6,6 +6,7 @@ from Channel_Caen import Channel_Caen
 from Settings_Caen import Settings_Caen
 from HV_Control import HV_Control
 from Utils import *
+import time
 
 trig_rand_time = 0.001  # for voltage calibration
 # trig_rand_time = 0.2  # for system test

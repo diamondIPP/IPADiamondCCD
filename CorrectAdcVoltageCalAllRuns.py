@@ -1,14 +1,9 @@
 #!/usr/bin/env python
-import numpy as np
-from struct import unpack
-import time, os, sys
 from optparse import OptionParser
-import ipdb
-import pickle as pickle
+import glob
+import shutil
 from Utils import *
-from Settings_Caen import Settings_Caen
 from Modify_Settings_Caen import Modify_Pickles_Caen
-# from DataAcquisition import DataAcquisition
 
 
 class CorrectAdcVoltageCalAllRuns:

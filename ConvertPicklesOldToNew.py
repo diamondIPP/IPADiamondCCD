@@ -1,15 +1,15 @@
 #!/usr/bin/env python
-import imp
+import importlib
 import pickle as pickle
 from optparse import OptionParser
-import shutil, os
-import ipdb
+import shutil
+
 
 class ConvertPicklesOldToNew:
 	def __init__(self, old_module_name, old_module_path, new_module_name, new_module_path, arguments, pickle_file):
 		self.pickle_file = pickle_file
-		ModuleOld = imp.load_source(old_module_name, old_module_path)
-		ModuleNew = imp.load_source(new_module_name, new_module_path)
+		ModuleOld = importlib.load_source(old_module_name, old_module_path)
+		ModuleNew = importlib.load_source(new_module_name, new_module_path)
 
 		# ipdb.set_trace()
 

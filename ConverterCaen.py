@@ -5,6 +5,7 @@ import pickle
 import re
 from Utils import *
 import glob
+import time
 
 
 # from DataAcquisition import DataAcquisition
@@ -54,8 +55,7 @@ class ConverterCaen:
 		self.anti_co_offset = self.veto_ch.dc_offset_percent if self.doVeto else 0
 		self.time_res = self.settings.time_res
 		self.post_trig_percent = self.settings.post_trig_percent
-		self.trig_value = self.settings.ADC_to_Volts(self.settings.GetTriggerValueADCs(self.trigger_ch),
-													 self.trigger_ch)
+		self.trig_value = self.settings.ADC_to_Volts(self.settings.GetTriggerValueADCs(self.trigger_ch), self.trigger_ch)
 		self.veto_value = self.veto_ch.thr_counts if self.doVeto else 0
 		self.dig_bits = self.settings.dig_bits
 		self.simultaneous_conversion = self.settings.simultaneous_conversion

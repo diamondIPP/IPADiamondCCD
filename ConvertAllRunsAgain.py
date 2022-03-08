@@ -1,17 +1,10 @@
 #!/usr/bin/env python
-import numpy as np
-from struct import unpack
-import time, os, sys
+import time
+import glob
 from optparse import OptionParser
-import ipdb
-import pickle as pickle
 from Utils import *
-from Settings_Caen import Settings_Caen
-from ConverterCaen import ConverterCaen
-import subprocess as subp
 import multiprocessing as mp
 from ParallelManager import ParallelManager
-# from DataAcquisition import DataAcquisition
 
 
 class ConvertAllRunsAgain:

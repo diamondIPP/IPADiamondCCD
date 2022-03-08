@@ -1,23 +1,9 @@
 #!/usr/bin/env python
-import os
-import shutil
-import struct
-import subprocess as subp
-import sys
 import time
-from configparser import ConfigParser
 from optparse import OptionParser
-
-import ROOT as ro
-import numpy as np
-import pickle as pickle
-
-from Channel_Caen import Channel_Caen
 from Settings_Caen import Settings_Caen
-from HV_Control import HV_Control
 from Utils import *
 from CCD_Caen import CCD_Caen
-# from memory_profiler import profile
 
 trig_rand_time = 0.2
 wait_time_hv = 7

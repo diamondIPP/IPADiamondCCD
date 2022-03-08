@@ -1,16 +1,8 @@
 #!/usr/bin/env python
-import numpy as np
-from struct import unpack
-import time, os, sys
+import time
 from optparse import OptionParser
-import ipdb
-import pickle as pickle
 from Utils import *
-from Settings_Caen import Settings_Caen
-from ConverterCaen import ConverterCaen
-import subprocess as subp
-from AnalysisCaenCCD import AnalysisCaenCCD
-import ROOT as ro
+
 
 fit_method = ('Minuit2', 'Migrad', )
 

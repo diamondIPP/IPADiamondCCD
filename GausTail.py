@@ -1,8 +1,7 @@
 #!/usr/bin/env python
-
 import ROOT as ro
 import numpy as np
-import ipdb
+
 
 class GausTail:
 	def __init__(self, graph, bias=1, peakTime=2e-6):

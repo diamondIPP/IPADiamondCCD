@@ -1,20 +1,8 @@
 #!/usr/bin/env python
-import os, glob
-import shutil
-import struct
-import subprocess as subp
-import sys
-import time
-from configparser import ConfigParser
+import glob
 from optparse import OptionParser
-
-
 import ROOT as ro
-import numpy as np
 import pickle as pickle
-
-from Channel_Caen import Channel_Caen
-from Settings_Caen import Settings_Caen
 from Utils import *
 
 # accuracy and resolution of reference multimeter UT803. Change accordingly if using another reference device. All values are given in mV
