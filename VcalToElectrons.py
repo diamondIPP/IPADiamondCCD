@@ -3,8 +3,6 @@ from configparser import ConfigParser
 from optparse import OptionParser
 import scipy.constants as spc
 from uncertainties import ufloat
-import pickle as pickle
-from Settings_Caen import Settings_Caen
 from Utils import *
 
 #

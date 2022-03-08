@@ -8,9 +8,6 @@ import shutil
 class ConvertPicklesOldToNew:
 	def __init__(self, old_module_name, old_module_path, new_module_name, new_module_path, arguments, pickle_file):
 		self.pickle_file = pickle_file
-		ModuleOld = importlib.load_source(old_module_name, old_module_path)
-		ModuleNew = importlib.load_source(new_module_name, new_module_path)
-
 		# ipdb.set_trace()
 
 		self.new_pickle = eval("ModuleNew.{n}{a}".format(n=new_module_name, a=arguments))
@@ -28,7 +25,7 @@ class ConvertPicklesOldToNew:
 		user_input = input('type "y" if you want to backup old pickle and save the new one: ')
 		if user_input.lower() == 'y':
 			print('Backing up old pickle and saving new one...')
-			self.ReplacePickleAndBackUp()
+			self.BackUpAndReplacePickle()
 		else:
 			print('Not bakcing up old pickle and not saving the new one. You can modify variables in the pickle and later do this by running on interactive mode')
 
@@ -41,7 +38,6 @@ class ConvertPicklesOldToNew:
 	def PrintVariablesStatus(self):
 		for var in self.new_variables:
 			print(var, eval('self.new_pickle.{v}'.format(v=var)))
-
 
 
 if __name__ == '__main__':
