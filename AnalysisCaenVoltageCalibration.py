@@ -264,7 +264,7 @@ class AnalysisCaenVoltageCalibration:
 
 if __name__ == '__main__':
 	parser = ArgumentParser()
-	parser.add_argument('-d', '--inDir', dest='inDir', default='.', type='string', help='Directory containing the subdirectories with different voltages run files')
+	parser.add_argument('-d', '--inDir', dest='inDir', default='.', type=str, help='Directory containing the subdirectories with different voltages run files')
 	parser.add_argument('-a', '--automatic', dest='auto', default=False, help='Toggles automatic basic analysis', action='store_true')
 	parser.add_argument('-o', '--overwrite', dest='overwrite', default=False, help='Toggles overwriting of the analysis tree', action='store_true')
 
