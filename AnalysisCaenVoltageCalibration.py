@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import glob
 from optparse import OptionParser
+from argparse import ArgumentParser
 import ROOT as ro
 import pickle as pickle
 from Utils import *
@@ -262,15 +263,15 @@ class AnalysisCaenVoltageCalibration:
 
 
 if __name__ == '__main__':
-	parser = OptionParser()
-	parser.add_option('-d', '--inDir', dest='inDir', default='.', type='string', help='Directory containing the subdirectories with different voltages run files')
-	parser.add_option('-a', '--automatic', dest='auto', default=False, help='Toggles automatic basic analysis', action='store_true')
-	parser.add_option('-o', '--overwrite', dest='overwrite', default=False, help='Toggles overwriting of the analysis tree', action='store_true')
+	parser = ArgumentParser()
+	parser.add_argument('-d', '--inDir', dest='inDir', default='.', type='string', help='Directory containing the subdirectories with different voltages run files')
+	parser.add_argument('-a', '--automatic', dest='auto', default=False, help='Toggles automatic basic analysis', action='store_true')
+	parser.add_argument('-o', '--overwrite', dest='overwrite', default=False, help='Toggles overwriting of the analysis tree', action='store_true')
 
-	(options, args) = parser.parse_args()
-	directory = str(options.inDir)
-	autom = bool(options.auto)
-	overw = bool(options.overwrite)
+	args = parser.parse_args()
+	directory = str(args.inDir)
+	autom = bool(args.auto)
+	overw = bool(args.overwrite)
 
 	ana = AnalysisCaenVoltageCalibration(directory)
 
