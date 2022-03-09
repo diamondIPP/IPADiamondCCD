@@ -19,7 +19,8 @@ class ConverterCaen:
 		self.output_dir = '/'.join(self.settings_full_path.split('/')[:-1])
 		self.raw_dir = self.output_dir if data_path == '' else data_path
 		self.filename = self.settings_full_path.split('/')[-1].split('.settings')[0]
-		self.settings = pickle.load(open(f'{self.output_dir}/{self.filename}.settings', 'rb'))
+		with open(f'{self.output_dir}/{self.filename}.settings', 'rb') as f:
+			self.settings = pickle.load(f, encoding='bytes')
 		self.signal_ch = pickle.load(open(f'{self.output_dir}/{self.filename}.signal_ch', 'rb'))
 		self.trigger_ch = pickle.load(open(f'{self.output_dir}/{self.filename}.trigger_ch', 'rb'))
 		self.is_cal_run = self.settings.is_cal_run if 'is_cal_run' in list(self.settings.__dict__.keys()) else False
