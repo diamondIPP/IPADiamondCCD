@@ -19,7 +19,7 @@ class VoltageScan:
 		self.voltages = np.linspace(self.vini, self.vend, int(round(float(self.vend - self.vini)/float(self.vstep)) + 1), dtype='int32') if lista == [] else np.array(lista, 'int32')
 		self.time_sleep = timebla
 		self.settings = Settings_Caen(self.infile, self.verb)
-		self.settings.ReadInputFile()
+		self.settings.read_input_file()
 		self.settings.Get_Calibration_Constants()
 		self.settings.SetOutputFiles()
 		self.wd = os.getcwd()
@@ -70,7 +70,7 @@ class VoltageScan:
 
 	def ResetSettings(self):
 		self.settings = Settings_Caen(self.infile, self.verb)
-		self.settings.ReadInputFile()
+		self.settings.read_input_file()
 		self.settings.Get_Calibration_Constants()
 		self.settings.SetOutputFiles()
 

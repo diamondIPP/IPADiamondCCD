@@ -63,7 +63,7 @@ class Channel_Caen:
 
 	def Correct_Base_Line(self, mean_adc, sigma_adc, settings):
 		self.sigma_adcs = sigma_adc
-		self.base_line_u_adcs = self.Calculate_Universal_ADCs(self.ADC_to_Volts(mean_adc), self.adc_to_volts_cal['p1'])
+		self.base_line_u_adcs = self.Calculate_Universal_ADCs(self.adc_to_volts(mean_adc), self.adc_to_volts_cal['p1'])
 		self.base_line_adcs = RoundInt(mean_adc, 'uint16')
 
 	def Correct_Threshold(self):
@@ -72,7 +72,7 @@ class Channel_Caen:
 		elif self.type == 'veto':
 			self.thr_counts = int(round(max(4 * self.sigma_adcs, self.thr_counts)))
 
-	def ADC_to_Volts(self, adcs):
+	def adc_to_volts(self, adcs):
 		return np.add(self.adc_to_volts_cal['p0'], np.multiply(adcs, self.adc_to_volts_cal['p1'], dtype='f8'), dtype='f8')
 		# return np.subtract(np.add(np.multiply(adcs, self.adc_to_volts_cal['p1'], dtype='f8'), np.divide(self.dc_offset_percent, 50.0, dtype='f8')), 1, dtype='f8')
 

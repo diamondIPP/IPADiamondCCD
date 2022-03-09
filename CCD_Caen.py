@@ -22,7 +22,7 @@ class CCD_Caen:
 		self.is_cal_run = is_cal
 		if self.infile != 'None':
 			self.settings = Settings_Caen(self.infile, self.verb, self.is_cal_run)
-			self.settings.ReadInputFile()
+			self.settings.read_input_file()
 		elif settings:
 			self.settings = settings
 		else:
@@ -155,12 +155,12 @@ class CCD_Caen:
 		self.trigger_ch.Correct_Base_Line(mean_adc=mean_t, sigma_adc=std_t, settings=self.settings)
 		self.trigger_ch.Correct_Threshold()
 		# self.settings.trig_base_line = np.multiply(self.trigger_ch.base_line_u_adcs, self.settings.sigRes, dtype='f8')
-		self.settings.trig_base_line = self.trigger_ch.ADC_to_Volts(self.trigger_ch.base_line_adcs)
+		self.settings.trig_base_line = self.trigger_ch.adc_to_volts(self.trigger_ch.base_line_adcs)
 		self.settings.trig_thr_counts = self.trigger_ch.thr_counts
 		self.veto_ch.Correct_Base_Line(mean_adc=mean_ac, sigma_adc=std_ac, settings=self.settings)
 		self.veto_ch.Correct_Threshold()
 		# self.settings.ac_base_line = np.multiply(self.veto_ch.base_line_u_adcs, self.settings.sigRes, dtype='f8')
-		self.settings.ac_base_line = self.veto_ch.ADC_to_Volts(self.veto_ch.base_line_adcs)
+		self.settings.ac_base_line = self.veto_ch.adc_to_volts(self.veto_ch.base_line_adcs)
 		self.settings.ac_thr_counts = self.veto_ch.thr_counts
 
 		del self.ft0, self.datat, t, triggADCs, mean_t, std_t

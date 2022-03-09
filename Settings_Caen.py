@@ -5,6 +5,7 @@ import ROOT as ro
 import shutil
 from Utils import *
 import pickle as pickle
+from argparse import ArgumentParser
 
 
 # has all the setting required for data acquisition, it reads runs con
@@ -51,7 +52,7 @@ class Settings_Caen:
 		self.prefix = 'waves'
 		self.suffix = 'default'
 		self.sigRes = 0
-		self.UpdateSignalResolution()
+		self.update_signal_resolution()
 		self.filename = ''
 		self.r_passive = 230e6
 
@@ -86,7 +87,7 @@ class Settings_Caen:
 
 		self.bar = None
 
-	def ReadInputFile(self):
+	def read_input_file(self):
 		parser = ConfigParser()
 		if self.infile != 'None':
 			if os.path.isfile(self.infile):
@@ -204,9 +205,10 @@ class Settings_Caen:
 						self.suffix = parser.get('OUTPUT', 'suffix')
 					else:
 						self.suffix = ''
-				self.UpdateSignalResolution()
+				self.update_signal_resolution()
 
-	def UpdateSignalResolution(self):
+	def update_signal_resolution(self):
+		"""Sets the value of a single ADC channel in volts"""
 		self.sigRes = np.double(np.divide(np.double(self.input_range), (np.power(2.0, 14.0, dtype='f8') - 1)))
 
 	def Get_Calibration_Constants(self):
@@ -224,15 +226,12 @@ class Settings_Caen:
 	def Get_voltage_calibration(self):
 		if self.voltage_calib_dir != '':
 			if os.path.isdir(self.voltage_calib_dir):
-				v_adc_calfile = ''
 				if 'sig_dc_offset_percent' in list(self.__dict__.keys()):
-					v_adc_calfile = 'adc_cal_{c}_{dop}.cal'.format(c=self.sigCh, dop=self.sig_dc_offset_percent)
+					v_adc_calfile = f'adc_cal_{self.sigCh}_{self.sig_dc_offset_percent}.cal'
 				else:
-					v_adc_calfile = 'adc_cal_{c}_{dop}.cal'.format(c=self.sigCh, dop=45 if self.bias < 0 else -45)
-				if os.path.isfile('{d}/{f}'.format(d=self.voltage_calib_dir, f=v_adc_calfile)):
-					self.adc_volts_pickle = pickle.load(open('{d}/{f}'.format(d=self.voltage_calib_dir, f=v_adc_calfile), 'rb'))
-
-
+					v_adc_calfile = f'adc_cal_{self.sigCh}_{45 if self.bias < 0 else -45}.cal'
+				if os.path.isfile(f'{self.voltage_calib_dir}/{v_adc_calfile}'):
+					self.adc_volts_pickle = pickle.load(open(f'{self.voltage_calib_dir}/{v_adc_calfile}', 'rb'))
 
 	def UpdateVcalVsSignal(self):
 		self.fit_vcal_signal_params = np.array([np.divide(-self.fit_signal_vcal_params[0], self.fit_signal_vcal_params[1], dtype='f8'), np.divide(1.0, self.fit_signal_vcal_params[1], dtype='f8')], dtype='f8')
@@ -311,8 +310,8 @@ class Settings_Caen:
 				dest_file.write('\n')
 		print('Done')
 
-	def ADC_to_Volts(self, adcs, channel):
-		return channel.ADC_to_Volts(adcs)
+	def adc_to_volts(self, adcs, channel):
+		return channel.adc_to_volts(adcs)
 
 	def GetTriggerValueADCs(self, channel):
 		try:
@@ -356,4 +355,8 @@ class Settings_Caen:
 
 
 if __name__ == '__main__':
-	print('bla')
+	arg_parser = ArgumentParser()
+	arg_parser.add_argument('settings')
+	args = arg_parser.parse_args()
+	settings_filename = args.settings
+	settings = Settings_Caen(settings_filename)
