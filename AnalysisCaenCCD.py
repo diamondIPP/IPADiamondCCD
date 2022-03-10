@@ -2161,13 +2161,13 @@ class AnalysisCaenCCD:
 # 	infile = str(options.infile)
 # 	bias = float(options.bias)
 # 	verb = bool(options.verb)
-# 	autom = bool(options.auto)
+# 	auto = bool(options.auto)
 #
 # 	ana = AnalysisCaenCCD(directory, config, infile, bias, verb)
 #
 # 	# ana.LoadAnalysisTree()
 # 	# ana.LoadPickles()
-# 	if autom:
+# 	if auto:
 # 		ana.AnalysisWaves()
 # 		ana.PlotWaveforms('SelectedWaveforms', 'signal', cuts=ana.cut0.GetTitle())
 # 		ana.canvas['SelectedWaveforms'].SetLogz()

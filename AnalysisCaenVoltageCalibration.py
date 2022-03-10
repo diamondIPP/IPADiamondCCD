@@ -5,6 +5,7 @@ from argparse import ArgumentParser
 import ROOT as ro
 import pickle as pickle
 from Utils import *
+import dill
 
 # accuracy and resolution of reference multimeter UT803. Change accordingly if using another reference device. All values are given in mV
 reference_ranges = [600, 6000, 60000, 600000, 1000000]
@@ -27,7 +28,8 @@ class AnalysisCaenVoltageCalibration:
 		self.adcs_std = []
 		self.cal_pickle_name = ''
 		self.inDir = Correct_Path(directory)
-		if not os.path.isdir(self.inDir): ExitMessage('The given directory does not exist. Exiting!', os.EX_DATAERR)
+		if not os.path.isdir(self.inDir):
+			ExitMessage('The given directory does not exist. Exiting!', os.EX_DATAERR)
 		self.cal_pickles = self.LookForCalPickles()
 		if len(self.cal_pickles) > 0:
 			self.LoadPickle()
@@ -63,7 +65,7 @@ class AnalysisCaenVoltageCalibration:
 		if len(self.runs) < 2: ExitMessage('Can\'t make calibration with only ' + str(len(self.runs)) + ' runs. Exiting!', os.EX_USAGE)
 		self.runs.sort(key=lambda x: float(x.split('_')[-1].split('mV')[0]))
 		self.vcals = [float(x.split('_')[-1].split('mV')[0]) for x in self.runs]
-		if len(self.vcals) != len(self.runs): ExitMessage('There was an error. Check the runs inside {d}'.format(d=self.inDir), os.EX_DATAERR)
+		if len(self.vcals) != len(self.runs): ExitMessage(f'There was an error. Check the runs inside {self.inDir}', os.EX_DATAERR)
 		self.EstimateVcalsUncertainty()
 
 	def LookForCalPickles(self):
@@ -71,8 +73,9 @@ class AnalysisCaenVoltageCalibration:
 		return pick_files
 
 	def LoadPickle(self, pos=0):
+		dill._dill._reverse_typemap["ObjectType"] = object
 		if pos < len(self.cal_pickles):
-			self.cal_pickle = pickle.load(open(self.cal_pickles[pos], 'rb'))
+			self.cal_pickle = pickle.load(open(self.cal_pickles[pos], 'rb'), encoding="latin1")
 			self.cal_pickle_name = self.cal_pickle['file_name']
 			self.vcals = self.cal_pickle['vcals']
 			self.vcals_uncertainty = self.cal_pickle['vcals_sigma']
@@ -124,6 +127,7 @@ class AnalysisCaenVoltageCalibration:
 	def LoadEvents(self):
 		unpack_fmt = '@' + str(self.working_num_events * self.working_settings.points) + 'H'
 		self.working_signal.seek(0, 0)
+		print('Types:', type(self.working_struct_len), type(self.working_num_events))
 		tempdata = self.working_signal.read(self.working_struct_len * self.working_num_events)
 		tempstruct = struct.Struct(unpack_fmt).unpack_from(tempdata)
 		self.working_adcs.append(tempstruct)
@@ -135,29 +139,34 @@ class AnalysisCaenVoltageCalibration:
 		self.working_vcal_un = self.vcals_uncertainty[pos]
 
 		temp_list = glob.glob(self.working_dir + '/*.settings')
-		if len(temp_list) != 1: ExitMessage('There should be one and only one settings file pickle in {d}'.format(d=self.working_dir), os.EX_DATAERR)
+		if len(temp_list) != 1: ExitMessage(f'There should be one and only one settings file pickle in {self.working_dir}', os.EX_DATAERR)
 		self.working_settings_path = temp_list[0]
-		self.working_settings = pickle.load(open(self.working_settings_path, 'rb'))
+		# convert py2 to py3
+		dill._dill._reverse_typemap["ObjectType"] = object
+		self.working_settings = pickle.load(open(self.working_settings_path, 'rb'), encoding="latin1")
+		print('Working Settings:', self.working_settings.struct_fmt, self.working_settings.struct_len, self.working_settings.dig_bits)
 		self.working_struct_fmt = self.working_settings.struct_fmt
 		self.working_struct_len = self.working_settings.struct_len
 		self.working_bits_adc = self.working_settings.dig_bits
 
 		temp_list = glob.glob(self.working_dir + '/*.signal_ch')
-		if len(temp_list) != 1: ExitMessage('There should be one and only one signal_ch file pickle in {d}'.format(d=self.working_dir), os.EX_DATAERR)
+		if len(temp_list) != 1:
+			ExitMessage(f'There should be one and only one signal_ch file pickle in {self.working_dir}', os.EX_DATAERR)
 		self.working_channel_path = temp_list[0]
-		self.working_channel = pickle.load(open(self.working_channel_path, 'rb'))
+		self.working_channel = pickle.load(open(self.working_channel_path, 'rb'), encoding="latin1")
 		self.working_caen_ch = self.working_channel.ch
 		self.working_caen_ch_dc_off_percent = self.working_channel.dc_offset_percent
 
 		temp_list = glob.glob(self.working_dir + '/*signal.dat')
-		if len(temp_list) != 1: ExitMessage('There should be one and only one signal.dat binary file in {d}'.format(d=self.working_dir), os.EX_DATAERR)
+		if len(temp_list) != 1:
+			ExitMessage(f'There should be one and only one signal.dat binary file in {self.working_dir}', os.EX_DATAERR)
 		self.working_signal_path = temp_list[0]
 		self.LoadBinary()
 
 	def LoadBinary(self):
 		if os.path.isfile(self.working_signal_path):
 			self.working_signal = open(self.working_signal_path, 'rb')
-			self.working_num_events = os.path.getsize(self.working_signal_path) / self.working_settings.struct_len
+			self.working_num_events = os.path.getsize(self.working_signal_path) // self.working_settings.struct_len
 
 	def CloseBinary(self):
 		if self.working_signal:
@@ -196,8 +205,8 @@ class AnalysisCaenVoltageCalibration:
 		self.graphs[name].Draw('AP')
 		SetDefault1DCanvasSettings(self.canvas[name])
 		self.FitGraph(name)
-		self.canvas[name].SaveAs('{d}/{n}_{c}_{o}.png'.format(d=self.inDir, n=name, c=self.working_caen_ch, o=self.working_caen_ch_dc_off_percent))
-		self.canvas[name].SaveAs('{d}/{n}_{c}_{o}.root'.format(d=self.inDir, n=name, c=self.working_caen_ch, o=self.working_caen_ch_dc_off_percent))
+		self.canvas[name].SaveAs(f'{self.inDir}/{name}_{self.working_caen_ch}_{self.working_caen_ch_dc_off_percent}.png')
+		self.canvas[name].SaveAs(f'{self.inDir}/{name}_{self.working_caen_ch}_{self.working_caen_ch_dc_off_percent}.root')
 
 	def FitGraph(self, name='ADC_Voltage_cal'):
 		if name in list(self.graphs.keys()):
@@ -215,7 +224,7 @@ class AnalysisCaenVoltageCalibration:
 				if func.GetProb() < 0.9:
 					self.graphs[name].Fit('fit_' + name, 'Q0', '', 0, 2**14 -1)
 				self.fits[name] = func
-				self.fits[name].Draw('same')
+				# self.fits[name].Draw('same')
 
 	def CheckExistingCanvas(self, name='ADC_Voltage_cal'):
 		if name in list(self.canvas.keys()):
@@ -250,34 +259,39 @@ class AnalysisCaenVoltageCalibration:
 		                   }
 
 	def SavePickle(self, name='ADC_Voltage_cal', overwrite=False):
-		self.cal_pickle_name = 'adc_cal_{ch}_{o}.cal'.format(ch=self.working_caen_ch, o=self.working_caen_ch_dc_off_percent)
+		self.cal_pickle_name = f'adc_cal_{self.working_caen_ch}_{self.working_caen_ch_dc_off_percent}.cal'
 		if not self.cal_pickle:
 			self.FillPickle(name)
-		if os.path.isfile('{d}/{pn}'.format(d=self.inDir, pn=self.cal_pickle_name)):
+		if os.path.isfile(f'{self.inDir}/{self.cal_pickle_name}'):
 			if not overwrite:
 				print('The file', self.cal_pickle_name, 'already exists in', self.inDir)
 				return
-		with open('{d}/{pn}'.format(d=self.inDir, pn=self.cal_pickle_name), 'wb') as fpickle:
+		with open(f'{self.inDir}/{self.cal_pickle_name}', 'wb') as fpickle:
 			pickle.dump(self.cal_pickle, fpickle, pickle.HIGHEST_PROTOCOL)
 		print('Saved calibration pickle', self.cal_pickle_name, 'in', self.inDir)
 
 
 if __name__ == '__main__':
 	parser = ArgumentParser()
-	parser.add_argument('-d', '--inDir', dest='inDir', default='.', type=str, help='Directory containing the subdirectories with different voltages run files')
-	parser.add_argument('-a', '--automatic', dest='auto', default=False, help='Toggles automatic basic analysis', action='store_true')
-	parser.add_argument('-o', '--overwrite', dest='overwrite', default=False, help='Toggles overwriting of the analysis tree', action='store_true')
+	parser.add_argument('-d', '--inDir', dest='inDir', default='.', type=str,
+						help='Directory containing the subdirectories with different voltages run files')
+	parser.add_argument('-a', '--automatic', dest='auto', default=False,
+						help='Toggles automatic basic analysis', action='store_true')
+	parser.add_argument('-o', '--overwrite', dest='overwrite', default=False,
+						help='Toggles overwriting of the analysis tree', action='store_true')
 
 	args = parser.parse_args()
 	directory = str(args.inDir)
-	autom = bool(args.auto)
-	overw = bool(args.overwrite)
+	auto = bool(args.auto)
+	overwrite = bool(args.overwrite)
 
 	ana = AnalysisCaenVoltageCalibration(directory)
 
-	if autom:
+	if auto:
 		if not ana.cal_pickle:
 			ana.LoopRuns()
 			ana.CreateResultsGraph()
+			ana.FitGraph()
+			ana.SavePickle()
 	# return ana
 	# ana = main()

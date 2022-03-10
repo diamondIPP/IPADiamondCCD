@@ -79,7 +79,7 @@ class Settings_Caen:
 		self.fit_vcal_signal_params, self.fit_vcal_signal_params_errors = None, None
 		self.UpdateVcalVsSignal()
 
-		self.struct_fmt = '@{p}H'.format(p=self.points)
+		self.struct_fmt = f'@{self.points}H'
 		self.struct_len = struct.calcsize(self.struct_fmt)
 
 		self.hv_struct_fmt = '@IIIff' # struct for hv file: starting event is a uint, time in seconds is a uint, nanoseconds is a uint, voltage is float32, current is float32
@@ -107,7 +107,7 @@ class Settings_Caen:
 				if parser.has_section('RUN'):
 					if parser.has_option('RUN', 'time'):
 						self.points = int(np.ceil(parser.getfloat('RUN', 'time') * 1.0e-6 / self.time_res))
-						self.struct_fmt = '@{p}H'.format(p=self.points)
+						self.struct_fmt = f'@{self.points}H'
 						self.struct_len = struct.calcsize(self.struct_fmt)
 					if parser.has_option('RUN', 'post_trigger_percent'):
 						self.post_trig_percent = parser.getint('RUN', 'post_trigger_percent')
@@ -200,7 +200,7 @@ class Settings_Caen:
 					if parser.has_option('OUTPUT', 'dir'):
 						self.outdir = parser.get('OUTPUT', 'dir')
 					if parser.has_option('OUTPUT', 'prefix'):
-						self.prefix = parser.get('OUTPUT', 'prefix') if not self.is_cal_run else '{Y:04d}{M:02d}{D:02d}'.format(Y=time.localtime()[0], M=time.localtime()[1], D=time.localtime()[2])
+						self.prefix = parser.get('OUTPUT', 'prefix') if not self.is_cal_run else f'{time.localtime()[0]:04d}{time.localtime()[1]:02d}{time.localtime()[2]:02d}'
 					if parser.has_option('OUTPUT', 'suffix'):
 						self.suffix = parser.get('OUTPUT', 'suffix')
 					else:
@@ -241,27 +241,27 @@ class Settings_Caen:
 		def AddSuffix(string1):
 			if not self.is_cal_run:
 				string1 += '_Pos' if self.bias >= 0 else '_Neg'
-				string1 += '_{b}V'.format(b=abs(self.bias))
+				string1 += f'_{abs(self.bias)}V'
 				if self.suffix != '':
-					string1 += '_{s}'.format(s=self.suffix)
+					string1 += f'_{self.suffix}'
 			else:
-				string1 += '_{t}'.format(t=self.cal_type)
-				string1 += '_{p}mV'.format(p=self.pulser_amplitude)
+				string1 += f'_{self.cal_type}'
+				string1 += f'_{self.pulser_amplitude}mV'
 			return string1
 
-		self.filename = '{d}_{p}_ccd'.format(p=self.prefix, d=self.dut)
+		self.filename = f'{self.dut}_{self.prefix}_ccd'
 		self.filename = AddSuffix(self.filename)
 
 		if not os.path.isdir(self.outdir):
 			os.makedirs(self.outdir)
-		if not os.path.isdir('{d}/Runs'.format(d=self.outdir)):
-			os.makedirs('{d}/Runs'.format(d=self.outdir))
-		if not os.path.isdir('{d}/Runs/{f}'.format(d=self.outdir, f=self.filename)):
-			os.makedirs('{d}/Runs/{f}'.format(d=self.outdir, f=self.filename))
+		if not os.path.isdir(f'{self.outdir}/Runs'):
+			os.makedirs(f'{self.outdir}/Runs')
+		if not os.path.isdir(f'{self.outdir}/Runs/{self.filename}'):
+			os.makedirs(f'{self.outdir}/Runs/{self.filename}')
 
 	def SetupDigitiser(self, doBaseLines=False, signal=None, trigger=None, ac=None, events_written=0):
 		print('Creating digitiser CAEN V1730D configuration file... ', end=' ') ; sys.stdout.flush()
-		name_dest = '{d}/WaveDumpConfig_CCD_BL.txt'.format(d=self.outdir) if doBaseLines else '{d}/WaveDumpConfig_CCD.txt'.format(d=self.outdir)
+		name_dest = f'{self.outdir}/WaveDumpConfig_CCD_BL.txt' if doBaseLines else f'{self.outdir}/WaveDumpConfig_CCD.txt'
 
 		sig_polarity = 'POSITIVE' if self.bias < 0 else 'NEGATIVE'
 		cont = True
@@ -270,11 +270,11 @@ class Settings_Caen:
 				for line in source_file:
 					if cont:
 						if line.startswith('OPEN PCI'):
-							dest_file.write('OPEN PCI {ol} {n} {ba}\n'.format(ol=int(self.optlink), n=int(self.node), ba=int(self.vme_b_addr)))
+							dest_file.write(f'OPEN PCI {int(self.optlink)} {int(self.node)} {int(self.vme_b_addr)}\n')
 						elif line.startswith('RECORD_LENGTH'):
-							dest_file.write('RECORD_LENGTH\t{p}\n'.format(p=int(self.points)))
+							dest_file.write(f'RECORD_LENGTH\t{int(self.points)}\n')
 						elif line.startswith('POST_TRIGGER'):
-							dest_file.write('POST_TRIGGER\t{pt}\n'.format(pt=RoundInt(self.post_trig_percent - 100. * self.trigg_offset / self.points)))
+							dest_file.write(f'POST_TRIGGER\t{RoundInt(self.post_trig_percent - 100. * self.trigg_offset / self.points)}\n')
 						elif line.startswith('CHANNEL_TRIGGER'):
 							dest_file.write('CHANNEL_TRIGGER\tDISABLED\n')
 							cont = False
@@ -283,29 +283,29 @@ class Settings_Caen:
 
 				dest_file.write('\n# configuration for each channel [0] to [15], although it only has 8 channels ;)')
 				for ch in range(16):
-					dest_file.write('\n\n[{ch}]'.format(ch=ch))
+					dest_file.write(f'\n\n[{ch}]')
 					channels = [signal.ch, trigger.ch, ac.ch] if not self.is_cal_run and ac else [signal.ch, trigger.ch]
 					if ch in channels:
 						dest_file.write('\nENABLE_INPUT\tYES')
 					else:
 						dest_file.write('\nENABLE_INPUT\tNO')
 					if ch == signal.ch:
-						dest_file.write('\nPULSE_POLARITY\t{sp}'.format(sp=sig_polarity))
-						dest_file.write('\nDC_OFFSET\t{o}'.format(o=signal.dc_offset_percent))
+						dest_file.write(f'\nPULSE_POLARITY\t{sig_polarity}')
+						dest_file.write(f'\nDC_OFFSET\t{signal.dc_offset_percent}')
 						dest_file.write('\nCHANNEL_TRIGGER\tDISABLED')
 					elif ch == self.trigCh:
 						trigpol = 'NEGATIVE' if trigger.edge == -1 else 'POSITIVE'
-						dest_file.write('\nPULSE_POLARITY\t{tp}'.format(tp=trigpol))
-						dest_file.write('\nDC_OFFSET\t{o}'.format(o=trigger.dc_offset_percent))
+						dest_file.write(f'\nPULSE_POLARITY\t{trigpol}')
+						dest_file.write(f'\nDC_OFFSET\t{trigger.dc_offset_percent}')
 						if doBaseLines or self.random_test:
 							dest_file.write('\nCHANNEL_TRIGGER\tDISABLED')
 						else:
 							dest_file.write('\nCHANNEL_TRIGGER\tACQUISITION_ONLY')
-							dest_file.write('\nTRIGGER_THRESHOLD\t{th}'.format(th=self.GetTriggerValueADCs(trigger)))
+							dest_file.write(f'\nTRIGGER_THRESHOLD\t{self.GetTriggerValueADCs(trigger)}')
 					elif not self.is_cal_run and ac:
 						if ch == ac.ch:
 							dest_file.write('\nPULSE_POLARITY\tNEGATIVE')
-							dest_file.write('\nDC_OFFSET\t{o}'.format(o=ac.dc_offset_percent))
+							dest_file.write(f'\nDC_OFFSET\t{ac.dc_offset_percent}')
 							dest_file.write('\nCHANNEL_TRIGGER\tDISABLED')
 				dest_file.write('\n')
 		print('Done')
@@ -321,30 +321,30 @@ class Settings_Caen:
 
 	def MoveBinaryFiles(self):
 		print('Moving binary files... ', end=' ') ; sys.stdout.flush()
-		shutil.move('raw_wave{chs}.dat'.format(chs=self.sigCh), '{d}/Runs/{f}/{f}_signal.dat'.format(d=self.outdir, f=self.filename))
-		shutil.move('raw_wave{cht}.dat'.format(cht=self.trigCh), '{d}/Runs/{f}/{f}_trigger.dat'.format(d=self.outdir, f=self.filename))
+		shutil.move(f'raw_wave{self.sigCh}.dat', f'{self.outdir}/Runs/{self.filename}/{self.filename}_signal.dat')
+		shutil.move(f'raw_wave{self.trigCh}.dat', f'{self.outdir}/Runs/{self.filename}/{self.filename}_trigger.dat')
 		if not self.is_cal_run:
-			shutil.move('raw_wave{cha}.dat'.format(cha=self.acCh), '{d}/Runs/{f}/{f}_veto.dat'.format(d=self.outdir, f=self.filename))
+			shutil.move(f'raw_wave{self.acCh}.dat', f'{self.outdir}/Runs/{self.filename}/{self.filename}_veto.dat')
 		if os.path.isfile('raw_time.dat'):
-			shutil.move('raw_time.dat', '{d}/Runs/{f}/{f}_time.dat'.format(d=self.outdir, f=self.filename))
+			shutil.move('raw_time.dat', f'{self.outdir}/Runs/{self.filename}/{self.filename}_time.dat')
 		self.RemoveBinaries()
 		print('Done')
 
 	def RenameDigitiserSettings(self):
 		print('Moving digitiser settings... ', end=' ') ; sys.stdout.flush()
-		shutil.move('{d}/WaveDumpConfig_CCD.txt'.format(d=self.outdir), '{d}/Runs/{f}/WDConfig_CCD_{f}.txt'.format(d=self.outdir, f=self.filename))
+		shutil.move(f'{self.outdir}/WaveDumpConfig_CCD.txt', f'{self.outdir}/Runs/{self.filename}/WDConfig_CCD_{self.filename}.txt')
 		print('Done')
 
 	def RemoveBinaries(self):
 		channels = [self.sigCh, self.trigCh, self.acCh] if not self.is_cal_run else [self.sigCh, self.trigCh]
 		for ch in channels:
-			if os.path.isfile('wave{c}.dat'.format(c=ch)):
-				os.remove('wave{c}.dat'.format(c=ch))
+			if os.path.isfile(f'wave{ch}.dat'):
+				os.remove(f'wave{ch}.dat')
 
 	def CreateProgressBar(self, maxVal=1):
 		widgets = [
 			'Processed: ', progressbar.Counter(),
-			' out of {mv} '.format(mv=maxVal), progressbar.Percentage(),
+			' out of {maxVal} ', progressbar.Percentage(),
 			' ', progressbar.Bar(marker='>'),
 			' ', progressbar.Timer(),
 			' ', progressbar.ETA()
