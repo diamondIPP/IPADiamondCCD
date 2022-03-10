@@ -127,7 +127,6 @@ class AnalysisCaenVoltageCalibration:
 	def LoadEvents(self):
 		unpack_fmt = '@' + str(self.working_num_events * self.working_settings.points) + 'H'
 		self.working_signal.seek(0, 0)
-		print('Types:', type(self.working_struct_len), type(self.working_num_events))
 		tempdata = self.working_signal.read(self.working_struct_len * self.working_num_events)
 		tempstruct = struct.Struct(unpack_fmt).unpack_from(tempdata)
 		self.working_adcs.append(tempstruct)
@@ -144,7 +143,6 @@ class AnalysisCaenVoltageCalibration:
 		# convert py2 to py3
 		dill._dill._reverse_typemap["ObjectType"] = object
 		self.working_settings = pickle.load(open(self.working_settings_path, 'rb'), encoding="latin1")
-		print('Working Settings:', self.working_settings.struct_fmt, self.working_settings.struct_len, self.working_settings.dig_bits)
 		self.working_struct_fmt = self.working_settings.struct_fmt
 		self.working_struct_len = self.working_settings.struct_len
 		self.working_bits_adc = self.working_settings.dig_bits
