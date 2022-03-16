@@ -7,9 +7,14 @@ import pickle as pickle
 from Utils import *
 import dill
 
-# accuracy and resolution of reference multimeter UT803. Change accordingly if using another reference device. All values are given in mV
+# accuracy and resolution of reference multimeter UT803.
+# Change accordingly if using another reference device. All values are given in mV
 reference_ranges = [600, 6000, 60000, 600000, 1000000]
-reference_accuracy = {600: {'percent': 0.6, 'digits': 0.2}, 6000: {'percent': 0.3, 'digits': 2}, 60000: {'percent': 0.3, 'digits': 20}, 600000: {'percent': 0.3, 'digits': 200}, 6000000: {'percent': 0.5, 'digits': 3000}}
+reference_accuracy = {
+	600: {'percent': 0.6, 'digits': 0.2}, 6000: {'percent': 0.3, 'digits': 2},
+	60000: {'percent': 0.3, 'digits': 20}, 600000: {'percent': 0.3, 'digits': 200},
+	6000000: {'percent': 0.5, 'digits': 3000}
+}
 fit_method = ('Minuit2', 'Migrad', )
 
 class AnalysisCaenVoltageCalibration:
@@ -62,10 +67,12 @@ class AnalysisCaenVoltageCalibration:
 		self.vcals_valid = []
 		self.vcals_uncertainty = []
 		self.runs = glob.glob(self.inDir + '/*mV')
-		if len(self.runs) < 2: ExitMessage('Can\'t make calibration with only ' + str(len(self.runs)) + ' runs. Exiting!', os.EX_USAGE)
+		if len(self.runs) < 2:
+			ExitMessage(f"Can't make calibration with only {len(self.runs)} run. Exiting!", os.EX_USAGE)
 		self.runs.sort(key=lambda x: float(x.split('_')[-1].split('mV')[0]))
 		self.vcals = [float(x.split('_')[-1].split('mV')[0]) for x in self.runs]
-		if len(self.vcals) != len(self.runs): ExitMessage(f'There was an error. Check the runs inside {self.inDir}', os.EX_DATAERR)
+		if len(self.vcals) != len(self.runs):
+			ExitMessage(f'There was an error. Check the runs inside {self.inDir}', os.EX_DATAERR)
 		self.EstimateVcalsUncertainty()
 
 	def LookForCalPickles(self):

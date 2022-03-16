@@ -9,28 +9,36 @@ from optparse import OptionParser
 from collections import OrderedDict
 import ROOT as ro
 import pickle as pickle
+import dill
 from Utils import *
 from Langaus import LanGaus
 from VcalToElectrons import VcalToElectrons
+from argparse import ArgumentParser
 # from memory_profiler import profile
 
 trig_rand_time = 0.2
 wait_time_hv = 7
-BRANCHES1DTOTAL = ['event', 'vetoedEvent', 'badShape', 'badPedestal', 'satEvent', 'voltageDia', 'voltageHV', 'currentHV',
-				   'timeHV', 'peakPosition', 'peakPositionCF', 'pedestal', 'pedestalCF', 'pedestalSigma', 'pedestalSigmaCF',
-				   'signalAndPedestal', 'signalAndPedestalCF', 'signalAndPedestalSigma', 'signalAndPedestalSigmaCF', 'signal',
-				   'signalCF', 'deltaTimeCF']
-BRANCHES1DTYPE = {'event': 'uint32', 'vetoedEvent': 'bool', 'badShape': 'int8', 'badPedestal': 'bool', 'satEvent': 'bool',
-				  'voltageDia': 'float32', 'voltageHV': 'float32', 'currentHV': 'float32', 'timeHV.AsDouble()': 'float64',
-				  'timeHV.Convert()': 'uint32', 'peakPosition': 'float32', 'peakPositionCF': 'float32', 'pedestal': 'float32',
-				  'pedestalCF': 'float32', 'pedestalSigma': 'float32', 'pedestalSigmaCF': 'float32', 'signalAndPedestal': 'float32',
-				  'signalAndPedestalCF': 'float32','signalAndPedestalSigma': 'float32','signalAndPedestalSigmaCF': 'float32',
-				  'signal': 'float32', 'signalCF': 'float32', 'deltaTimeCF': 'float64'}
+BRANCHES1DTOTAL = [
+	'event', 'vetoedEvent', 'badShape', 'badPedestal', 'satEvent', 'voltageDia', 'voltageHV', 'currentHV',
+	'timeHV', 'peakPosition', 'peakPositionCF', 'pedestal', 'pedestalCF', 'pedestalSigma', 'pedestalSigmaCF',
+	'signalAndPedestal', 'signalAndPedestalCF', 'signalAndPedestalSigma', 'signalAndPedestalSigmaCF', 'signal',
+	'signalCF', 'deltaTimeCF']
+BRANCHES1DTYPE = {
+	'event': 'uint32', 'vetoedEvent': 'bool', 'badShape': 'int8', 'badPedestal': 'bool', 'satEvent': 'bool',
+	'voltageDia': 'float32', 'voltageHV': 'float32', 'currentHV': 'float32', 'timeHV.AsDouble()': 'float64',
+	'timeHV.Convert()': 'uint32', 'peakPosition': 'float32', 'peakPositionCF': 'float32', 'pedestal': 'float32',
+	'pedestalCF': 'float32', 'pedestalSigma': 'float32', 'pedestalSigmaCF': 'float32', 'signalAndPedestal': 'float32',
+	'signalAndPedestalCF': 'float32','signalAndPedestalSigma': 'float32','signalAndPedestalSigmaCF': 'float32',
+	'signal': 'float32', 'signalCF': 'float32', 'deltaTimeCF': 'float64'}
 BRANCHESWAVESTOTAL = ['time', 'voltageSignal', 'voltageTrigger', 'voltageVeto']
 BRANCHESWAVESTYPE = {'time': 'float64', 'voltageSignal': 'float64', 'voltageTrigger': 'float64', 'voltageVeto': 'float64'}
-BRANCHES1DLOAD = ['event', 'voltageDia', 'voltageHV','currentHV', 'timeHV.Convert()', 'timeHV.AsDouble()', 'peakPosition', 'peakPositionCF', 'deltaTimeCF']
+BRANCHES1DLOAD = [
+	'event', 'voltageDia', 'voltageHV','currentHV', 'timeHV.Convert()', 'timeHV.AsDouble()', 'peakPosition',
+	'peakPositionCF', 'deltaTimeCF']
 BRANCHESWAVESLOAD = ['time', 'voltageSignal']
-ANALYSISSCALARBRANCHES = ['pedestal', 'pedestalCF', 'pedestalSigma', 'pedestalSigmaCF', 'signalAndPedestal', 'signalAndPedestalCF', 'signalAndPedestalSigma', 'signalAndPedestalSigmaCF', 'signal', 'signalCF']
+ANALYSISSCALARBRANCHES = [
+	'pedestal', 'pedestalCF', 'pedestalSigma', 'pedestalSigmaCF', 'signalAndPedestal', 'signalAndPedestalCF',
+	'signalAndPedestalSigma', 'signalAndPedestalSigmaCF', 'signal', 'signalCF']
 fit_method = ('Minuit2', 'Migrad', )
 LOAD_IGNORE_NAMES = ['analysis', 'pedestal', 'waveform', 'voltage', 'signal', 'dist', 'currents', 'ph', 'veto', 'trigger', 'peak', 'blag']
 
@@ -149,7 +157,7 @@ class AnalysisCaenCCD:
 		self.signal_cal_fit_params = {'p0': 0, 'p1': 0, 'p0_error': 0, 'p1_error': 0, 'prob': 0, 'chi2': 0, 'ndf': 0}
 		self.cal_circuit_settings = ''
 		self.vcal_to_q = VcalToElectrons()
-
+		print(f'infile: {infile}, directory: {directory}')
 		if infile == '' and directory != '.':
 			print('Is analysis of data after 06/18...')
 			self.LoadInputTree()
@@ -166,7 +174,10 @@ class AnalysisCaenCCD:
 			self.LoadInputTree()
 			self.LoadPickles()
 		else:
-			ExitMessage('I don\'t know what to do. If you want to run the analysis for old files, give inputFile, configFile, bias. If you want to run the analysis for new files, just give the directory where the pickles, data files and root files are.', os.EX_CONFIG)
+			ExitMessage(
+				'I don\'t know what to do. If you want to run the analysis for old files, give inputFile, configFile, bias.'
+				'If you want to run the analysis for new files, just give the directory where the pickles, '
+				'data files and root files are.', os.EX_CONFIG)
 
 		self.analysisFile = None
 		self.analysisTree = None
@@ -286,15 +297,15 @@ class AnalysisCaenCCD:
 
 	def LoadInputTree(self):
 		if not os.path.isdir(self.inDir):
-			ExitMessage('The directory {d} does not exist! Exiting...'.format(d=self.inDir), os.EX_DATAERR)
+			ExitMessage(f'The directory {self.inDir} does not exist! Exiting...', os.EX_DATAERR)
 		if self.in_tree_name == '':
-			root_files = glob.glob('{d}/*.root'.format(d=self.inDir))
+			root_files = glob.glob(f'{self.inDir}/*.root')
 			for name in LOAD_IGNORE_NAMES:
 				root_files = [filei for filei in root_files if name not in filei.split('/')[-1].lower()]
 			if len(root_files) == 1:
 				self.in_tree_name = root_files[0].split('/')[-1].split('.root')[0]
 			elif len(root_files) == 0:
-				ExitMessage('There is no root file inside the directory {d}. Exiting...'.format(d=self.inDir), os.EX_DATAERR)
+				ExitMessage(f'There is no root file inside the directory {self.inDir}. Exiting...', os.EX_DATAERR)
 			else:
 				print('The following files were encountered:')
 				for it in root_files:
@@ -303,35 +314,36 @@ class AnalysisCaenCCD:
 				if file_to_open in root_files:
 					self.in_tree_name = file_to_open.split('/')[-1].split('.root')[0]
 				else:
-					ExitMessage('The given file: {f} is not part of the given list. Exiting...'.format(f=file_to_open), os.EX_DATAERR)
-		if os.path.isfile('{d}/{f}.root'.format(d=self.inDir, f=self.in_tree_name)):
-			self.in_root_file = ro.TFile('{d}/{f}.root'.format(d=self.inDir, f=self.in_tree_name))
+					ExitMessage(f'The given file: {file_to_open} is not part of the given list. Exiting...', os.EX_DATAERR)
+		if os.path.isfile(f'{self.inDir}/{self.in_tree_name}.root'):
+			self.in_root_file = ro.TFile(f'{self.inDir}/{self.in_tree_name}.root')
 			if self.in_root_file.GetListOfKeys().GetSize() == 0:
-				print('The file {d}/{f}.root is empty. Run won\'t be analysed.'.format(d=self.inDir, f=self.in_tree_name))
+				print(f'The file {self.inDir}/{self.in_tree_name}.root is empty. Run won\'t be analysed.')
 			else:
 				self.in_root_tree = self.in_root_file.Get(self.in_tree_name)
 				print('Loaded raw tree')
 		else:
-			ExitMessage('The file {f} is not inside {d}. Exiting...'.format(d=self.inDir, f=self.in_tree_name), os.EX_DATAERR)
+			ExitMessage(f'The file {self.in_tree_name} is not inside {self.inDir}. Exiting...', os.EX_DATAERR)
 
 	def LoadPickles(self):
+		dill._dill._reverse_typemap["ObjectType"] = object
 		if self.in_tree_name != '':
 			if os.path.isdir(self.inDir):
-				if os.path.isfile('{d}/{f}.settings'.format(d=self.inDir, f=self.in_tree_name)):
-					with open('{d}/{f}.settings'.format(d=self.inDir, f=self.in_tree_name), 'rb') as pklsets:
-						self.settings = pickle.load(pklsets)
-				if os.path.isfile('{d}/{f}.signal_ch'.format(d=self.inDir, f=self.in_tree_name)):
-					with open('{d}/{f}.signal_ch'.format(d=self.inDir, f=self.in_tree_name)) as pklsign:
-						self.signal_ch = pickle.load(pklsign)
-				if os.path.isfile('{d}/{f}.trigger_ch'.format(d=self.inDir, f=self.in_tree_name)):
-					with open('{d}/{f}.trigger_ch'.format(d=self.inDir, f=self.in_tree_name)) as pkltrig:
-						self.trigger_ch = pickle.load(pkltrig)
-				if os.path.isfile('{d}/{f}.veto_ch'.format(d=self.inDir, f=self.in_tree_name)):
-					with open('{d}/{f}.veto_ch'.format(d=self.inDir, f=self.in_tree_name)) as pklveto:
-						self.veto_ch = pickle.load(pklveto)
-				elif os.path.isfile('{d}/{f}.veto'.format(d=self.inDir, f=self.in_tree_name)):
-					with open('{d}/{f}.veto'.format(d=self.inDir, f=self.in_tree_name)) as pklveto:
-						self.veto_ch = pickle.load(pklveto)
+				if os.path.isfile(f'{self.inDir}/{self.in_tree_name}.settings'):
+					with open(f'{self.inDir}/{self.in_tree_name}.settings', 'rb') as pklsets:
+						self.settings = pickle.load(pklsets, encoding="latin1")
+				if os.path.isfile(f'{self.inDir}/{self.in_tree_name}.signal_ch'):
+					with open(f'{self.inDir}/{self.in_tree_name}.signal_ch') as pklsign:
+						self.signal_ch = pickle.load(pklsign, encoding="latin1")
+				if os.path.isfile(f'{self.inDir}/{self.in_tree_name}.trigger_ch'):
+					with open(f'{self.inDir}/{self.in_tree_name}.trigger_ch') as pkltrig:
+						self.trigger_ch = pickle.load(pkltrig, encoding="latin1")
+				if os.path.isfile(f'{self.inDir}/{self.in_tree_name}.veto_ch'):
+					with open(f'{self.inDir}/{self.in_tree_name}.veto_ch') as pklveto:
+						self.veto_ch = pickle.load(pklveto, encoding="latin1")
+				elif os.path.isfile(f'{self.inDir}/{self.in_tree_name}.veto'):
+					with open(f'{self.inDir}/{self.in_tree_name}.veto') as pklveto:
+						self.veto_ch = pickle.load(pklveto, encoding="latin1")
 
 	def CheckLoadedVectors(self):
 		if self.eventVect.size == 0:
@@ -1023,10 +1035,10 @@ class AnalysisCaenCCD:
 
 	def DrawHisto(self, name, xmin, xmax, deltax, var, varname, cuts='', option='e'):
 		if not is_float(xmin) or not is_float(xmax) or not is_float(deltax):
-			print('Won\'t create histogram as the limits are not well defined (xmin, xmax, deltax): {mi}, {ma}, {dx}'.format(mi=xmin, ma=xmax, dx=deltax))
+			print(f"Won't create histogram. The parameters are not floats. xmin: {xmin}, xmax: {xmax}, deltax: {deltax}")
 			return
 		elif deltax <= 0 or xmin >= xmax:
-			print('Won\'t create histogram as the limits are not well defined (xmin, xmax, deltax): {mi}, {ma}, {dx}'.format(mi=xmin, ma=xmax, dx=deltax))
+			print(f"Won't create histogram. The limits are not well defined. xmin: {xmin}, xmax: {xmax}, deltax: {deltax}")
 			return
 		ro.TFormula.SetMaxima(100000)
 		if name in self.histo:
@@ -1044,7 +1056,7 @@ class AnalysisCaenCCD:
 			self.canvas[name] = ro.TCanvas('c_' + name, 'c_' + name, 1)
 			self.canvas[name].cd()
 		cuts0 = self.cut0.GetTitle() if cuts == '' else cuts
-		self.analysisTree.Draw('{v}>>h_{n}'.format(v=var, n=name), cuts0, option)
+		self.analysisTree.Draw(f'{var}>>h_{name}', cuts0, option)
 		if 'goff' not in option:
 			self.canvas[name].SetGridx()
 			self.canvas[name].SetGridy()
@@ -1056,10 +1068,10 @@ class AnalysisCaenCCD:
 
 	def DrawProfile(self, name, varx, xmin, xmax, deltax, xname, vary, ymin, ymax, yname, cuts='', options='e hist'):
 		if not is_float(xmin) or not is_float(xmax) or not is_float(deltax) or not is_float(ymin) or not is_float(ymax):
-			print('Won\'t create profile as the limits are not well defined (xmin, xmax, deltax, ymin, ymax): {mi}, {ma}, {dx}, {ym}, {yma}'.format(mi=xmin, ma=xmax, dx=deltax, ym=ymin, yma=ymax))
+			print(f"Won't create profile. The limit parameters should be floats (xmin, xmax, deltax, ymin, ymax): {xmin}, {xmax},{deltax}, {ymin}, {ymax}")
 			return
 		elif deltax <= 0 or xmin >= xmax or ymin >= ymax:
-			print('Won\'t create profile as the limits are not well defined (xmin, xmax, deltax, ymin, ymax): {mi}, {ma}, {dx}, {ym}, {yma}'.format(mi=xmin, ma=xmax, dx=deltax, ym=ymin, yma=ymax))
+			print(f"Won't create profile as the limits are not well defined (xmin, xmax, deltax, ymin, ymax): {xmin}, {xmax}, {deltax}, {ymin}, {ymax}")
 			return
 		ro.TFormula.SetMaxima(100000)
 		if name in self.profile:
@@ -2146,80 +2158,33 @@ class AnalysisCaenCCD:
 				self.SaveAllCanvas()
 
 
-# def main():
-# 	parser = OptionParser()
-# 	parser.add_option('-d', '--inDir', dest='inDir', default='.', type='string', help='Directory containing the run files')
-# 	parser.add_option('-c', '--configFile', dest='config', default='CAENAnalysisConfig.cfg', type='string', help='Path to file containing Analysis configuration file')
-# 	parser.add_option('-i', '--inputFile', dest='infile', default='', type='string', help='Path to root file to be analysed')
-# 	parser.add_option('-b', '--bias', dest='bias', default=0, type='float', help='Bias voltage used')
-# 	parser.add_option('-v', '--verbose', dest='verb', default=False, help='Toggles verbose', action='store_true')
-# 	parser.add_option('-a', '--automatic', dest='auto', default=False, help='Toggles automatic basic analysis', action='store_true')
-#
-# 	(options, args) = parser.parse_args()
-# 	directory = str(options.inDir)
-# 	config = str(options.config)
-# 	infile = str(options.infile)
-# 	bias = float(options.bias)
-# 	verb = bool(options.verb)
-# 	auto = bool(options.auto)
-#
-# 	ana = AnalysisCaenCCD(directory, config, infile, bias, verb)
-#
-# 	# ana.LoadAnalysisTree()
-# 	# ana.LoadPickles()
-# 	if auto:
-# 		ana.AnalysisWaves()
-# 		ana.PlotWaveforms('SelectedWaveforms', 'signal', cuts=ana.cut0.GetTitle())
-# 		ana.canvas['SelectedWaveforms'].SetLogz()
-# 		ana.PlotSignal('PH', cuts=ana.cut0.GetTitle())
-# 		ana.FitLanGaus('PH')
-# 		ana.PlotPedestal('Pedestal', cuts=ana.cut0.GetTitle())
-# 		ana.SaveAllCanvas()
-# 	return ana
-#
-# 	# if auto:
-# 	# 	ccd.StartHVControl()
-# 	# 	ccd.AdjustBaseLines()
-# 	# 	ccd.SavePickles()
-# 	# 	written_events = ccd.GetData()
-# 	# 	ccd.settings.num_events = written_events
-# 	# 	ccd.SavePickles()  # update pickles with the real amount of written events
-# 	# 	ccd.settings.MoveBinaryFiles()
-# 	# 	ccd.settings.RenameDigitiserSettings()
-# 	# 	ccd.CloseHVClient()
-# 	# 	if not ccd.settings.simultaneous_conversion:
-# 	# 		ccd.CreateRootFile(files_moved=True)
-# 	# 		while ccd.pconv.poll() is None:
-# 	# 			continue
-# 	# 		ccd.CloseSubprocess('converter', stdin=False, stdout=False)
-# 	#
-# 	# print 'Finished :)'
-# 	# sys.stdout.write('\a\a\a')
-# 	# sys.stdout.flush()
+
 
 if __name__ == '__main__':
-	parser = OptionParser()
-	parser.add_option('-d', '--inDir', dest='inDir', default='.', type='string', help='Directory containing the run files')
-	parser.add_option('-c', '--configFile', dest='config', default='CAENAnalysisConfig.cfg', type='string', help='Path to file containing Analysis configuration file')
-	parser.add_option('-i', '--inputFile', dest='infile', default='', type='string', help='Path to root file to be analysed')
-	parser.add_option('-b', '--bias', dest='bias', default=0, type='float', help='Bias voltage used')
-	parser.add_option('-v', '--verbose', dest='verb', default=False, help='Toggles verbose', action='store_true')
-	parser.add_option('-a', '--automatic', dest='auto', default=False, help='Toggles automatic basic analysis', action='store_true')
-	parser.add_option('-o', '--overwrite', dest='overwrite', default=False, help='Toggles overwriting of the analysis tree', action='store_true')
-	parser.add_option('--batch', dest='dobatch', default=False, help='Toggles batch mode with no plotting', action='store_true')
-	parser.add_option('--debug', dest='dodebug', default=False, help='Toggles debug mode', action='store_true')
+	parser = ArgumentParser()
+	# ToDo: Which arguments are needed for the analysis here?
+	parser.add_argument('-d', '--inDir', dest='inDir', default='.', type=str, help='Directory containing the run files')
+	parser.add_argument('-c', '--configFile', dest='config', default='CAENAnalysisConfig.cfg', type=str, help='Path to file containing Analysis configuration file')
+	parser.add_argument('-i', '--inputFile', dest='infile', default='', type=str, help='Path to root file to be analysed')
+	parser.add_argument('-b', '--bias', dest='bias', default=0, type=float, help='Bias voltage used')
+	parser.add_argument('-v', '--verbose', dest='verb', default=False, help='Toggles verbose', action='store_true')
+	parser.add_argument('-a', '--automatic', dest='auto', default=False, help='Toggles automatic basic analysis', action='store_true')
+	parser.add_argument('-o', '--overwrite', dest='overwrite', default=False, help='Toggles overwriting of the analysis tree', action='store_true')
+	parser.add_argument('--batch', dest='dobatch', default=False, help='Toggles batch mode with no plotting', action='store_true')
+	parser.add_argument('--debug', dest='dodebug', default=False, help='Toggles debug mode', action='store_true')
 
-	(options, args) = parser.parse_args()
-	directory = str(options.inDir)
-	config = str(options.config)
-	infile = str(options.infile)
-	bias = float(options.bias)
-	verb = bool(options.verb)
+	args = parser.parse_args()
+	print(args.inDir)
+	directory = str(args.inDir)
+	config = str(args.config)
+	infile = str(args.infile)
+	bias = float(args.bias)
+	verb = bool(args.verb)
 	verb = True or verb
-	autom = bool(options.auto)
-	overw = bool(options.overwrite)
-	doBatch = bool(options.dobatch)
-	doDebug = bool(options.dodebug)
+	autom = bool(args.auto)
+	overw = bool(args.overwrite)
+	doBatch = bool(args.dobatch)
+	doDebug = bool(args.dodebug)
 
 	ana = AnalysisCaenCCD(directory, config, infile, bias, overw, verb, doDebug)
 
@@ -2230,6 +2195,7 @@ if __name__ == '__main__':
 	# ana.LoadAnalysisTree()
 	# ana.LoadPickles()
 	if autom:
-		ana.DoAll(doDebug)
+		ana.AnalysisWaves()
+		# ana.DoAll(doDebug)
 	# return ana
 	# ana = main()

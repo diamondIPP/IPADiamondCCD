@@ -17,18 +17,20 @@ class AnalysisAllRunsInFolder:
 		self.configInput = Correct_Path(configinput) if configinput != '' else ''
 		self.overwrite = overwrite
 		self.doDebug = doDebug
-		self.are_cal_runs = False if self.configInput == '' else True # this is only true for signal calibration runs
-		runstemp = glob.glob('{d}/*'.format(d=self.runsdir))
+		# True if runs are the calibration runs (mV - electrons) with pulser input
+		self.are_cal_runs = False if self.configInput == '' else True
+		runstemp = glob.glob(f'{self.runsdir}/*')
 		if len(runstemp) < 1:
 			ExitMessage('The directory does not have any runs', os.EX_USAGE)
 		# self.num_cores = 1
-		self.runs = [runi for runi in runstemp if os.path.isdir(runi)]
+		self.runs = [run for run in runstemp if os.path.isdir(run)]
 		if self.are_cal_runs:
 			self.runs.sort(key=lambda x: float(x.split('_')[-1].split('mV')[0].split('V')[0]))
 		else:
 			self.runs.sort(key=lambda x: float(x.split('_Pos_')[-1].split('V')[0]) if '_Pos_' in x else -1*float(x.split('_Neg_')[-1].split('V')[0]))
 		self.num_runs = len(self.runs)
-		if self.num_runs < 1: ExitMessage('There is not even the required data to convert one run', os.EX_DATAERR)
+		if self.num_runs < 1:
+			ExitMessage('There is not even the required data to convert one run', os.EX_DATAERR)
 
 		self.caen_ch = 3
 
@@ -215,12 +217,15 @@ class AnalysisAllRunsInFolder:
 		# ro.gROOT.SetBatch(True)
 		for run in self.runs:
 			print('\nAnalysing run:', run)
+			# check that run directory exist
 			if os.path.isdir(run):
-				root_files = glob.glob('{d}/*.root'.format(d=run))
+				root_files = glob.glob(f'{run}/*.root')
+				# check if there is more than one root file in the directory
 				if len(root_files) > 0:
 					configfile = self.config if not self.are_cal_runs or '_out_' in run else self.configInput
 					print('Using config file:', configfile)
 					print('Overwriting analysis tree if it exists' if self.overwrite else 'Not overwriting analysis tree if it exists')
+					# analyze the run
 					anaRun = AnalysisCaenCCD(run, configfile, overw=self.overwrite, doDebug=self.doDebug)
 					anaRun.DoAll()
 					self.voltages.append(anaRun.bias)
@@ -698,8 +703,8 @@ class AnalysisAllRunsInFolder:
 
 	def SaveCanvas(self, canvas, graph):
 		if canvas and graph:
-			canvas.SaveAs('{d}/{n}.png'.format(d=self.runsdir, n=graph.GetName()))
-			canvas.SaveAs('{d}/{n}.root'.format(d=self.runsdir, n=graph.GetName()))
+			canvas.SaveAs(f'{self.runsdir}/{graph.GetName()}.png')
+			canvas.SaveAs(f'{self.runsdir}/{graph.GetName()}.root')
 
 
 	def SaveAllCanvas(self):
