@@ -43,10 +43,10 @@ fit_method = ('Minuit2', 'Migrad', )
 LOAD_IGNORE_NAMES = ['analysis', 'pedestal', 'waveform', 'voltage', 'signal', 'dist', 'currents', 'ph', 'veto', 'trigger', 'peak', 'blag']
 
 class AnalysisCaenCCD:
-	def __init__(self, directory='.', config='CAENAnalysisConfig.cfg', infile='', bias=0.0, overw=False, verbose=False, doDebug=False):
+	"""Creates *.analysis.*.root files from input *.root file"""
+	def __init__(self, directory='.', config='CAENAnalysisConfig.cfg', overw=False, doDebug=False):
 		print('Starting CCD Analysis ...')
 		self.config = config
-		self.verb = verbose
 		self.overw = overw
 		self.doDebug = doDebug
 		self.inputFile = ''
@@ -62,7 +62,6 @@ class AnalysisCaenCCD:
 		self.is_cal_run = False
 		self.ch_caen_signal = 3
 		self.cal_run_type = ''
-		self.bias = bias
 		self.emptyAnalysis = False
 		self.pedestalIntegrationTime = 0.4e-6
 		self.pedestalTEndPos = -20e-9
@@ -157,27 +156,12 @@ class AnalysisCaenCCD:
 		self.signal_cal_fit_params = {'p0': 0, 'p1': 0, 'p0_error': 0, 'p1_error': 0, 'prob': 0, 'chi2': 0, 'ndf': 0}
 		self.cal_circuit_settings = ''
 		self.vcal_to_q = VcalToElectrons()
-		print(f'infile: {infile}, directory: {directory}')
-		if infile == '' and directory != '.':
-			print('Is analysis of data after 06/18...')
-			self.LoadInputTree()
-			self.LoadPickles()
-			self.outDir = self.inDir
-			self.inputFile = self.in_tree_name + '.root'
-			self.SetFromSettingsFile()
 
-		elif infile != '' and directory == '.':
-			print('Is analysis of data before 06/18...')
-			self.outDir, self.inputFile = '/'.join(infile.split('/')[:-1]), infile.split('/')[-1]
-			self.in_tree_name = '.'.join(self.inputFile.split('.')[:-1])
-			self.inDir = self.outDir
-			self.LoadInputTree()
-			self.LoadPickles()
-		else:
-			ExitMessage(
-				'I don\'t know what to do. If you want to run the analysis for old files, give inputFile, configFile, bias.'
-				'If you want to run the analysis for new files, just give the directory where the pickles, '
-				'data files and root files are.', os.EX_CONFIG)
+		self.LoadInputTree()
+		self.LoadPickles()
+		self.outDir = self.inDir
+		self.inputFile = self.in_tree_name + '.root'
+		self.SetFromSettingsFile()
 
 		self.analysisFile = None
 		self.analysisTree = None
@@ -353,42 +337,59 @@ class AnalysisCaenCCD:
 			self.emptyAnalysis = True
 
 	def AnalysisWaves(self, doCuts0=True):
+		"""Identify the pedestal location, peak location, """
 		optiont = 'RECREATE' if self.overw else 'UPDATE'
 		self.OpenAnalysisROOTFile(optiont)
-		if doCuts0: self.CreateCut0()
+		if doCuts0: self.CreateCut0() # create cut object from settings file
+		# If Analysis is not already created do analysis (checks to peakPositions of other branches
 		if not self.hasBranch['peakPosition'] or not np.array([self.hasBranch[key0] for key0 in self.analysisScalarsBranches]).all():
 			if self.in_root_tree:
+				# split analysis in batches
 				self.suffix = None if self.in_root_tree.GetEntries() <= self.load_entries else self.start_entry
+				# Loop through events
 				while self.loaded_entries < self.in_root_tree.GetEntries():
+					# to avoid memory leaks close the file first
 					self.CloseAnalysisROOTFile()
 					self.OpenAnalysisROOTFile('RECREATE')
+					# load all voltage data from each channel
 					self.LoadVectorsFromTree()
 					if self.doDebug: ipdb.set_trace()
+					# map branches to dictionary names
 					self.ExplicitVectorsFromDictionary()
 					if self.doDebug: ipdb.set_trace()
+					# Checks that everything is alright, if there are events
 					self.CheckLoadedVectors()
 					if self.emptyAnalysis:
 						break
+					# determines constant fraction timing
 					self.DoConstantFraction()
 					if self.doDebug: ipdb.set_trace()
+					#
 					if self.doPeakPos:
+						# Find peaks iteratively fitting a range of the waveform with 4th order poly
 						self.FindRealPeakPosition()
 						if self.doDebug: ipdb.set_trace()
 					else:
 						self.peak_positions = np.full(self.events, self.peakTime)
 						self.peak_positionsCF = np.full(self.events, self.peakTimeCF)
 					if self.doDebug: ipdb.set_trace()
+					# makes mask array based on the t=0 (trigger time)
 					self.FindPedestalPosition()
 					if self.doDebug: ipdb.set_trace()
+					# Create mask array for signal based on found peak position
 					self.FindSignalPositions(self.peakBackward, self.peakForward)
 					if self.doDebug: ipdb.set_trace()
+					# calculate averages and stds using the masks
 					self.CalculatePedestalsAndSignals()
 					if self.doDebug: ipdb.set_trace()
 					self.FillAnalysisBranches()
 					self.CloseAnalysisROOTFile()
 					self.CloseInputROOTFiles()
+					# resets dictionary of branches
 					self.Reset_Braches_Lists_And_Dictionaries()
+					# Load not analysed tree
 					self.LoadInputTree()
+					# load analysed file
 					self.OpenAnalysisROOTFile('READ')
 					if self.suffix >= 0:
 						self.suffix += 1
@@ -436,19 +437,24 @@ class AnalysisCaenCCD:
 					self.suffix = None
 					self.OpenAnalysisROOTFile('READ')
 		if self.emptyAnalysis: return
+		# check that signal has Gauss shape
 		if not self.is_cal_run or self.cal_run_type == 'out':
 			if self.doDebug: ipdb.set_trace()
 			if self.hasBranch['deltaTimeCF']:
 				self.PlotCFDeltaDistribution()
+				# Cut on crazy CF shifts (anaConfig)
 				self.AddCFShiftCut()
 			if self.hasBranch['peakPosition']:
 				self.PlotPeakPositionDistributions('peakPosDist', isCF=False)
+				# Cut on the wide peak position
 				self.AddPeakPositionCut()
 			if self.hasBranch['peakPositionCF']:
+				# cut on the narrow peak position
 				self.PlotPeakPositionDistributions('peakPosDistCF', isCF=True)
 				self.AddPeakPositionCutCF()
 		if self.hasBranch['voltageDia']:
 			if self.doDebug: ipdb.set_trace()
+			# plot voltage to the diamond based on the leakage current
 			self.PlotHVDiaDistribution(cut=self.cut0.GetTitle())
 			self.AddDiamondVoltageCut()
 
@@ -703,6 +709,7 @@ class AnalysisCaenCCD:
 		self.AddTimeCFFriend(self.timeCFDelay, self.attenCF, self.overw)
 
 	def FindRealPeakPosition(self):
+		"""Fits waveform with 4th order poly in the certain range"""
 		print('Getting real peak positions...')
 		# mpos = self.signalWaveVect.argmin(axis=1) if self.bias >= 0 else self.signalWaveVect.argmax(axis=1)
 		# time_mpos = self.timeVect[:, mpos].diagonal()
@@ -2158,16 +2165,17 @@ class AnalysisCaenCCD:
 				self.SaveAllCanvas()
 
 
-
-
 if __name__ == '__main__':
+	# only two parameters are needed inDir and config file
+	# inDir is the directory that contains *.dat and *.root and pickles files
+	# Config Full path to analysis configFile
+	# auto does everything Runs DoAll script
+	# debug stops after each major step
+	# batch does not show graphs and will not have popup windows
+	# overwrite overwrites all *.analysis.*.root files
 	parser = ArgumentParser()
-	# ToDo: Which arguments are needed for the analysis here?
 	parser.add_argument('-d', '--inDir', dest='inDir', default='.', type=str, help='Directory containing the run files')
 	parser.add_argument('-c', '--configFile', dest='config', default='CAENAnalysisConfig.cfg', type=str, help='Path to file containing Analysis configuration file')
-	parser.add_argument('-i', '--inputFile', dest='infile', default='', type=str, help='Path to root file to be analysed')
-	parser.add_argument('-b', '--bias', dest='bias', default=0, type=float, help='Bias voltage used')
-	parser.add_argument('-v', '--verbose', dest='verb', default=False, help='Toggles verbose', action='store_true')
 	parser.add_argument('-a', '--automatic', dest='auto', default=False, help='Toggles automatic basic analysis', action='store_true')
 	parser.add_argument('-o', '--overwrite', dest='overwrite', default=False, help='Toggles overwriting of the analysis tree', action='store_true')
 	parser.add_argument('--batch', dest='dobatch', default=False, help='Toggles batch mode with no plotting', action='store_true')
@@ -2177,16 +2185,12 @@ if __name__ == '__main__':
 	print(args.inDir)
 	directory = str(args.inDir)
 	config = str(args.config)
-	infile = str(args.infile)
-	bias = float(args.bias)
-	verb = bool(args.verb)
-	verb = True or verb
 	autom = bool(args.auto)
 	overw = bool(args.overwrite)
 	doBatch = bool(args.dobatch)
 	doDebug = bool(args.dodebug)
 
-	ana = AnalysisCaenCCD(directory, config, infile, bias, overw, verb, doDebug)
+	ana = AnalysisCaenCCD(directory, config, overw, doDebug)
 
 	if doBatch:
 		print('Running in Batch mode!')
@@ -2195,7 +2199,7 @@ if __name__ == '__main__':
 	# ana.LoadAnalysisTree()
 	# ana.LoadPickles()
 	if autom:
-		ana.AnalysisWaves()
-		# ana.DoAll(doDebug)
+		# ana.AnalysisWaves()
+		ana.DoAll(doDebug)
 	# return ana
 	# ana = main()

@@ -1,6 +1,9 @@
 #!/usr/bin/env python
-import subprocess as subp
+# import subprocess as subp
+from subprocess import PIPE, Popen
+import pexpect
 from optparse import OptionParser
+from argparse import ArgumentParser
 import pickle as pickle
 from Channel_Caen import Channel_Caen
 from Settings_Caen import Settings_Caen
@@ -93,7 +96,7 @@ class CCD_Caen:
 	def StartHVControl(self):
 		if self.settings.do_hv_control:
 			self.hv_control = HV_Control(self.settings)
-			print('Waiting {t} seconds for the HVClient to start... '.format(t=wait_time_hv), end=' ') ; sys.stdout.flush()
+			print(f'Waiting {wait_time_hv} seconds for the HVClient to start... ', end=' ') ; sys.stdout.flush()
 			time.sleep(wait_time_hv)
 			print('Done')
 			self.hv_control.CheckVoltage()
@@ -105,10 +108,13 @@ class CCD_Caen:
 		self.CreateEmptyFiles()
 		self.CloseFiles()
 		self.settings.SetupDigitiser(doBaseLines=True, signal=self.signal_ch, trigger=self.trigger_ch, ac=self.veto_ch)
-		self.p = subp.Popen(['{p}/wavedump'.format(p=self.settings.wavedump_path), '{d}/WaveDumpConfig_CCD_BL.txt'.format(d=self.settings.outdir)], bufsize=-1, stdin=subp.PIPE, close_fds=True)
-		time.sleep(2)
-		if self.p.poll() is None:
-			self.GetWaveforms(int(-1 * ntriggers), True, False)
+		# self.p = Popen([f'{self.settings.wavedump_path}/wavedump', f'{self.settings.outdir}/WaveDumpConfig_CCD_BL.txt'], stdin=PIPE, stdout=PIPE, universal_newlines=True)
+		self.p = pexpect.spawn(f'{self.settings.wavedump_path}/wavedump', [f'{self.settings.outdir}/WaveDumpConfig_CCD_BL.txt'], encoding='utf-8')
+		# time.sleep(2)
+		for i in range(10):
+			if self.p.expect(['\w+\r\n', '[\w\s\,\[\],\/]+help\r\n']) == 1:
+				self.GetWaveforms(int(-1 * ntriggers), True, False)
+				break
 		else:
 			print('Wavedump did not start')
 			self.settings.RemoveBinaries()
@@ -122,7 +128,7 @@ class CCD_Caen:
 			print('Saved', self.total_events, 'which is different to the', ntriggers, 'sent')
 			ntriggers = self.total_events
 
-		with open('raw_wave{t}.dat'.format(t=self.trigger_ch.ch), 'rb') as self.ft0:
+		with open(f'raw_wave{self.trigger_ch.ch}.dat', 'rb') as self.ft0:
 			triggADCs = np.empty(0, dtype='H')
 			for ev in range(ntriggers):
 				self.ft0.seek(ev * self.settings.struct_len, 0)
@@ -132,7 +138,7 @@ class CCD_Caen:
 			mean_t = triggADCs.mean()
 			std_t = triggADCs.std()
 
-		with open('raw_wave{ac}.dat'.format(ac=self.veto_ch.ch), 'rb') as self.fv0:
+		with open(f'raw_wave{self.veto_ch.ch}.dat', 'rb') as self.fv0:
 			acADCs = np.empty(0, dtype='H')
 			for ev in range(ntriggers):
 				self.fv0.seek(ev * self.settings.struct_len, 0)
@@ -143,6 +149,7 @@ class CCD_Caen:
 			std_ac = acADCs.std()
 
 		# clear possible ADCs with non-baseline signals
+		#
 		for i in range(10):
 			condition_t = (np.abs(triggADCs - mean_t) < 3 * std_t)
 			mean_t = np.extract(condition_t, triggADCs).mean()
@@ -152,6 +159,7 @@ class CCD_Caen:
 			std_ac = np.extract(condition_ac, acADCs).std()
 
 		# set channels such that the baselines are near the maximum ADC's leaving space for the scintillator signals. Adjust threshold values
+		# update settings file with correct baselines
 		self.trigger_ch.Correct_Base_Line(mean_adc=mean_t, sigma_adc=std_t, settings=self.settings)
 		self.trigger_ch.Correct_Threshold()
 		# self.settings.trig_base_line = np.multiply(self.trigger_ch.base_line_u_adcs, self.settings.sigRes, dtype='f8')
@@ -169,20 +177,20 @@ class CCD_Caen:
 		self.fv0, self.datav = None, None
 
 	def CreateEmptyFiles(self):
-		self.ft0 = open('raw_wave{t}.dat'.format(t=self.trigger_ch.ch), 'wb')
-		self.fs0 = open('raw_wave{s}.dat'.format(s=self.signal_ch.ch), 'wb')
+		self.ft0 = open(f'raw_wave{self.trigger_ch.ch}.dat', 'wb')
+		self.fs0 = open(f'raw_wave{self.signal_ch.ch}.dat', 'wb')
 		if not self.is_cal_run:
-			self.fv0 = open('raw_wave{a}.dat'.format(a=self.veto_ch.ch), 'wb')
+			self.fv0 = open(f'raw_wave{self.veto_ch.ch}.dat', 'wb')
 		# for timestamp
 		self.file_time_stamp = open('raw_time.dat', 'wb')
 
 	def OpenFiles(self, mode='rb'):
 		if not self.fs0:
-			self.fs0 = open('raw_wave{s}.dat'.format(s=self.signal_ch.ch), mode)
+			self.fs0 = open(f'raw_wave{self.signal_ch.ch}.dat', mode)
 		if not self.ft0:
-			self.ft0 = open('raw_wave{t}.dat'.format(t=self.trigger_ch.ch), mode)
+			self.ft0 = open(f'raw_wave{self.trigger_ch.ch}.dat', mode)
 		if not self.fv0:
-			self.fv0 = open('raw_wave{a}.dat'.format(a=self.veto_ch.ch), mode)
+			self.fv0 = open(f'raw_wave{self.veto_ch.ch}.dat', mode)
 
 	def CloseFiles(self):
 		print('Closing files')
@@ -211,76 +219,49 @@ class CCD_Caen:
 		self.t1 = time.time()
 		# Negative events is for correcting the baseline of the scintillators and the sigma to set the thresholds
 		if events < 0:
-			# while self.p.poll() is None:
-			time.sleep(1)
-			self.p.stdin.write('c')  # calibrate channels
-			self.p.stdin.flush()
-			time.sleep(1)
-			self.p.stdin.write('s')
-			self.p.stdin.flush()
+			self.p.send('s') # start aquisition
 			if self.settings.plot_waveforms:
-				# time.sleep(1)
-				self.p.stdin.write('P')  #  plot waveforms  continuously
-				self.p.stdin.flush()
-			# time.sleep(1)
-			self.p.stdin.write('W')  #  write waveforms continuously into binaries
-			self.p.stdin.flush()
-			# time.sleep(1)
+				self.p.send('P')  #  plot waveforms  continuously
+			self.p.send('W')  #  write waveforms continuously into binaries
 			for it in range(abs(events)):
 				time.sleep(0.5)
-				self.p.stdin.write('t') # issues software trigger
-				self.p.stdin.flush()
-			self.p.stdin.write('s') # stop the wavedump
-			self.p.stdin.flush()
+				self.p.send('t') # issues software trigger
+			self.p.send('s') # stop aquisition
 			time.sleep(1)
-			self.p.stdin.write('q')  # quit
-			self.p.stdin.flush()
-			# wait until it quits
-			while self.p.poll() is None:
-				continue
+			self.p.send('q')  # quit
+			self.p.close()
 			if self.settings.do_hv_control: self.stop_run = self.stop_run or self.hv_control.UpdateHVFile()
 			self.ConcatenateBinaries() # put binaries in a big binary file
-			self.CloseSubprocess('wave_dump', stdin=stdin, stdout=stdout)
 			self.settings.RemoveBinaries() # remove the small binaries
+		# Non-neagtive events
 		else:
 			time.sleep(1)
-			self.p.stdin.write('c')
-			self.p.stdin.flush()
-			time.sleep(1)
-			self.p.stdin.write('W')
-			self.p.stdin.flush()
+			self.p.send('c') # calibrate channels
+			self.p.send('W')
 			if self.settings.plot_waveforms:
-				# time.sleep(1)
-				self.p.stdin.write('P')
-				self.p.stdin.flush()
-			# time.sleep(1)
-			self.p.stdin.write('s')
-			self.p.stdin.flush()
+				self.p.send('P')
+			self.p.send('s') # Start aquisition
 			self.written_events_sig, self.written_events_trig, self.written_events_veto = 0, 0, 0
-			# time.sleep(1)
 			self.t2 = time.time()
-			while self.p.poll() is None:
+			while self.p.isalive():
+				# peform another calibration alowing for warm up for "time_calib"
 				if time.time() - self.t1 >= self.settings.time_calib:
-					self.p.stdin.write('s')
-					self.p.stdin.flush()
+					self.p.send('s') # stop aquisition
 					self.settings.RemoveBinaries()
-					self.p.stdin.write('c')
-					self.p.stdin.flush()
-					self.p.stdin.write('q')
-					self.p.stdin.flush()
+					self.p.send('c') # calibrate channels
+					self.p.send('q') # quit wavedump
 					time.sleep(1)
 				elif (self.written_events_sig + self.sig_written >= events) or self.stop_run:
 					if self.stop_run: print('run was stopped')
-					self.p.stdin.write('s')
-					self.p.stdin.flush()
+					self.p.send('s')
 					self.settings.RemoveBinaries()
-					self.p.stdin.write('q')
-					self.p.stdin.flush()
+					self.p.send('q')
+					# self.p.stdin.flush()
 					time.sleep(1)
 				else:
 					if self.settings.random_test and (time.time() - self.t2 > trig_rand_time):
-						self.p.stdin.write('t')
-						self.p.stdin.flush()
+						self.p.send('t')
+						# self.p.stdin.flush()
 						self.t2 = time.time()
 					self.ConcatenateBinaries()
 					if self.settings.do_hv_control:
@@ -289,7 +270,7 @@ class CCD_Caen:
 						self.settings.bar.update(int(min(self.written_events_sig + self.sig_written, self.settings.num_events)))
 			del self.t1
 			self.t1 = None
-			self.CloseSubprocess('wave_dump', stdin=stdin, stdout=stdout)
+			self.p.close()
 			time.sleep(1)
 			del self.t2
 			self.t2 = None
@@ -305,55 +286,57 @@ class CCD_Caen:
 		del self.total_events_sig, self.total_events_trig, self.total_events_veto
 		self.total_events_sig, self.total_events_trig, self.total_events_veto = None, None, None
 
-	def CloseSubprocess(self, pname='wave_dump', stdin=False, stdout=False):
-		p = self.p if pname == 'wave_dump' else self.pconv if pname == 'converter' else None
-		if not p:
-			print('Something failed! Exiting!')
-			exit()
-		pid = p.pid
-		if stdin:
-			p.stdin.close()
-		if stdout:
-			p.stdout.close()
-		if p.wait() is None:
-			print('Could not terminate subprocess... forcing termination')
-			p.kill()
-			if p.wait() is None:
-				print('Could not kill subprocess... quitting')
-				exit()
-		try:
-			os.kill(pid, 0)
-		except OSError:
-			pass
-		else:
-			print('The subprocess is still running. Killing it with os.kill')
-			os.kill(pid, 15)
-			try:
-				os.kill(pid, 0)
-			except OSError:
-				pass
-			else:
-				print('The process does not die... quitting program')
-				exit()
-		del p, pid
-
-		if pname == 'wave_dump':
-			del self.p
-			self.p = None
-		elif pname == 'converter':
-			del self.pconv
-			self.pconv = None
+	# def CloseSubprocess(self, pname='wave_dump', stdin=False, stdout=False):
+	# 	p = self.p if pname == 'wave_dump' else self.pconv if pname == 'converter' else None
+	# 	if not p:
+	# 		print('Something failed! Exiting!')
+	# 		exit()
+	# 	pid = p.pid
+	# 	if stdin:
+	# 		p.stdin.close()
+	# 	if stdout:
+	# 		p.stdout.close()
+	# 	if p.wait() is None:
+	# 		print('Could not terminate subprocess... forcing termination')
+	# 		p.kill()
+	# 		if p.wait() is None:
+	# 			print('Could not kill subprocess... quitting')
+	# 			exit()
+	# 	try:
+	# 		os.kill(pid, 0)
+	# 	except OSError:
+	# 		pass
+	# 	else:
+	# 		print('The subprocess is still running. Killing it with os.kill')
+	# 		os.kill(pid, 15)
+	# 		try:
+	# 			os.kill(pid, 0)
+	# 		except OSError:
+	# 			pass
+	# 		else:
+	# 			print('The process does not die... quitting program')
+	# 			exit()
+	# 	del p, pid
+	#
+	# 	if pname == 'wave_dump':
+	# 		del self.p
+	# 		self.p = None
+	# 	elif pname == 'converter':
+	# 		del self.pconv
+	# 		self.pconv = None
 
 	def ConcatenateBinaries(self):
 		self.session_measured_data_sig, self.session_measured_data_trig, self.session_measured_data_veto = 0, 0, 0
-		if os.path.isfile('wave{s}.dat'.format(s=self.signal_ch.ch)) and os.path.isfile('wave{t}.dat'.format(t=self.trigger_ch.ch)) and (self.is_cal_run or os.path.isfile('wave{a}.dat'.format(a=self.veto_ch.ch))):
-			self.session_measured_data_sig = int(os.path.getsize('wave{s}.dat'.format(s=self.signal_ch.ch)))
-			self.session_measured_data_trig = int(os.path.getsize('wave{t}.dat'.format(t=self.trigger_ch.ch)))
-			self.session_measured_data_veto = int(os.path.getsize('wave{a}.dat'.format(a=self.veto_ch.ch))) if not self.is_cal_run else 0
+		if os.path.isfile(f'wave{self.signal_ch.ch}.dat') \
+				and os.path.isfile(f'wave{self.trigger_ch.ch}.dat') \
+				and (self.is_cal_run or os.path.isfile(f'wave{self.veto_ch.ch}.dat')):
+			self.session_measured_data_sig = int(os.path.getsize(f'wave{self.signal_ch.ch}.dat'))
+			self.session_measured_data_trig = int(os.path.getsize(f'wave{self.trigger_ch.ch}.dat'))
+			self.session_measured_data_veto = int(os.path.getsize(f'wave{self.veto_ch.ch}.dat')) if not self.is_cal_run else 0
 
-		self.total_merged_data_sig = int(os.path.getsize('raw_wave{s}.dat'.format(s=self.signal_ch.ch)))
-		self.total_merged_data_trig = int(os.path.getsize('raw_wave{t}.dat'.format(t=self.trigger_ch.ch)))
-		self.total_merged_data_veto = int(os.path.getsize('raw_wave{a}.dat'.format(a=self.veto_ch.ch))) if not self.is_cal_run else 0
+		self.total_merged_data_sig = int(os.path.getsize(f'raw_wave{self.signal_ch.ch}.dat'))
+		self.total_merged_data_trig = int(os.path.getsize(f'raw_wave{self.trigger_ch.ch}.dat'))
+		self.total_merged_data_veto = int(os.path.getsize(f'raw_wave{self.veto_ch.ch}.dat')) if not self.is_cal_run else 0
 		self.total_merged_data_time = int(os.path.getsize('raw_time.dat'))
 		self.doMerge = (self.session_measured_data_sig + self.sig_written * self.settings.struct_len > self.total_merged_data_sig) and (self.session_measured_data_trig + self.trg_written * self.settings.struct_len > self.total_merged_data_trig)
 		if not self.is_cal_run:
@@ -369,35 +352,35 @@ class CCD_Caen:
 			self.events_to_write = int(np.floor(self.min_data_to_write / float(self.settings.struct_len)))
 			self.read_size = self.events_to_write * self.settings.struct_len
 
-			with open('wave{s}.dat'.format(s=self.signal_ch.ch), 'rb') as self.fins:
+			with open(f'wave{self.signal_ch.ch}.dat', 'rb') as self.fins:
 				self.fins.seek(self.written_events_sig * self.settings.struct_len, 0)
 				self.datas = self.fins.read(self.read_size)
 			del self.fins
 			self.fins = None
-			with open('raw_wave{s}.dat'.format(s=self.signal_ch.ch), 'ab') as self.fs0:
+			with open(f'raw_wave{self.signal_ch.ch}.dat', 'ab') as self.fs0:
 				self.fs0.write(self.datas)
 				self.fs0.flush()
 			del self.fs0, self.datas
 			self.fs0, self.datas = None, None
 
-			with open('wave{t}.dat'.format(t=self.trigger_ch.ch), 'rb') as self.fint:
+			with open(f'wave{self.trigger_ch.ch}.dat', 'rb') as self.fint:
 				self.fint.seek(self.written_events_trig * self.settings.struct_len, 0)
 				self.datat = self.fint.read(self.read_size)
 			del self.fint
 			self.fint = None
-			with open('raw_wave{t}.dat'.format(t=self.trigger_ch.ch), 'ab') as self.ft0:
+			with open(f'raw_wave{self.trigger_ch.ch}.dat', 'ab') as self.ft0:
 				self.ft0.write(self.datat)
 				self.ft0.flush()
 			del self.ft0, self.datat
 			self.ft0, self.datat = None, None
 
 			if not self.is_cal_run:
-				with open('wave{a}.dat'.format(a=self.veto_ch.ch), 'rb') as self.finv:
+				with open(f'wave{self.veto_ch.ch}.dat', 'rb') as self.finv:
 					self.finv.seek(self.written_events_veto * self.settings.struct_len, 0)
 					self.datav = self.finv.read(self.read_size)
 				del self.finv
 				self.finv = None
-				with open('raw_wave{a}.dat'.format(a=self.veto_ch.ch), 'ab') as self.fv0:
+				with open(f'raw_wave{self.veto_ch.ch}.dat', 'ab') as self.fv0:
 					self.fv0.write(self.datav)
 					self.fv0.flush()
 				del self.fv0, self.datav
@@ -427,7 +410,7 @@ class CCD_Caen:
 	def CalculateEventsWritten(self, ch):
 		if ch != -1:
 			# it is not timestamp file. it is a digitized channel
-			return int(round(float(os.path.getsize('raw_wave{c}.dat'.format(c=ch))) / float(self.settings.struct_len)))
+			return int(round(float(os.path.getsize(f'raw_wave{ch}.dat')) / float(self.settings.struct_len)))
 		else:
 			# it is for timestamp
 			return int(round(float(os.path.getsize('raw_time.dat')) / float(self.settings.time_struct_len)))
@@ -456,10 +439,17 @@ class CCD_Caen:
 			if not self.stop_run:
 				print('Starting wavedump')
 				# calls the wavedump software
-				self.p = subp.Popen(['{p}/wavedump'.format(p=self.settings.wavedump_path), '{d}/WaveDumpConfig_CCD.txt'.format(d=self.settings.outdir)], bufsize=-1, stdin=subp.PIPE, stdout=subp.PIPE, close_fds=True)
-				time.sleep(2)
-				if self.p.poll() is None:
-					self.GetWaveforms(self.settings.num_events, stdin=True, stdout=True)
+				self.p = pexpect.spawn(f'{self.settings.wavedump_path}/wavedump', [f'{self.settings.outdir}/WaveDumpConfig_CCD.txt'], encoding='utf-8')
+				# time.sleep(2)
+				for i in range(10):
+					# The wavedump would start outputing several lines, the last line will end with '... help\r\n'
+					out = self.p.expect(['\w+\r\n', '[\w\s\,\[\],\/]+help\r\n'])
+					if out == 0:
+						print(self.p.before + self.p.after)
+					if  out == 1:
+						print(self.p.before + self.p.after)
+						self.GetWaveforms(self.settings.num_events)
+						break
 				else:
 					print('Wavedump did not start')
 					if ntries <= 0:
@@ -486,12 +476,12 @@ class CCD_Caen:
 		return self.total_events
 
 	def CreateRootFile(self, files_moved=False):
-		settings_bin_path = os.path.abspath(self.settings.outdir + '/Runs/{f}/{f}.settings'.format(f=self.settings.filename))
-		data_bin_path = os.path.abspath(self.settings.outdir + '/Runs/{f}'.format(f=self.settings.filename)) if files_moved else os.getcwd()
+		settings_bin_path = os.path.abspath(self.settings.outdir + f'/Runs/{self.settings.filename}/{self.settings.filename}.settings')
+		data_bin_path = os.path.abspath(self.settings.outdir + f'/Runs/{self.settings.filename}') if files_moved else os.getcwd()
 		conv_command = ['python', 'ConverterCaen.py', settings_bin_path, data_bin_path]
 		if files_moved:
 			conv_command.append('0')
-		self.pconv = subp.Popen(conv_command, close_fds=True)
+		self.pconv = Popen(conv_command, universal_newlines=True)
 		del settings_bin_path
 
 	def CloseHVClient(self):
@@ -514,25 +504,36 @@ class CCD_Caen:
 		                      tf+self.settings.time_res/2.0, (vmax-vmin)/self.settings.sigRes, vmin, vmax]))
 
 def main():
-	parser = OptionParser()
-	parser.add_option('-i', '--infile', dest='infile', default='None', type='string',
-	                  help='Input configuration file. e.g. CAENCalibration.cfg')
-	parser.add_option('-v', '--verbose', dest='verb', default=False, help='Toggles verbose', action='store_true')
-	parser.add_option('-a', '--automatic', dest='auto', default=False, help='Toggles automatic conversion and analysis afterwards', action='store_true')
-	parser.add_option('-c', '--calibration_run', dest='calrun', default=False, action='store_true', help='Used for calibration runs with pulser')
-	parser.add_option('-t', '--time', dest='stabilizationtime', type='int', default=180, help='Time in seconds to wait before taking data due to HV stabilization. Default: 180. For calibration runs, only 10 seconds is used')
+	parser = ArgumentParser()
+	parser.add_argument(
+		'-i', '--infile', dest='infile', default='None', type=str,
+		help='Input configuration file. e.g. CAENCalibration.cfg')
+	parser.add_argument(
+		'-v', '--verbose', dest='verb', default=False,
+		help='Toggles verbose', action='store_true')
+	parser.add_argument(
+		'-a', '--automatic', dest='auto', default=False,
+		help='Toggles automatic conversion and analysis afterwards', action='store_true')
+	parser.add_argument(
+		'-c', '--calibration_run', dest='calrun', default=False, action='store_true',
+		help='Used for calibration runs with pulser')
+	parser.add_argument(
+		'-t', '--time', dest='stabilizationtime', type=int, default=180,
+		help='Time in seconds to wait before taking data due to HV stabilization. '
+			 'Default: 180. For calibration runs, only 10 seconds is used')
 
-	(options, args) = parser.parse_args()
-	infile = str(options.infile)
-	auto = bool(options.auto)
-	verb = bool(options.verb)
-	iscal = bool(options.calrun)
-	time_wait = int(options.stabilizationtime) if not iscal else 10
+	args = parser.parse_args()
+	infile = str(args.infile)
+	auto = bool(args.auto)
+	verb = bool(args.verb)
+	iscal = bool(args.calrun)
+	time_wait = int(args.stabilizationtime) if not iscal else 10
 	ccd = CCD_Caen(infile, verb, is_cal=iscal)
 
 	if auto or iscal:
 		if not iscal:
 			ccd.StartHVControl()
+			# Calculates the baselines for the channels
 			ccd.AdjustBaseLines()
 		ccd.SavePickles()
 		time.sleep(time_wait) # wait for voltage to stabilize
@@ -546,8 +547,8 @@ def main():
 			ccd.CloseHVClient()
 		if not ccd.settings.simultaneous_conversion:
 			ccd.CreateRootFile(files_moved=True)
-			while ccd.pconv.poll() is None: # auxilary program running the converter
-				time.sleep(3) # wait for converter to finish then close the subprocess
+			while ccd.pconv.poll() is None:  # auxilary program running the converter
+				time.sleep(3)  # wait for converter to finish then close the subprocess
 			ccd.CloseSubprocess('converter', stdin=False, stdout=False)
 
 	print('Finished :)')

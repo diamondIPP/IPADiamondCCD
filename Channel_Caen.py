@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 from Utils import *
 
@@ -6,17 +6,17 @@ from Utils import *
 class Channel_Caen:
 	def __init__(self, ch=3, ch_type='signal', verb=False):
 		self.ch = ch
-		self.type = ch_type
+		self.type = ch_type # signal, veto, trigger types
 		self.verb = verb
 
-		self.base_line_u_adcs = 0
-		self.base_line_adcs = 0
-		self.sigma_adcs = 10
-		self.dc_offset_percent = 0
-		self.thr_counts = 0
-		self.edge = -1
-		self.name = str(ch_type)
-
+		self.base_line_u_adcs = 0  # baseline in universal adc (voltages)
+		self.base_line_adcs = 0 # baseline in ADCs
+		self.sigma_adcs = 10  # number of ADC for baseline fluctuation
+		self.dc_offset_percent = 0  # centered from -1 to 1 -50 from -2 to 0 50 from 0 to 2
+		self.thr_counts = 0  #  Counts in ADC
+		self.edge = -1  # Trigger edge Positive or Negative
+		self.name = str(ch_type) # name of the channel
+		# eventually is taken from voltage calibration file
 		self.adc_to_volts_cal = {'p0': -1, 'p1': np.divide(2, np.subtract(np.power(2, 14, dtype='float64'), 1.0, dtype='float64'), dtype='float64')}
 
 	def Set_Channel(self, settings):

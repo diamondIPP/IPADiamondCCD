@@ -1,22 +1,22 @@
 #!/usr/bin/env python
-import time, os, sys
+import time
 import subprocess as subp
 import ROOT as ro
 import shutil
 import glob
 from Utils import *
-
-
-# from DataAcquisition import DataAcquisition
+# HVClient imports
+from HVClient.src import device_reader as hv
 
 class HV_Control:
 	def __init__(self, settings):
 		self.settings = settings
-		self.hv_supply, self.ch, self.bias, self.current_limit, self.hot_start, self.address = settings.hv_supply, settings.hv_ch, settings.bias, settings.current_limit, settings.hot_start, settings.hv_address
+		self.hv_supply, self.ch, self.bias = settings.hv_supply, settings.hv_ch, settings.bias
+		self.current_limit, self.hot_start, self.address = settings.current_limit, settings.hot_start, settings.hv_address
 		self.filename, self.dut = settings.filename, settings.dut
 		self.Pics_folder_path = settings.pics_folder_path
 		self.doControlHV = False if self.hv_supply == '' else True
-		self.logs_dir = '{f}/{d}_CH{ch}'.format(f=self.filename, d=self.hv_supply, ch=self.ch)
+		self.logs_dir = f'{self.filename}/{self.hv_supply}_CH{self.ch}'
 		self.log_file = None
 		self.last_line = {'event': 0, 'seconds': 0, 'nanoseconds': 0, 'voltage': 0, 'current': 0}
 		self.ramp = settings.hv_ramp
@@ -29,7 +29,7 @@ class HV_Control:
 		self.hv_struct = self.settings.hv_struct_fmt
 		self.hv_struct_len = self.settings.hv_struct_len
 		self.hv_struct_pack = None
-		self.out_file_name = 'hvfile_{f}.dat'.format(f=self.settings.filename)
+		self.out_file_name = f'hvfile_{self.settings.filename}.dat'
 		self.time0 = None
 		if self.Pics_folder_path == '':
 			print('Cannot control voltage because Pics folder (Micha) was not found XD')
